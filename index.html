@@ -47,10 +47,10 @@
 }
 html { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; }
 body { min-height: 100vh; }
-
+ 
 /* ─── Layout ─── */
 .app { display: flex; flex-direction: column; min-height: 100vh; }
-
+ 
 /* ─── Top Bar ─── */
 .topbar {
   background: var(--surface);
@@ -79,16 +79,16 @@ body { min-height: 100vh; }
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
 }
-
+ 
 /* ─── Pages ─── */
 .page { display: none; padding: 24px 28px 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
 .page.active { display: block; }
-
+ 
 /* ─── Page Header ─── */
 .page-header { margin-bottom: 20px; }
 .page-greeting { font-size: 12px; color: var(--text3); }
 .page-title { font-size: 22px; font-weight: 500; color: var(--text); margin-top: 3px; }
-
+ 
 /* ─── Cards ─── */
 .card {
   background: var(--surface);
@@ -107,7 +107,7 @@ body { min-height: 100vh; }
   cursor: pointer; background: none; border: none; font-family: var(--font);
 }
 .card-title .action:hover { opacity: 0.7; }
-
+ 
 /* ─── Hero Grid ─── */
 .hero-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 .hero-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
@@ -115,7 +115,7 @@ body { min-height: 100vh; }
 .hero-sub { font-size: 12px; margin-top: 4px; color: var(--text3); }
 .pos { color: var(--green); }
 .neg { color: var(--red); }
-
+ 
 /* ─── Progress Bar ─── */
 .progress-section { margin-top: 14px; }
 .progress-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); margin-bottom: 5px; }
@@ -123,7 +123,7 @@ body { min-height: 100vh; }
 .bar-track { background: var(--bg2); border-radius: 99px; height: 6px; overflow: hidden; }
 .bar-fill { background: var(--accent); height: 100%; border-radius: 99px; transition: width 0.8s ease; }
 .bar-note { font-size: 10.5px; color: var(--text3); margin-top: 5px; }
-
+ 
 /* ─── DCA Card ─── */
 .dca-assets { display: flex; flex-direction: column; gap: 0; }
 .dca-asset {
@@ -149,10 +149,10 @@ body { min-height: 100vh; }
   font-size: 11px; color: var(--text3);
 }
 .dca-total-bar strong { color: var(--text); font-weight: 500; }
-
+ 
 /* ─── Mid Grid ─── */
 .mid-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-
+ 
 /* ─── Holdings ─── */
 .holding {
   display: flex; align-items: center; justify-content: space-between;
@@ -166,7 +166,7 @@ body { min-height: 100vh; }
 .holding-val { font-size: 13px; font-weight: 500; color: var(--text); }
 .holding-chg { font-size: 11px; margin-top: 1px; }
 .dca-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 7px; flex-shrink: 0; }
-
+ 
 /* ─── News Feed ─── */
 .news-item { padding: 9px 0; border-bottom: 0.5px solid var(--bg); }
 .news-item:last-child { border-bottom: none; }
@@ -179,7 +179,7 @@ body { min-height: 100vh; }
 .nt-neu { background: #F1F5F9; color: #475569; }
 .news-hl { font-size: 12px; color: var(--text); line-height: 1.5; }
 .news-meta { font-size: 10.5px; color: var(--text3); margin-top: 2px; }
-
+ 
 /* ─── AI Section ─── */
 .ai-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -199,7 +199,7 @@ body { min-height: 100vh; }
 .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
+ 
 .ai-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .ai-card { position: relative; overflow: hidden; }
 .ai-card::before {
@@ -232,7 +232,7 @@ body { min-height: 100vh; }
   color: var(--text3); font-size: 12px; line-height: 1.7;
 }
 .ai-empty .big { font-size: 22px; font-family: var(--font-serif); color: var(--text2); display: block; margin-bottom: 6px; }
-
+ 
 /* ─── Trading Page ─── */
 .trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 .trade-log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -242,7 +242,7 @@ body { min-height: 100vh; }
 .trade-type { font-size: 9.5px; font-weight: 500; padding: 1.5px 7px; border-radius: 4px; }
 .buy { background: var(--green-bg); color: #166534; }
 .sell { background: var(--red-bg); color: #991B1B; }
-
+ 
 /* ─── Budget Page ─── */
 .budget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .budget-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 0.5px solid var(--bg); }
@@ -250,7 +250,7 @@ body { min-height: 100vh; }
 .budget-cat { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); }
 .budget-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .budget-amount { font-size: 12.5px; font-weight: 500; color: var(--text); }
-
+ 
 /* ─── Modals ─── */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.25);
@@ -295,17 +295,17 @@ body { min-height: 100vh; }
   transition: background 0.15s;
 }
 .btn-ghost:hover { background: var(--bg); }
-
+ 
 /* ─── Metric cards ─── */
 .metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
 .metric { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
 .metric-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
 .metric-value { font-size: 20px; font-family: var(--font-serif); color: var(--text); }
 .metric-sub { font-size: 11px; margin-top: 3px; color: var(--text3); }
-
+ 
 /* ─── Empty states ─── */
 .empty { text-align: center; padding: 28px; color: var(--text3); font-size: 12px; }
-
+ 
 /* ─── Toast ─── */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
@@ -315,7 +315,7 @@ body { min-height: 100vh; }
   pointer-events: none;
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
-
+ 
 /* ─── Responsive ─── */
 @media (max-width: 780px) {
   .hero-grid { grid-template-columns: 1fr; }
@@ -333,7 +333,7 @@ body { min-height: 100vh; }
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, addDoc, getDocs, deleteDoc, updateDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-
+ 
 const firebaseConfig = {
   apiKey: "AIzaSyCwiOy3kd8hPDXH4PN9J4GZ1T2jC9MMsr4",
   authDomain: "folio-5fcd0.firebaseapp.com",
@@ -343,11 +343,11 @@ const firebaseConfig = {
   appId: "1:400807339703:web:4c85f92ab477a3b6184f32",
   measurementId: "G-QPTZX9RBCT"
 };
-
+ 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const UID = 'nattapat';
-
+ 
 // ─── Firebase Helpers ───
 window.FB = {
   async add(col, data) {
@@ -369,13 +369,14 @@ window.FB = {
     await updateDoc(doc(db, `users/${UID}/${col}`, id), data);
   }
 };
-
+ 
 // ─── Load data from Firebase on start ───
 // Module scripts run after regular scripts, so we dispatch folio-ready from here
 // to guarantee window.FB is set before listeners attach.
 function attachFirebaseListeners() {
   FB.listen('holdings', docs => {
     state.holdings = docs;
+    window._holdingsLoaded = true;
     renderHoldings(); updatePortfolioSummary(); initPhase9(); initPhase10(); initPhase11(); initPhase12();
   });
   FB.listen('dca', docs => {
@@ -392,7 +393,7 @@ function attachFirebaseListeners() {
     state.budgetSavings = docs; renderBudget();
   });
 }
-
+ 
 // Wait for startApp to finish init (it sets up state), then attach listeners
 if (window._folioReady) {
   attachFirebaseListeners();
@@ -403,7 +404,7 @@ if (window._folioReady) {
 </head>
 <body>
 <div class="app">
-
+ 
   <!-- Top Bar -->
   <header class="topbar">
     <div class="logo">folio<em>.</em></div>
@@ -421,14 +422,14 @@ if (window._folioReady) {
       <div class="avatar">N</div>
     </div>
   </header>
-
+ 
   <!-- ─────────── OVERVIEW PAGE ─────────── -->
   <main class="page active" id="page-overview">
     <div class="page-header">
       <div class="page-greeting">สวัสดีตอนเช้า, Nattapat</div>
       <div class="page-title">ภาพรวมความมั่งคั่งของคุณ</div>
     </div>
-
+ 
     <!-- Hero -->
     <div class="hero-grid">
       <div class="card">
@@ -444,7 +445,7 @@ if (window._folioReady) {
           <div class="bar-note" id="yoyNote">ต้องการเพิ่มอีก 3.2% เพื่อถึงเป้าหมาย</div>
         </div>
       </div>
-
+ 
       <div class="card">
         <div class="card-title">
           แผน DCA
@@ -456,7 +457,7 @@ if (window._folioReady) {
           <strong id="dcaTotal">฿10,000 / mo</strong>
         </div>
       </div>
-
+ 
       <div class="card">
         <div class="hero-label">กำไร/ขาดทุนที่ยังไม่รับรู้</div>
         <div class="hero-val pos" id="unrealizedPL">+฿87,200</div>
@@ -477,13 +478,13 @@ if (window._folioReady) {
         </div>
       </div>
     </div>
-
+ 
     <!-- Phase 11: Decision Alerts -->
     <div id="p11AlertsWrap" style="display:none;margin-bottom:14px;">
       <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px;letter-spacing:0.3px;">⚡ การแจ้งเตือนที่ต้องดำเนินการ</div>
       <div id="p11AlertsList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
-
+ 
     <!-- Phase 9: YoY Gap Calculator -->
     <div class="card" style="margin-bottom:14px;" id="p9Card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -496,12 +497,12 @@ if (window._folioReady) {
           🤖 AI แนะนำ DCA
         </button>
       </div>
-
+ 
       <!-- Alert Banner -->
       <div id="p9Alert" style="display:flex;align-items:center;gap:8px;background:var(--amber-bg);border:0.5px solid #FCD34D;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);font-weight:500;margin-bottom:14px;">
         ⏳ กำลังคำนวณ...
       </div>
-
+ 
       <!-- KPI Row -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
         <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center;">
@@ -525,7 +526,7 @@ if (window._folioReady) {
           <div style="font-size:10px;color:var(--text3);margin-top:2px;">ที่ DCA pace นี้</div>
         </div>
       </div>
-
+ 
       <!-- Progress Bar -->
       <div style="margin-bottom:14px;">
         <div class="progress-meta">
@@ -536,19 +537,19 @@ if (window._folioReady) {
           <div class="bar-fill" id="p9ProgressFill" style="width:0%;"></div>
         </div>
       </div>
-
+ 
       <!-- Projection Chart -->
       <div style="position:relative;height:160px;margin-bottom:12px;">
         <canvas id="p9Chart"></canvas>
       </div>
-
+ 
       <!-- AI Recommendation Box -->
       <div id="p9AiBox" style="display:none;background:var(--accent-light);border:0.5px solid var(--border2);border-radius:10px;padding:14px;margin-top:4px;">
         <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:10px;">🤖 AI แนะนำ: จัดสรร DCA เพิ่มเพื่อถึง 10%</div>
         <div id="p9AiList" style="display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text);"></div>
       </div>
     </div>
-
+ 
     <!-- Phase 10: Rebalancing Engine -->
     <div class="card" style="margin-bottom:14px;" id="p10Card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -565,34 +566,34 @@ if (window._folioReady) {
           </button>
         </div>
       </div>
-
+ 
       <!-- Alert Banner -->
       <div id="p10Alert" style="display:flex;align-items:center;gap:8px;background:var(--blue-bg);border:0.5px solid #BFDBFE;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--blue);font-weight:500;margin-bottom:14px;">
         📊 เพิ่มหลักทรัพย์และตั้งเป้าหมายน้ำหนักเพื่อเริ่มใช้งาน
       </div>
-
+ 
       <!-- Asset Weight Rows -->
       <div id="p10Rows" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;"></div>
-
+ 
       <!-- Action Plan -->
       <div id="p10ActionPlan" style="display:none;background:var(--bg);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
         <div style="font-size:11px;font-weight:500;color:var(--text);margin-bottom:8px;">📋 แผน Rebalance</div>
         <div id="p10Actions" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text2);"></div>
       </div>
-
+ 
       <!-- Phase 14: Expected Return per allocation -->
       <div style="background:var(--bg);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
         <span>📈 ผลตอบแทนที่คาดหวัง (rule-based)</span>
         <span id="p14ExpectedReturn" style="font-weight:500;color:var(--text3);">—</span>
       </div>
-
+ 
       <!-- AI Recommendation Box -->
       <div id="p10AiBox" style="display:none;background:var(--accent-light);border:0.5px solid var(--border2);border-radius:10px;padding:14px;">
         <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:10px;">🤖 AI วิเคราะห์การ Rebalance</div>
         <div id="p10AiText" style="font-size:12px;color:var(--text);line-height:1.7;"></div>
       </div>
     </div>
-
+ 
     <!-- Mid -->
     <div class="mid-grid">
       <div class="card">
@@ -602,13 +603,13 @@ if (window._folioReady) {
         </div>
         <div id="holdingsList"></div>
       </div>
-
+ 
       <div class="card">
         <div class="card-title">ข่าวล่าสุด <button class="action" onclick="showPage('news')">ดูทั้งหมด</button></div>
         <div id="newsFeedShort"></div>
       </div>
     </div>
-
+ 
     <!-- AI Section -->
     <div class="card" style="margin-bottom:0">
       <div class="ai-header">
@@ -628,7 +629,7 @@ if (window._folioReady) {
         </div>
       </div>
     </div>
-
+ 
     <!-- ─── What-If Simulator ─── -->
     <div class="card" style="margin-top:14px;">
       <div class="ai-header">
@@ -637,10 +638,10 @@ if (window._folioReady) {
           <div class="ai-subtitle">กรอกสถานการณ์ที่อยากรู้ แล้ว AI จะวิเคราะห์และเปรียบเทียบกับ 3 กลยุทธ์ปัจจุบัน</div>
         </div>
       </div>
-
+ 
       <!-- Scenario chips -->
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;" id="scenarioChips"></div>
-
+ 
       <!-- Input area -->
       <div style="display:flex;gap:8px;align-items:flex-end;">
         <div style="flex:1;">
@@ -654,7 +655,7 @@ if (window._folioReady) {
           วิเคราะห์
         </button>
       </div>
-
+ 
       <!-- Result area -->
       <div id="simResult" style="margin-top:14px;display:none;">
         <!-- Chart -->
@@ -686,7 +687,7 @@ if (window._folioReady) {
         <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">กด "สร้างแผน" เพื่อรับแผนปฏิบัติการสัปดาห์นี้<br><span style="font-size:10.5px;">(ต้องมี Holdings + Gemini Key)</span></div>
       </div>
     </div>
-
+ 
     <!-- Phase 15: Benchmark Comparison -->
     <div class="card" style="margin-top:14px;" id="p15Card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -700,7 +701,7 @@ if (window._folioReady) {
         <div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;">กด ↻ อัพเดท เพื่อดึงข้อมูลตลาดล่าสุด</div>
       </div>
     </div>
-
+ 
     <!-- Phase 12: Monthly Review Mode -->
     <div class="card" style="margin-top:14px;" id="p12Card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -713,7 +714,7 @@ if (window._folioReady) {
           📊 สรุปเดือนนี้
         </button>
       </div>
-
+ 
       <!-- KPI row -->
       <div id="p12KpiRow" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
         <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center;">
@@ -733,10 +734,10 @@ if (window._folioReady) {
           <div id="p12SaveRate" style="font-size:18px;font-family:var(--font-serif);">—</div>
         </div>
       </div>
-
+ 
       <!-- Top/Bottom performers -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;" id="p12Performers"></div>
-
+ 
       <!-- AI narrative -->
       <div id="p12AiBox" style="display:none;background:var(--accent-light);border:0.5px solid var(--border2);border-radius:10px;padding:14px;">
         <div style="font-size:11px;font-weight:500;color:var(--accent);margin-bottom:8px;">🤖 AI สรุปภาพรวมเดือนนี้</div>
@@ -744,7 +745,7 @@ if (window._folioReady) {
       </div>
     </div>
   </main>
-
+ 
   <!-- ─────────── TRADING PAGE ─────────── -->
   <main class="page" id="page-trading">
     <div class="page-header">
@@ -757,7 +758,7 @@ if (window._folioReady) {
       <div class="metric"><div class="metric-label">จำนวนธุรกรรม</div><div class="metric-value" id="tradeCount">0</div><div class="metric-sub">รายการ</div></div>
       <div class="metric"><div class="metric-label">Buy / Sell</div><div class="metric-value" id="buySellRatio">— / —</div><div class="metric-sub">รายการ</div></div>
     </div>
-
+ 
     <div class="trade-grid">
       <div class="card">
         <div class="card-title">
@@ -775,14 +776,14 @@ if (window._folioReady) {
           </tbody>
         </table>
       </div>
-
+ 
       <div class="card">
         <div class="card-title">สัดส่วนการลงทุน</div>
         <div id="allocationChart" style="padding-top:4px;"></div>
       </div>
     </div>
   </main>
-
+ 
   <!-- ─────────── NEWS PAGE ─────────── -->
   <main class="page" id="page-news">
     <div class="page-header">
@@ -791,7 +792,7 @@ if (window._folioReady) {
     </div>
     <div id="newsFullList" style="display:flex;flex-direction:column;gap:12px;"></div>
   </main>
-
+ 
   <!-- ─────────── BUDGET PAGE ─────────── -->
   <main class="page" id="page-budget">
     <div class="page-header">
@@ -816,14 +817,14 @@ if (window._folioReady) {
       </div>
     </div>
   </main>
-
+ 
   <!-- ─────────── SETTINGS PAGE ─────────── -->
   <main class="page" id="page-settings">
     <div class="page-header">
       <div class="page-greeting">จัดการการเชื่อมต่อ</div>
       <div class="page-title">ตั้งค่า API Keys</div>
     </div>
-
+ 
     <!-- AI Keys — สำคัญที่สุด -->
     <div class="card" style="margin-bottom:14px;border:1.5px solid var(--accent-light);">
       <div class="card-title">🤖 Gemini AI Key <span style="font-size:10px;color:var(--text3);font-weight:400;">— ใส่ได้สูงสุด 4 key สลับอัตโนมัติเมื่อ quota หมด</span></div>
@@ -837,7 +838,7 @@ if (window._folioReady) {
         <div class="form-group"><label class="form-label">Key 4 (สำรอง)</label><input class="form-input" id="cfg-gemini-3" placeholder="AIzaSy..."></div>
       </div>
     </div>
-
+ 
     <!-- Firebase — hardcoded แล้ว แต่แสดงให้รู้ว่าใช้ project ไหน -->
     <div class="card" style="margin-bottom:14px;background:var(--bg);">
       <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -858,7 +859,7 @@ service cloud.firestore {
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px;">วิธีแก้: ไปที่ <a href="https://console.firebase.google.com/project/folio-5fcd0/firestore/rules" target="_blank" style="color:var(--accent);">Firebase Console → Firestore → Rules</a> → วาง rules ด้านบน → กด Publish</div>
     </div>
-
+ 
     <!-- SET Proxy — hardcoded -->
     <div class="card" style="margin-bottom:14px;background:var(--bg);">
       <div class="card-title">🔌 SET Proxy + Google Sheets <span style="font-size:10px;color:var(--green);font-weight:400;">✓ Hardcoded ในไฟล์แล้ว</span></div>
@@ -867,7 +868,7 @@ service cloud.firestore {
         Google Sheets: sync อัตโนมัติ — เชื่อมต่อแล้ว
       </div>
     </div>
-
+ 
     <!-- Stock & Crypto APIs -->
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">📈 Alpha Vantage (หุ้นสหรัฐ) <span style="font-size:10px;color:var(--text3);font-weight:400;">— ใส่ได้สูงสุด 4 key สลับอัตโนมัติเมื่อหมด quota</span></div>
@@ -878,7 +879,7 @@ service cloud.firestore {
         <div class="form-group"><label class="form-label">Key 4</label><input class="form-input" id="cfg-av-3" placeholder="key สำรอง"></div>
       </div>
     </div>
-
+ 
     <!-- News APIs -->
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">📰 Finnhub (หุ้นสหรัฐ / Crypto) <span style="font-size:10px;color:var(--text3);font-weight:400;">— 4 key, สลับอัตโนมัติ</span></div>
@@ -889,7 +890,7 @@ service cloud.firestore {
         <div class="form-group"><label class="form-label">Key 4</label><input class="form-input" id="cfg-finnhub-3" placeholder="key สำรอง"></div>
       </div>
     </div>
-
+ 
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">📰 Marketaux (ข่าวทั่วโลก) <span style="font-size:10px;color:var(--text3);font-weight:400;">— 4 key, สลับอัตโนมัติ</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -899,7 +900,7 @@ service cloud.firestore {
         <div class="form-group"><label class="form-label">Key 4</label><input class="form-input" id="cfg-marketaux-3" placeholder="key สำรอง"></div>
       </div>
     </div>
-
+ 
     <!-- Google Sheets -->
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">📊 Google Sheets Log</div>
@@ -911,22 +912,22 @@ service cloud.firestore {
         วิธีสร้าง: Google Sheet → Extensions → Apps Script → Deploy → Web App → Copy URL
       </div>
     </div>
-
+ 
     <!-- Status indicators -->
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">สถานะการเชื่อมต่อ</div>
       <div id="apiStatus" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"></div>
     </div>
-
+ 
     <!-- Save button -->
     <div style="display:flex;gap:10px;">
       <button class="btn-primary" style="flex:1;" onclick="saveSettings()">💾 บันทึกทุก Key</button>
       <button class="btn-ghost" onclick="testConnections()" style="flex:1;">🔌 ทดสอบการเชื่อมต่อ</button>
     </div>
   </main>
-
+ 
 </div><!-- end .app -->
-
+ 
 <!-- ─── Expense Modal ─── -->
 <div class="modal-overlay" id="expense-modal">
   <div class="modal">
@@ -947,7 +948,7 @@ service cloud.firestore {
     </div>
   </div>
 </div>
-
+ 
 <!-- ─── Saving Goal Modal ─── -->
 <div class="modal-overlay" id="saving-modal">
   <div class="modal">
@@ -972,7 +973,7 @@ service cloud.firestore {
     </div>
   </div>
 </div>
-
+ 
 <!-- ─── Add Holding Modal ─── -->
 <div class="modal-overlay" id="holding-modal">
   <div class="modal">
@@ -1062,7 +1063,7 @@ service cloud.firestore {
     </div>
   </div>
 </div>
-
+ 
 <!-- ─── Add DCA Modal ─── -->
 <div class="modal-overlay" id="dca-modal">
   <div class="modal">
@@ -1105,7 +1106,7 @@ service cloud.firestore {
     </div>
   </div>
 </div>
-
+ 
 <!-- ─── Add Trade Modal ─── -->
 <div class="modal-overlay" id="trade-modal">
   <div class="modal">
@@ -1147,7 +1148,7 @@ service cloud.firestore {
     </div>
   </div>
 </div>
-
+ 
 <!-- Phase 10: Target Weights Modal -->
 <div class="modal-overlay" id="p10-target-modal">
   <div class="modal">
@@ -1174,10 +1175,10 @@ service cloud.firestore {
     </div>
   </div>
 </div>
-
+ 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
-
+ 
 <script>
 // ─── NOTE: Firebase listeners set in module script above ───
 // ─── State (defaults shown until Firebase loads) ───
@@ -1192,13 +1193,13 @@ const state = {
   budgetExpenses: [],
   budgetSavings: [],
 };
-
+ 
 // ─── Hardcoded constants (no limit / ไม่มี quota) ───
 const SET_PROXY = 'https://folio-proxy.ojo0308.workers.dev';
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxjdzzg_dDVC2fSHdF7PpajatdfieI4C5yjhUWxW9PCxnz2O9LTdQv-0rqaYcwzQbks/exec';
 const CRYPTO_MAP = { BTC: 'bitcoin', ETH: 'ethereum', BNB: 'binancecoin', SOL: 'solana', XRP: 'ripple' };
 const AV_KEY = 'demo'; // Replace with your Alpha Vantage key
-
+ 
 async function fetchUsdThb() {
   try {
     const r = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
@@ -1206,7 +1207,7 @@ async function fetchUsdThb() {
     if (d.rates?.THB) state.usdThb = d.rates.THB;
   } catch(e) {}
 }
-
+ 
 async function fetchCryptoPrices() {
   const cryptos = state.holdings.filter(h => h.type === 'crypto');
   if (!cryptos.length) return;
@@ -1227,7 +1228,7 @@ async function fetchCryptoPrices() {
     });
   } catch(e) {}
 }
-
+ 
 async function fetchUSPrice(ticker) {
   try {
     const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${AV_KEY}`);
@@ -1239,35 +1240,74 @@ async function fetchUSPrice(ticker) {
   } catch(e) {}
   return null;
 }
-
-// ─── Thai Fund NAV via SEC API (routed through Cloudflare Worker) ───
-// Cache proj_ids so we only look them up once per session
-const _fundProjCache = {};
-
-// Hardcoded proj_id map for known funds (from SEC API)
-// proj_id format: {Type}{ID}_YYYY — add new funds here as needed
-// ─── Thai Fund NAV via Gemini AI ───
-async function fetchFundNAVsFromWorker(fundNames) {
-  // Fetch NAV for each fund via Cloudflare Worker -> SEC API
-  const results = {};
-  await Promise.all(fundNames.map(async name => {
-    try {
-      const r = await fetch(`${SET_PROXY}/?fund=${encodeURIComponent(name)}`);
-      if (!r.ok) return;
-      const d = await r.json();
-      if (d && d.nav) {
-        results[name.toUpperCase()] = { nav: d.nav, prev_nav: d.prev_nav || d.nav, nav_date: d.nav_date || '' };
+ 
+// ─── Price Cache (localStorage, valid for same calendar day) ───
+function savePriceCache() {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const data = {};
+    state.holdings.forEach((h, i) => {
+      if (h.livePrice) {
+        data[(h.id || h.ticker || i) + ''] = {
+          livePrice: h.livePrice, change: h.change || 0,
+          value: h.value || 0, _navDate: h._navDate || ''
+        };
       }
-    } catch(e) {}
-  }));
-  return results;
+    });
+    localStorage.setItem('folio_price_cache', JSON.stringify({ date: today, data }));
+  } catch(e) {}
 }
-
+ 
+function loadPriceCache() {
+  try {
+    const raw = localStorage.getItem('folio_price_cache');
+    if (!raw) return false;
+    const cache = JSON.parse(raw);
+    if (cache.date !== new Date().toISOString().split('T')[0]) return false;
+    state.holdings.forEach((h, i) => {
+      const c = cache.data[(h.id || h.ticker || i) + ''];
+      if (c && c.livePrice) {
+        h.livePrice = c.livePrice; h.change = c.change;
+        h.value = c.value; h._navDate = c._navDate || '';
+      }
+    });
+    return true;
+  } catch(e) { return false; }
+}
+ 
+// ─── Thai Fund NAV via Gemini AI ───
+async function fetchFundNAVsWithGemini(fundNames) {
+  const key = getActiveKey('GEMINI');
+  if (!key) { showToast('ใส่ Gemini Key ในหน้า ⚙️ ก่อน'); return {}; }
+  const prompt = 'บอก NAV ล่าสุด (บาท/หน่วย) ของกองทุนไทยต่อไปนี้: ' + fundNames.join(', ') + '\nตอบ JSON เท่านั้น ห้าม backtick รูปแบบ: {"K-GTECHRMF":{"nav":15.18,"prev_nav":15.10,"nav_date":"2026-04-14"}} ถ้าไม่ทราบใส่ null';
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + key, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000, temperature: 0 } })
+    });
+    const d = await res.json();
+    if (d.error?.status === 'RESOURCE_EXHAUSTED') { rotateKey('GEMINI'); showToast('Gemini key หมด — สลับแล้ว'); return {}; }
+    if (d.error) { showToast('Gemini: ' + (d.error.message || 'error')); return {}; }
+    const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!txt) { showToast('Gemini: ไม่มีคำตอบ'); return {}; }
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) { showToast('Gemini parse ไม่ได้: ' + txt.substring(0, 60)); return {}; }
+    return JSON.parse(m[0]);
+  } catch(e) { showToast('Gemini error: ' + e.message); return {}; }
+}
+ 
 async function fetchAllPrices() {
+  if (!window._holdingsLoaded) {
+    showToast('รอโหลดข้อมูล...');
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      if (window._holdingsLoaded) break;
+    }
+  }
   showToast('กำลังดึงราคาล่าสุด...');
   await fetchUsdThb();
   await fetchCryptoPrices();
-
+ 
   // US & Tech stocks
   const usStocks = state.holdings.filter(h => (h.type === 'us' || h.type === 'tech'));
   for (const h of usStocks) {
@@ -1278,7 +1318,7 @@ async function fetchAllPrices() {
       h.value = Math.round(h.shares * data.price * state.usdThb);
     }
   }
-
+ 
   // SET stocks — via Cloudflare Worker proxy
   const proxyUrl = SET_PROXY;
   const setStocks = state.holdings.filter(h => h.type === 'set');
@@ -1293,63 +1333,33 @@ async function fetchAllPrices() {
       }
     } catch(e) {}
   }
-
-  // Thai Funds — via Cloudflare Worker (SEC API), Gemini fallback
+ 
+  // Thai Funds — Gemini AI (primary)
   const fundHoldings = state.holdings.filter(h => h.type === 'fund');
   if (fundHoldings.length) {
     const fundNames = [...new Set(fundHoldings.map(h => h.name || h.ticker.replace(/_/g,' ')))];
-    showToast('กำลังดึง NAV กองทุน...');
-    let navMapNorm = await fetchFundNAVsFromWorker(fundNames);
-
-    // Fallback to Gemini if Worker returned nothing
-    if (!Object.keys(navMapNorm).length) {
-      const geminiKey = getActiveKey('GEMINI');
-      if (geminiKey) {
-        showToast('SEC API ไม่ตอบ — ลอง Gemini...');
-        const today = new Date().toLocaleDateString('th-TH', {day:'numeric',month:'long',year:'numeric'});
-        const prompt = `วันนี้คือ ${today}. บอก NAV ล่าสุด (บาท/หน่วย) ของกองทุนไทย: ${fundNames.join(', ')}
-ตอบ JSON เท่านั้น ห้ามมี backtick หรือคำอธิบาย: {"FUND_NAME":{"nav":number,"prev_nav":number,"nav_date":"YYYY-MM-DD"}} ถ้าไม่ทราบใส่ null`;
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:1200,temperature:0.1}})
-          });
-          const gd = await res.json();
-          if (gd.error?.status==='RESOURCE_EXHAUSTED') rotateKey('GEMINI');
-          else {
-            const txt = gd.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const m = txt.match(/\{[\s\S]*\}/);
-            if (m) {
-              const parsed = JSON.parse(m[0]);
-              Object.keys(parsed).forEach(k => { if (parsed[k]?.nav) navMapNorm[k.trim().toUpperCase()] = parsed[k]; });
-            }
-          }
-        } catch(e) {}
-      }
-    }
-
+    showToast('กำลังดึง NAV กองทุนผ่าน Gemini...');
+    const navMap = await fetchFundNAVsWithGemini(fundNames);
+    const navMapNorm = {};
+    Object.keys(navMap).forEach(k => { if (navMap[k]?.nav) navMapNorm[k.trim().toUpperCase()] = navMap[k]; });
     let updatedCount = 0;
     fundHoldings.forEach(h => {
       const name = (h.name || h.ticker.replace(/_/g,' ')).trim().toUpperCase();
       const data = navMapNorm[name];
       if (data && data.nav) {
         const prev = data.prev_nav || data.nav;
-        const chg = prev > 0 ? ((data.nav - prev) / prev) * 100 : 0;
         h.livePrice = parseFloat(data.nav);
-        h.change = parseFloat(chg.toFixed(2));
-        h.value = Math.round(h.shares * parseFloat(data.nav));
+        h.change = prev > 0 ? parseFloat(((data.nav - prev) / prev * 100).toFixed(2)) : 0;
+        h.value = Math.round(h.shares * h.livePrice);
         h._navDate = data.nav_date || '';
         updatedCount++;
       }
     });
-    if (updatedCount > 0) showToast(`อัพเดต NAV ${updatedCount} กองทุนแล้ว ✓`);
-    else {
-      const gKeys = Object.keys(navMapNorm).slice(0,2).join('|') || '(ว่าง)';
-      const hNames = fundHoldings.slice(0,2).map(h=>(h.name||h.ticker).trim().toUpperCase()).join('|');
-      showToast('Gemini: ' + gKeys + ' vs ' + hNames);
-    }
+    if (updatedCount > 0) showToast('อัพเดต NAV ' + updatedCount + ' กองทุนแล้ว ✓');
+    else showToast('Gemini ดึง NAV ไม่ได้ — ลองอีกครั้ง');
   }
-
+ 
+  savePriceCache();
   updatePortfolioSummary();
   renderHoldings();
   initPhase9();
@@ -1359,7 +1369,7 @@ async function fetchAllPrices() {
   p14TrackDrawdown();
   showToast('อัพเดทราคาเสร็จแล้ว ✓');
 }
-
+ 
 function updatePortfolioSummary() {
   // Use livePrice*shares when available, otherwise cost
   const total = state.holdings.reduce((s, h) => {
@@ -1376,9 +1386,15 @@ function updatePortfolioSummary() {
       : h.shares * h.avgPrice;
     return s + costVal;
   }, 0);
-  const pl = total - cost;
-  const plPct = cost > 0 ? ((pl / cost) * 100).toFixed(1) : 0;
-
+  const fundHoldingsAll = state.holdings.filter(h => h.type === 'fund');
+  const fundsLoaded = fundHoldingsAll.length === 0 || fundHoldingsAll.some(h => h.livePrice);
+  const liveHoldings = state.holdings.filter(h => h.livePrice);
+  const liveValue = liveHoldings.reduce((s,h) => s + (h.currency==='USD' ? h.shares*h.livePrice*state.usdThb : h.shares*h.livePrice), 0);
+  const liveCost = liveHoldings.reduce((s,h) => s + h.shares*h.avgPrice*(h.currency==='USD'?state.usdThb:1), 0);
+  const pl = fundsLoaded ? liveValue - liveCost : 0;
+  const plBase = fundsLoaded ? liveCost : cost;
+  const plPct = fundsLoaded && plBase > 0 ? ((pl / plBase) * 100).toFixed(1) : 0;
+ 
   // Today's change: sum weighted change across all holdings with live prices
   let todayChangeThb = 0;
   let liveTotal = 0;
@@ -1393,11 +1409,16 @@ function updatePortfolioSummary() {
     }
   });
   const todayPct = hasPrices && liveTotal > 0 ? (todayChangeThb / (liveTotal - todayChangeThb) * 100) : 0;
-
+ 
   document.getElementById('totalValue').textContent = '฿' + Number(total).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  document.getElementById('unrealizedPL').textContent = (pl >= 0 ? '+' : '') + '฿' + Number(pl).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  document.getElementById('unrealizedPL').className = 'hero-val ' + (pl >= 0 ? 'pos' : 'neg');
-
+  if (!fundsLoaded) {
+    document.getElementById('unrealizedPL').textContent = 'กด ↻ ราคาจริง เพื่อดู P&L';
+    document.getElementById('unrealizedPL').className = 'hero-val';
+  } else {
+    document.getElementById('unrealizedPL').textContent = (pl >= 0 ? '+' : '') + '฿' + Number(pl).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('unrealizedPL').className = 'hero-val ' + (pl >= 0 ? 'pos' : 'neg');
+  }
+ 
   // Best / Worst performer from current holdings (by % change)
   const holdingsWithChange = state.holdings.filter(h => h.livePrice && h.change !== 0 && h.change !== undefined);
   if (holdingsWithChange.length) {
@@ -1413,7 +1434,7 @@ function updatePortfolioSummary() {
     if (bestEl)  bestEl.textContent  = 'กด ↻ ราคาจริง';
     if (worstEl) worstEl.textContent = 'กด ↻ ราคาจริง';
   }
-
+ 
   // Realized P&L this year from trades
   const thisYear = new Date().getFullYear();
   const realizedPL = state.trades.filter(t => {
@@ -1431,7 +1452,7 @@ function updatePortfolioSummary() {
       realizedEl.className = '';
     }
   }
-
+ 
   // Update today change banner
   const tc = document.getElementById('todayChange');
   if (tc) {
@@ -1444,16 +1465,16 @@ function updatePortfolioSummary() {
       tc.className = 'hero-sub';
     }
   }
-
+ 
   // Update subtitle under unrealizedPL
   const plSub = document.getElementById('plPctLabel');
   if (plSub) plSub.textContent = 'กำไรรวม ' + (pl >= 0 ? '+' : '') + plPct + '%';
 }
-
+ 
 // ─── Helpers ───
 const typeClass = { set: 't-set', us: 't-us', crypto: 't-crypto', tech: 't-tech', fund: 't-fund' };
 const tagClass = { neg: 'nt-neg', pos: 'nt-pos', neu: 'nt-neu' };
-
+ 
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1462,24 +1483,24 @@ function showPage(id) {
     if (b.textContent.toLowerCase().startsWith(id)) b.classList.add('active');
   });
 }
-
+ 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
 });
-
+ 
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
+  setTimeout(() => t.classList.remove('show'), 4500);
 }
-
+ 
 function fmtCurrency(v, cur) {
   if (cur === 'USD') return '$' + Number(v).toLocaleString();
   return '฿' + Math.round(v).toLocaleString();
 }
-
+ 
 // แสดงทั้ง THB และ USD
 function fmtDual(h) {
   const value = h.value || Math.round(h.shares * h.avgPrice);
@@ -1494,13 +1515,13 @@ function fmtDual(h) {
   // SET — แสดงบาทเป็นหลัก ไม่มี USD
   return `<div class="holding-val">฿${Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`;
 }
-
+ 
 // ─── Date ───
 function setDate() {
   document.getElementById('dateDisplay').textContent =
     new Date().toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
-
+ 
 // ─── Render Holdings ───
 function renderHoldings() {
   const el = document.getElementById('holdingsList');
@@ -1559,7 +1580,7 @@ function renderHoldings() {
   // Store groups for delete reference
   window._holdingGroups = groups;
 }
-
+ 
 async function deleteHolding(i) {
   const h = state.holdings[i];
   if (window.FB && h.id) await window.FB.del('holdings', h.id);
@@ -1568,7 +1589,7 @@ async function deleteHolding(i) {
   updatePortfolioSummary();
   showToast('ลบหลักทรัพย์แล้ว');
 }
-
+ 
 async function deleteHoldingGroup(gi) {
   const group = (window._holdingGroups || [])[gi];
   if (!group) return;
@@ -1586,7 +1607,7 @@ async function deleteHoldingGroup(gi) {
   updatePortfolioSummary();
   showToast('ลบ ' + name + ' แล้ว');
 }
-
+ 
 // ─── Render DCA ───
 function renderDCA() {
   const el = document.getElementById('dcaList');
@@ -1613,7 +1634,7 @@ function renderDCA() {
   const total = state.dcaSchedules.reduce((s, d) => s + Number(d.amount), 0);
   document.getElementById('dcaTotal').textContent = total ? '฿' + total.toLocaleString() + ' / เดือน' : 'ยังไม่มีแผน';
 }
-
+ 
 async function deleteDCA(i) {
   const d = state.dcaSchedules[i];
   if (window.FB && d.id) await window.FB.del('dca', d.id);
@@ -1621,7 +1642,7 @@ async function deleteDCA(i) {
   renderDCA();
   showToast('ลบแผน DCA แล้ว');
 }
-
+ 
 function editDCA(i) {
   const d = state.dcaSchedules[i];
   // Fill modal with existing values
@@ -1633,7 +1654,7 @@ function editDCA(i) {
   document.getElementById('dca-modal').dataset.editIndex = i;
   openModal('dca-modal');
 }
-
+ 
 async function saveDCA() {
   const ticker = document.getElementById('d-ticker').value.trim().toUpperCase();
   const type = document.getElementById('d-type').value;
@@ -1644,10 +1665,10 @@ async function saveDCA() {
   const next = nextRaw
     ? new Date(nextRaw).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
     : 'ยังไม่ระบุ';
-
+ 
   const modal = document.getElementById('dca-modal');
   const editIndex = modal.dataset.editIndex;
-
+ 
   if (editIndex !== undefined && editIndex !== '') {
     // Edit mode — update in place
     const i = parseInt(editIndex);
@@ -1673,27 +1694,27 @@ async function saveDCA() {
     }
     showToast('เพิ่มแผน DCA แล้ว: ' + ticker);
   }
-
+ 
   // Reset modal state
   delete modal.dataset.editIndex;
   closeModal('dca-modal');
 }
-
+ 
 // ─── News API (Phase 4) ───
 const FINNHUB_KEY = 'YOUR_FINNHUB_KEY';
 const MARKETAUX_KEY = 'YOUR_MARKETAUX_KEY';
-
+ 
 function getKey(name) {
   return window['_' + name] || localStorage.getItem('folio_' + name) || '';
 }
-
+ 
 // Sentiment score → Thai tag
 function sentimentTag(score) {
   if (score >= 0.15) return { tag: 'บวก', type: 'pos' };
   if (score <= -0.15) return { tag: 'เสี่ยง', type: 'neg' };
   return { tag: 'กลาง', type: 'neu' };
 }
-
+ 
 // ─── Fund News via AI (Phase 4 + Fund support) ───
 // Gemini identifies a fund's underlying holdings, then we fetch news for those stocks
 async function fetchNewsForFund(holding) {
@@ -1712,7 +1733,7 @@ async function fetchNewsForFund(holding) {
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
     const underlyingTickers = JSON.parse(text.replace(/```json|```/g, '').trim());
     if (!Array.isArray(underlyingTickers) || !underlyingTickers.length) return [];
-
+ 
     // Fetch news for each underlying ticker, label them with the fund name
     const results = await Promise.all(underlyingTickers.slice(0,3).map(t => fetchNewsForTicker(t, null)));
     return results.flat().slice(0,3).map(n => ({
@@ -1722,7 +1743,7 @@ async function fetchNewsForFund(holding) {
     }));
   } catch(e) { return []; }
 }
-
+ 
 async function fetchNewsForTicker(ticker, holding) {
   // ── Fund: ask Gemini what stocks it holds, then get news for those ──
   if (holding && holding.type === 'fund') {
@@ -1753,7 +1774,7 @@ async function fetchNewsForTicker(ticker, holding) {
       });
     }
   } catch(e) {}
-
+ 
   // Fallback: Marketaux (better for SET/Thai stocks)
   try {
     const mxKey = getActiveKey('MARKETAUX');
@@ -1780,7 +1801,7 @@ async function fetchNewsForTicker(ticker, holding) {
   } catch(e) {}
   return [];
 }
-
+ 
 function timeAgo(ms) {
   const diff = Date.now() - ms;
   const h = Math.floor(diff / 3600000);
@@ -1788,7 +1809,7 @@ function timeAgo(ms) {
   if (h < 24) return `${h} ชม. ที่แล้ว`;
   return `${Math.floor(h/24)} วัน ที่แล้ว`;
 }
-
+ 
 async function fetchAllNews() {
   if (!state.holdings.length) return; // ไม่มี holdings ยังไม่ต้องดึงข่าว
   const tickers = [...new Set(state.holdings.map(h => h.ticker))];
@@ -1806,7 +1827,7 @@ async function fetchAllNews() {
   renderNewsFull();
   if (fresh.length) showToast('อัพเดทข่าวเสร็จแล้ว ✓');
 }
-
+ 
 // ─── Render News Short ───
 function renderNewsShort() {
   const el = document.getElementById('newsFeedShort');
@@ -1821,7 +1842,7 @@ function renderNewsShort() {
       <div class="news-meta">${n.source} · ${n.time}</div>
     </div>`).join('');
 }
-
+ 
 // ─── Render News Full ───
 function renderNewsFull() {
   const el = document.getElementById('newsFullList');
@@ -1836,21 +1857,21 @@ function renderNewsFull() {
       <div class="news-meta" style="margin-top:5px;">${n.source} · ${n.time}</div>
     </div>`).join('');
 }
-
+ 
 // ─── Budget Render ───
 const EXPENSE_COLORS = ['#D95070','#F59E0B','#1D4ED8','#7E22CE','#16A34A','#AAB0BB','#C2410C','#0F766E'];
-
+ 
 function renderBudget() {
   const month = new Date().toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
   document.getElementById('budgetMonth').textContent = month;
-
+ 
   const totalExp = state.budgetExpenses.reduce((s, e) => s + Number(e.amount), 0);
   const dca = state.dcaSchedules.reduce((s, d) => s + Number(d.amount), 0);
   const remaining = state.budgetIncome - totalExp - dca;
   const incPct = state.budgetIncome > 0 ? Math.round(totalExp/state.budgetIncome*100) : 0;
   const dcaPct = state.budgetIncome > 0 ? Math.round(dca/state.budgetIncome*100) : 0;
   const remPct = state.budgetIncome > 0 ? Math.round(remaining/state.budgetIncome*100) : 0;
-
+ 
   document.getElementById('budgetMetrics').innerHTML = `
     <div class="metric" style="cursor:pointer;" onclick="editIncome()">
       <div class="metric-label">รายได้ต่อเดือน <span style="color:var(--accent);font-size:9px;">✏️ แก้ไข</span></div>
@@ -1860,7 +1881,7 @@ function renderBudget() {
     <div class="metric"><div class="metric-label">รายจ่ายรวม</div><div class="metric-value neg">฿${totalExp.toLocaleString()}</div><div class="metric-sub">${incPct}% ของรายได้</div></div>
     <div class="metric"><div class="metric-label">ลงทุน (DCA)</div><div class="metric-value pos">฿${dca.toLocaleString()}</div><div class="metric-sub">${dcaPct}% ของรายได้</div></div>
     <div class="metric"><div class="metric-label">คงเหลือ</div><div class="metric-value ${remaining>=0?'pos':'neg'}">฿${remaining.toLocaleString()}</div><div class="metric-sub">${remPct}% ของรายได้</div></div>`;
-
+ 
   document.getElementById('expenseList').innerHTML = state.budgetExpenses.length
     ? state.budgetExpenses.map((e, i) => `
         <div class="budget-row">
@@ -1874,7 +1895,7 @@ function renderBudget() {
           </div>
         </div>`).join('')
     : `<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px;">ยังไม่มีรายจ่าย<br><button onclick="openModal('expense-modal')" class="btn-primary" style="margin-top:8px;font-size:11px;padding:5px 14px;">+ เพิ่มรายจ่าย</button></div>`;
-
+ 
   document.getElementById('savingsList').innerHTML = state.budgetSavings.map((s, i) => {
     const pct = Math.min(100, Math.round(s.current / s.target * 100));
     return `<div>
@@ -1890,7 +1911,7 @@ function renderBudget() {
     </div>`;
   }).join('');
 }
-
+ 
 function editIncome() {
   const val = prompt('กรอกรายได้ต่อเดือน (฿)', state.budgetIncome || '');
   if (val === null) return;
@@ -1901,7 +1922,7 @@ function editIncome() {
     showToast('อัพเดทรายได้แล้ว');
   }
 }
-
+ 
 async function addExpense() {
   const cat = document.getElementById('exp-cat').value.trim();
   const amount = parseFloat(document.getElementById('exp-amount').value);
@@ -1915,14 +1936,14 @@ async function addExpense() {
   closeModal('expense-modal');
   showToast('เพิ่มรายจ่ายแล้ว: ' + cat);
 }
-
+ 
 async function deleteExpense(i) {
   const e = state.budgetExpenses[i];
   if (window.FB && e.id) await window.FB.del('budget_expenses', e.id);
   state.budgetExpenses.splice(i, 1);
   renderBudget();
 }
-
+ 
 async function addSaving() {
   const name = document.getElementById('sav-name').value.trim();
   const current = parseFloat(document.getElementById('sav-current').value) || 0;
@@ -1935,19 +1956,19 @@ async function addSaving() {
   closeModal('saving-modal');
   showToast('เพิ่มเป้าหมายออมแล้ว: ' + name);
 }
-
+ 
 async function deleteSaving(i) {
   const s = state.budgetSavings[i];
   if (window.FB && s.id) await window.FB.del('budget_savings', s.id);
   state.budgetSavings.splice(i, 1);
   renderBudget();
 }
-
+ 
 // ─── Add Holding ───
 document.getElementById('h-broker').addEventListener('change', function() {
   document.getElementById('h-broker-custom').style.display = this.value === 'other' ? '' : 'none';
 });
-
+ 
 function onHoldingTypeChange() {
   const type = document.getElementById('h-type').value;
   const isFund = type === 'fund';
@@ -1956,7 +1977,7 @@ function onHoldingTypeChange() {
   document.getElementById('h-fund-region-group').style.display = isFund ? '' : 'none';
   document.getElementById('h-ticker-label').textContent = 'Ticker';
 }
-
+ 
 function openHoldingModal(editId) {
   // Reset to add mode
   document.getElementById('h-edit-id').value = editId || '';
@@ -1965,7 +1986,7 @@ function openHoldingModal(editId) {
   document.getElementById('h-submit-btn').textContent = isEdit ? 'บันทึกการแก้ไข' : 'เพิ่มหลักทรัพย์';
   openModal('holding-modal');
 }
-
+ 
 function editHoldingGroup(gi) {
   const group = (window._holdingGroups || [])[gi];
   if (!group) return;
@@ -1997,7 +2018,7 @@ function editHoldingGroup(gi) {
   }
   openHoldingModal(firstEntry.id || '__local__' + group._ids[0].i);
 }
-
+ 
 async function addHolding() {
   const type = document.getElementById('h-type').value;
   const isFund = type === 'fund';
@@ -2051,7 +2072,7 @@ async function addHolding() {
   showToast((isEdit ? 'อัพเดตแล้ว: ' : 'เพิ่มหลักทรัพย์แล้ว: ') + name);
   syncHoldingsToSheets();
 }
-
+ 
 // ─── Add DCA ───
 async function addDCA() {
   const ticker = document.getElementById('d-ticker').value.trim().toUpperCase();
@@ -2071,7 +2092,7 @@ async function addDCA() {
   closeModal('dca-modal');
   showToast('เพิ่มแผน DCA แล้ว: ' + ticker);
 }
-
+ 
 // ─── Add Trade ───
 async function addTrade() {
   const type = document.getElementById('t-type').value;
@@ -2095,7 +2116,7 @@ async function addTrade() {
   showToast('บันทึกธุรกรรมแล้ว: ' + type + ' ' + asset);
   syncTradesToSheets(data);
 }
-
+ 
 // ─── Render Trades ───
 function renderTrades() {
   const tbody = document.getElementById('tradeLog');
@@ -2125,7 +2146,7 @@ function renderTrades() {
   if (el('buySellRatio')) el('buySellRatio').textContent = `${buys} / ${sells}`;
   if (el('totalInvested')) el('totalInvested').textContent = totalInv ? '฿' + Number(totalInv).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : '฿0';
 }
-
+ 
 // ─── AI Refresh ───
 async function refreshAI() {
   const btn = document.getElementById('refreshBtn');
@@ -2134,7 +2155,7 @@ async function refreshAI() {
   const subtitle = document.getElementById('aiSubtitle');
   btn.disabled = true; spinner.style.display = 'block';
   cards.innerHTML = '<div class="ai-loading">Gemini กำลังวิเคราะห์พอร์ตและข่าววันนี้...</div>';
-
+ 
   const holdingSummary = state.holdings.map(h => {
     const typeLabel = h.type === 'fund' ? 'กองทุน' : h.type;
     const nameLabel = h.name && h.name !== h.ticker ? `${h.name} (${h.type === 'fund' ? 'กองทุน' : h.ticker})` : h.ticker;
@@ -2142,16 +2163,16 @@ async function refreshAI() {
   }).join(', ');
   const newsSummary = state.news.slice(0,4).map(n => `[${n.tag}] ${n.ticker}: ${n.headline}`).join('\n');
   const dcaSummary = state.dcaSchedules.map(d => `${d.ticker} ฿${d.amount}/${d.freq}`).join(', ');
-
+ 
   const prompt = `คุณคือที่ปรึกษาการลงทุนส่วนตัว AI สำหรับนักลงทุนไทยที่ใช้กลยุทธ์ DCA และมีเป้าหมายผลตอบแทน 10% ต่อปี
-
+ 
 พอร์ตปัจจุบัน: ${holdingSummary}
 แผน DCA: ${dcaSummary}
 ผลตอบแทน YoY ตอนนี้: 6.8% (เป้าหมาย 10%)
-
+ 
 ข่าวที่เกี่ยวกับพอร์ตวันนี้:
 ${newsSummary}
-
+ 
 สร้างกลยุทธ์การลงทุน 3 แบบในรูปแบบ JSON array เท่านั้น ห้ามมี text หรือ markdown อื่น:
 [
   {
@@ -2165,7 +2186,7 @@ ${newsSummary}
   {"type": "สมดุล", ...},
   {"type": "เชิงรุก", ...}
 ]`;
-
+ 
   try {
     const geminiKey = getActiveKey('GEMINI');
     if (!geminiKey) throw new Error('no_key');
@@ -2193,7 +2214,7 @@ ${newsSummary}
   }
   btn.disabled = false; spinner.style.display = 'none';
 }
-
+ 
 function renderAICards(strategies) {
   const typeMap = { 'อนุรักษ์นิยม': 'conservative', 'สมดุล': 'balanced', 'เชิงรุก': 'aggressive', 'Conservative': 'conservative', 'Balanced': 'balanced', 'Aggressive': 'aggressive' };
   const returnColor = { 'อนุรักษ์นิยม': 'var(--green)', 'สมดุล': 'var(--accent)', 'เชิงรุก': 'var(--purple)', 'Conservative': 'var(--green)', 'Balanced': 'var(--accent)', 'Aggressive': 'var(--purple)' };
@@ -2209,13 +2230,13 @@ function renderAICards(strategies) {
       </div>
     </div>`).join('');
 }
-
+ 
 // ─── Init ───
 function setDate() {
   document.getElementById('dateDisplay').textContent =
     new Date().toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
-
+ 
 function renderAllocation() {
   const el = document.getElementById('allocationChart');
   [{ label: 'หุ้นไทย (SET)', pct: 40, color: '#1D4ED8' },
@@ -2230,7 +2251,7 @@ function renderAllocation() {
     </div>`;
   });
 }
-
+ 
 function startApp() {
   setDate();
   renderHoldings();
@@ -2244,8 +2265,7 @@ function startApp() {
   document.getElementById('t-date').value = today;
   window._folioReady = true;
   window.dispatchEvent(new Event('folio-ready'));
-  fetchAllPrices();
-  setInterval(fetchAllPrices, 60000);
+  if (loadPriceCache()) { updatePortfolioSummary(); renderHoldings(); initPhase9(); initPhase10(); initPhase11(); initPhase12(); }
   fetchAllNews();
   setInterval(fetchAllNews, 900000);
 }
@@ -2261,10 +2281,10 @@ const SERVICES = {
   AV:        { label: 'Alpha Vantage', slots: 4 },
   GEMINI:    { label: 'Gemini AI', slots: 4 },
 };
-
+ 
 // Track which key index is currently active per service
 const activeKeyIndex = { FINNHUB: 0, MARKETAUX: 0, AV: 0, GEMINI: 0 };
-
+ 
 function getKeys(service) {
   const keys = [];
   for (let i = 0; i < SERVICES[service].slots; i++) {
@@ -2273,7 +2293,7 @@ function getKeys(service) {
   }
   return keys;
 }
-
+ 
 // Get active key, rotate to next if current fails
 function getActiveKey(service) {
   const keys = getKeys(service);
@@ -2281,7 +2301,7 @@ function getActiveKey(service) {
   const idx = activeKeyIndex[service] % keys.length;
   return keys[idx];
 }
-
+ 
 function rotateKey(service) {
   const keys = getKeys(service);
   if (keys.length > 1) {
@@ -2289,7 +2309,7 @@ function rotateKey(service) {
     showToast(`⚠️ ${SERVICES[service].label} key หมด สลับไป key ${activeKeyIndex[service]+1}`);
   }
 }
-
+ 
 function getKey(name) {
   // Legacy single-key support
   if (['FINNHUB_KEY','MARKETAUX_KEY','AV_KEY','PROXY_URL','SHEETS_URL'].includes(name)) {
@@ -2299,7 +2319,7 @@ function getKey(name) {
   const svc = name.replace('_KEY','');
   return getActiveKey(svc) || window['_' + name] || '';
 }
-
+ 
 const CFG_KEYS = {
   'cfg-proxy':    'PROXY_URL',
   'cfg-sheets':   'SHEETS_URL',
@@ -2308,7 +2328,7 @@ const CFG_KEYS = {
   'cfg-fb-authdomain':'FB_AUTH_DOMAIN',
   'cfg-fb-appid': 'FB_APP_ID',
 };
-
+ 
 function loadSettings() {
   // Single-value fields
   Object.entries(CFG_KEYS).forEach(([inputId, storageKey]) => {
@@ -2326,7 +2346,7 @@ function loadSettings() {
   window._PROXY_URL = SET_PROXY;
   window._SHEETS_URL = SHEETS_URL;
 }
-
+ 
 function saveSettings() {
   Object.entries(CFG_KEYS).forEach(([inputId, storageKey]) => {
     const el = document.getElementById(inputId);
@@ -2345,7 +2365,7 @@ function saveSettings() {
   showToast('บันทึก API Keys เรียบร้อยแล้ว ✓');
   renderApiStatus();
 }
-
+ 
 function renderApiStatus() {
   const el = document.getElementById('apiStatus');
   if (!el) return;
@@ -2364,7 +2384,7 @@ function renderApiStatus() {
       <div style="font-size:9px;color:${c.has?'var(--green)':'var(--text3)'};">${c.has ? (c.keys > 1 ? `✓ ${c.keys} keys` : '✓ พร้อม') : 'ยังไม่ได้ใส่'}</div>
     </div>`).join('');
 }
-
+ 
 async function testConnections() {
   showToast('กำลังทดสอบ...');
   const proxy = localStorage.getItem('folio_PROXY_URL') || 'https://folio-proxy.ojo0308.workers.dev';
@@ -2381,7 +2401,7 @@ async function testConnections() {
     } catch { showToast('✗ CoinGecko เชื่อมต่อไม่ได้'); }
   }, 2000);
 }
-
+ 
 // ─── Google Sheets Sync ───
 async function syncToSheets(tab, rows, headers) {
   const url = SHEETS_URL;
@@ -2393,7 +2413,7 @@ async function syncToSheets(tab, rows, headers) {
     });
   } catch(e) {}
 }
-
+ 
 function testFirebaseWrite() {
   if (!window.FB) { showToast('Firebase ยังไม่พร้อม'); return; }
   showToast('กำลังทดสอบ Firebase...');
@@ -2404,7 +2424,7 @@ function testFirebaseWrite() {
     showToast('Firebase ❌ ' + e.message);
   });
 }
-
+ 
 function copyFirebaseRules() {
   const rules = `rules_version = '2';
 service cloud.firestore {
@@ -2416,21 +2436,21 @@ service cloud.firestore {
 }`;
   navigator.clipboard.writeText(rules).then(() => showToast('คัดลอก Rules แล้ว ✓'));
 }
-
+ 
 function syncHoldingsToSheets() {
   const headers = ['Ticker','ชื่อ','ประเภท','จำนวน','ราคาเฉลี่ย','สกุลเงิน','มูลค่า','เปลี่ยนแปลง%','DCA'];
   const rows = state.holdings.map(h => [h.ticker, h.name||h.ticker, h.type, h.shares, h.avgPrice, h.currency, h.value||0, h.change||0, h.dca?'ใช่':'ไม่']);
   syncToSheets('Holdings', rows, headers);
 }
-
+ 
 function syncTradesToSheets(trade) {
   syncToSheets('Trades', [[trade.dateStr, trade.type, trade.asset, trade.price, trade.qty]],
     ['วันที่','ประเภท','หลักทรัพย์','ราคา','จำนวน']);
 }
-
+ 
 // ─── Phase 9: YoY Gap Calculator ───
 let _p9Chart = null;
-
+ 
 function initPhase9() {
   if (!state.holdings.length) return;
   const totalCost  = state.holdings.reduce((s,h) => {
@@ -2439,7 +2459,7 @@ function initPhase9() {
   const totalValue = state.holdings.reduce((s,h) => s + (h.value || h.shares * h.avgPrice), 0);
   const totalMonthly = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
   if (totalCost === 0) return;
-
+ 
   const currentYoy = ((totalValue - totalCost) / totalCost) * 100;
   const TARGET = 10;
   const gapPct  = TARGET - currentYoy;
@@ -2450,32 +2470,32 @@ function initPhase9() {
   const projValue  = totalValue + totalMonthly * monthsLeft;
   const projCost   = totalCost  + totalMonthly * monthsLeft;
   const projYoy    = projCost > 0 ? ((projValue - projCost) / projCost) * 100 : 0;
-
+ 
   const fmt = v => `${v>=0?'+':''}${v.toFixed(1)}%`;
   const fmtB = v => `฿${Math.abs(v).toLocaleString('th-TH',{maximumFractionDigits:0})}`;
-
+ 
   // KPIs
   const yoyEl = document.getElementById('p9CurrentYoy');
   yoyEl.textContent = fmt(currentYoy);
   yoyEl.style.color = currentYoy >= TARGET ? 'var(--green)' : currentYoy >= 5 ? 'var(--amber)' : 'var(--red)';
-
+ 
   const gapEl = document.getElementById('p9Gap');
   gapEl.textContent = gapPct <= 0 ? fmt(-gapPct) + ' 🎉' : fmt(gapPct);
   gapEl.style.color = gapPct <= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('p9GapBaht').textContent = gapBaht > 0 ? `ขาดอีก ${fmtB(gapBaht)}` : `เกินเป้า ${fmtB(-gapBaht)}`;
-
+ 
   document.getElementById('p9DcaNeeded').textContent = dcaNeeded > 0 ? fmtB(dcaNeeded) : '—';
   document.getElementById('p9DcaNeeded').style.color = dcaNeeded > 0 ? 'var(--accent)' : 'var(--green)';
-
+ 
   const projEl = document.getElementById('p9Projected');
   projEl.textContent = fmt(projYoy);
   projEl.style.color = projYoy >= TARGET ? 'var(--green)' : projYoy >= 5 ? 'var(--amber)' : 'var(--red)';
-
+ 
   // Progress bar (Phase 9 card)
   const pct = Math.min(100, Math.max(0, (currentYoy / TARGET) * 100));
   document.getElementById('p9ProgressFill').style.width = pct + '%';
   document.getElementById('p9ProgressLabel').textContent = currentYoy.toFixed(1) + '% จาก ' + TARGET + '% เป้าหมาย';
-
+ 
   // Hero bar (top card) — sync with real YoY
   const yoyPctEl = document.getElementById('yoyPct');
   const yoyBarEl = document.getElementById('yoyBar');
@@ -2483,7 +2503,7 @@ function initPhase9() {
   if (yoyPctEl) { yoyPctEl.textContent = currentYoy.toFixed(1) + '%'; yoyPctEl.style.color = currentYoy >= TARGET ? 'var(--green)' : currentYoy >= 5 ? 'var(--amber)' : 'var(--red)'; }
   if (yoyBarEl) yoyBarEl.style.width = Math.min(100, Math.max(0, (currentYoy / TARGET) * 100)) + '%';
   if (yoyNoteEl) yoyNoteEl.textContent = gapPct > 0 ? 'ต้องการเพิ่มอีก ' + gapPct.toFixed(1) + '% เพื่อถึงเป้าหมาย' : 'เกินเป้าหมาย 10% แล้ว 🎉';
-
+ 
   // Alert
   const alertEl = document.getElementById('p9Alert');
   if (gapPct <= 0) {
@@ -2493,7 +2513,7 @@ function initPhase9() {
     alertEl.style.background = 'var(--amber-bg)'; alertEl.style.borderColor = '#FCD34D'; alertEl.style.color = 'var(--amber)';
     alertEl.innerHTML = `⚡ ต้องการ DCA เพิ่ม <strong>${fmtB(dcaNeeded)}/เดือน</strong> เพื่อปิด gap ${fmt(gapPct)} ภายใน ${monthsLeft} เดือน`;
   }
-
+ 
   // Chart
   const labels = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const monthsPast = 12 - monthsLeft;
@@ -2504,7 +2524,7 @@ function initPhase9() {
     return c > 0 ? parseFloat(((v-c)/c*100).toFixed(2)) : 0;
   });
   const targetLine = labels.map(() => TARGET);
-
+ 
   const ctx = document.getElementById('p9Chart').getContext('2d');
   if (_p9Chart) _p9Chart.destroy();
   _p9Chart = new Chart(ctx, {
@@ -2522,10 +2542,10 @@ function initPhase9() {
       }
     }
   });
-
+ 
   window._p9Data = { holdings: state.holdings, totalCost, totalValue, totalMonthly, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft, projectedYoy: projYoy };
 }
-
+ 
 // ─── Phase 10: Rebalancing Engine ───
 const P10_TYPES = ['set','us','crypto','fund_thai','fund_us','fund_global','fund_china','fund_asia','fund_bond','fund_mixed','tech'];
 const P10_LABELS = {
@@ -2542,12 +2562,12 @@ const P10_COLORS = {
 const FUND_REGION_KEY = { thai:'fund_thai', us:'fund_us', global:'fund_global', china:'fund_china', asia:'fund_asia', bond:'fund_bond', mixed:'fund_mixed' };
 // Expected returns rule-based per P10 type (%/yr)
 const P10_EXPECTED_RETURN = { set:8.5, us:12, crypto:25, tech:15, fund_thai:7.5, fund_us:10, fund_global:8, fund_china:9, fund_asia:8, fund_bond:3, fund_mixed:6 };
-
+ 
 function p10LoadTargets() {
   const saved = localStorage.getItem('folio_p10_targets');
   return saved ? JSON.parse(saved) : { set:40, us:30, crypto:20, fund_thai:5, fund_us:5, tech:0 };
 }
-
+ 
 function p10SaveTargets() {
   const targets = {};
   P10_TYPES.forEach(t => {
@@ -2561,7 +2581,7 @@ function p10SaveTargets() {
   initPhase10();
   showToast('บันทึกเป้าหมายน้ำหนักแล้ว ✓');
 }
-
+ 
 function p10OpenModal() {
   const t = p10LoadTargets();
   // Show/hide fund region rows based on what's in holdings
@@ -2578,7 +2598,7 @@ function p10OpenModal() {
   p10UpdateSum();
   openModal('p10-target-modal');
 }
-
+ 
 function p10UpdateSum() {
   const sum = P10_TYPES.reduce((a,type) => {
     const el = document.getElementById('p10t-'+type);
@@ -2606,7 +2626,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('folio_p10_targets', JSON.stringify(t));
   }
 })();
-
+ 
 // ─── Phase 10 Fund-Centric Mode ───
 let _p10FundMode = false;
 function p10ToggleMode() {
@@ -2619,12 +2639,12 @@ function p10ToggleMode() {
   }
   initPhase10();
 }
-
+ 
 function initPhase10() {
   if (!state.holdings.length) return;
   const totalValue = state.holdings.reduce((s,h) => s+(h.value||h.shares*h.avgPrice),0);
   if (!totalValue) return;
-
+ 
   // Fund-Centric Mode: only look at fund sub-allocation, ignore SET/Crypto/US
   if (_p10FundMode) {
     const fundHoldings = state.holdings.filter(h => h.type === 'fund');
@@ -2651,7 +2671,7 @@ function initPhase10() {
     document.getElementById('p10ActionPlan').style.display='none';
     return;
   }
-
+ 
   // Normal Mode: compute actual weights per type (funds split by fundRegion)
   const actual = {};
   P10_TYPES.forEach(t => actual[t] = 0);
@@ -2663,11 +2683,11 @@ function initPhase10() {
     if (actual[key] !== undefined) actual[key] += (h.value || h.shares*h.avgPrice);
   });
   P10_TYPES.forEach(t => actual[t] = (actual[t]/totalValue)*100);
-
+ 
   const targets = p10LoadTargets();
   const activeTypes = P10_TYPES.filter(t => targets[t] > 0 || actual[t] > 0);
   window._p10Data = { actual, targets, activeTypes };
-
+ 
   // Render rows
   const rows = document.getElementById('p10Rows');
   rows.innerHTML = activeTypes.map(t => {
@@ -2694,7 +2714,7 @@ function initPhase10() {
       </div>
     </div>`;
   }).join('');
-
+ 
   // Alert
   const alertEl = document.getElementById('p10Alert');
   const maxDev = activeTypes.reduce((mx,t) => Math.max(mx, Math.abs((actual[t]||0)-(targets[t]||0))),0);
@@ -2707,7 +2727,7 @@ function initPhase10() {
     alertEl.style.background='var(--amber-bg)'; alertEl.style.borderColor='#FCD34D'; alertEl.style.color='var(--amber)';
     alertEl.innerHTML=`⚡ <strong>${P10_LABELS[worst]}</strong>${dev>0?' มากเกินไป '+dev.toFixed(1)+'%':' ขาดอยู่ '+Math.abs(dev).toFixed(1)+'%'} — ควรปรับ Rebalance`;
   }
-
+ 
   // Action plan
   const actionEl = document.getElementById('p10ActionPlan');
   const actionsEl = document.getElementById('p10Actions');
@@ -2728,10 +2748,10 @@ function initPhase10() {
   } else {
     actionEl.style.display='none';
   }
-
+ 
   window._p10Data = { actual, targets, totalValue, activeTypes };
 }
-
+ 
 async function p10RefreshAI() {
   if (!window._p10Data) { showToast('โหลด Holdings ก่อนนะครับ'); return; }
   const btn = document.getElementById('p10AiBtn');
@@ -2741,14 +2761,14 @@ async function p10RefreshAI() {
   btn.disabled=true; sp.style.display='block';
   box.style.display='block';
   txt.innerHTML='<span style="color:var(--text3);">AI กำลังวิเคราะห์...</span>';
-
+ 
   const { actual, targets, totalValue, activeTypes } = window._p10Data;
   const summary = activeTypes.map(t =>
     `${P10_LABELS[t]}: จริง ${(actual[t]||0).toFixed(1)}% เป้า ${targets[t]||0}% (${((actual[t]||0)-(targets[t]||0))>=0?'เกิน':'ขาด'} ${Math.abs((actual[t]||0)-(targets[t]||0)).toFixed(1)}%)`
   ).join('\n');
   const yoyData = window._p9Data;
   const yoyLine = yoyData ? `YoY ปัจจุบัน: ${yoyData.currentYoy.toFixed(1)}%, gap ${yoyData.gapPct.toFixed(1)}%` : '';
-
+ 
   const prompt = `คุณคือที่ปรึกษาลงทุน AI วิเคราะห์การ Rebalance พอร์ต
 ${yoyLine}
 มูลค่าพอร์ตรวม: ฿${Math.round(totalValue).toLocaleString()}
@@ -2756,7 +2776,7 @@ ${yoyLine}
 ${summary}
 แนะนำว่าควร Rebalance อย่างไร asset ไหนควรซื้อก่อนเพื่อให้เข้าใกล้เป้าหมายและช่วยเรื่อง YoY
 ตอบเป็นภาษาไทย 3-5 ประโยค กระชับ ให้คำแนะนำที่นำไปใช้ได้จริง`;
-
+ 
   try {
     const key = getActiveKey('GEMINI');
     if (!key) throw new Error('no_key');
@@ -2773,13 +2793,13 @@ ${summary}
   }
   btn.disabled=false; sp.style.display='none';
 }
-
+ 
 // ─── Phase 11: Decision Alerts ───
 function initPhase11() {
   const alerts = [];
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
-
+ 
   // 1. Holdings with big daily moves (>5% either direction)
   state.holdings.forEach(h => {
     const chg = h.change || 0;
@@ -2790,7 +2810,7 @@ function initPhase11() {
       alerts.push({ type: 'info', icon: '📈', msg: `<strong>${label}</strong> พุ่งขึ้น <strong>+${chg.toFixed(1)}%</strong> วันนี้ — พิจารณา Take Profit`, action: null });
     }
   });
-
+ 
   // 2. DCA due today or overdue
   state.dcaSchedules.forEach(d => {
     if (!d.next || d.next === 'ยังไม่ระบุ') return;
@@ -2803,7 +2823,7 @@ function initPhase11() {
       alerts.push({ type: 'warn', icon: '💰', msg: `DCA <strong>${d.ticker}</strong> ครบกำหนดวันนี้ — ฿${Number(d.amount).toLocaleString()}`, action: null });
     }
   });
-
+ 
   // 3. YoY gap critical
   if (window._p9Data) {
     const { currentYoy, gapPct } = window._p9Data;
@@ -2815,7 +2835,7 @@ function initPhase11() {
       alerts.push({ type: 'info', icon: '🎉', msg: `ถึงเป้า 10% YoY แล้ว! YoY ปัจจุบัน <strong>${currentYoy.toFixed(1)}%</strong> — ยอดเยี่ยม`, action: null });
     }
   }
-
+ 
   // 4. Rebalance deviation >10%
   if (window._p10Data) {
     const { actual, targets, activeTypes } = window._p10Data;
@@ -2827,7 +2847,7 @@ function initPhase11() {
       }
     });
   }
-
+ 
   // 5. Portfolio all-time loss
   if (state.holdings.length) {
     const total = state.holdings.reduce((s,h) => s+(h.value||h.shares*h.avgPrice), 0);
@@ -2836,17 +2856,17 @@ function initPhase11() {
       alerts.push({ type: 'danger', icon: '🔴', msg: `พอร์ตติดลบมากกว่า 10% จากต้นทุน — ควรทบทวนกลยุทธ์โดยด่วน`, action: null });
     }
   }
-
+ 
   const wrap = document.getElementById('p11AlertsWrap');
   const list = document.getElementById('p11AlertsList');
   if (!alerts.length) { wrap.style.display = 'none'; return; }
-
+ 
   const colors = {
     danger: { bg:'var(--red-bg)', border:'#FECACA', icon:'var(--red)' },
     warn:   { bg:'var(--amber-bg)', border:'#FCD34D', icon:'var(--amber)' },
     info:   { bg:'var(--blue-bg)', border:'#BFDBFE', icon:'var(--blue)' }
   };
-
+ 
   list.innerHTML = alerts.map(a => {
     const c = colors[a.type];
     return `<div style="display:flex;align-items:center;gap:10px;background:${c.bg};border:0.5px solid ${c.border};border-radius:9px;padding:10px 14px;font-size:12px;color:var(--text);">
@@ -2857,14 +2877,14 @@ function initPhase11() {
   }).join('');
   wrap.style.display = 'block';
 }
-
+ 
 // ─── Phase 12: Monthly Review Mode ───
 function initPhase12() {
   const now = new Date();
   const monthNames = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
   const label = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
   document.getElementById('p12MonthLabel').textContent = `ข้อมูลสรุป ${label}`;
-
+ 
   // P&L this month from trades
   const thisMonth = now.getMonth(); const thisYear = now.getFullYear();
   const monthTrades = state.trades.filter(t => {
@@ -2879,22 +2899,22 @@ function initPhase12() {
   const plEl = document.getElementById('p12Pl');
   plEl.textContent = (monthPL >= 0 ? '+' : '') + '฿' + Math.abs(Math.round(monthPL)).toLocaleString();
   plEl.style.color = monthPL >= 0 ? 'var(--green)' : 'var(--red)';
-
+ 
   // Monthly DCA total
   const dcaTotal = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
   document.getElementById('p12Dca').textContent = '฿' + dcaTotal.toLocaleString();
-
+ 
   // Expenses this month
   const monthExpenses = state.budgetExpenses.reduce((s,e) => s + Number(e.amount||0), 0);
   document.getElementById('p12Expense').textContent = '฿' + Math.round(monthExpenses).toLocaleString();
-
+ 
   // Save rate = DCA / (DCA + expenses)
   const total = dcaTotal + monthExpenses;
   const saveRate = total > 0 ? ((dcaTotal / total) * 100).toFixed(0) : '—';
   const srEl = document.getElementById('p12SaveRate');
   srEl.textContent = total > 0 ? saveRate + '%' : '—';
   srEl.style.color = saveRate >= 20 ? 'var(--green)' : saveRate >= 10 ? 'var(--amber)' : 'var(--red)';
-
+ 
   // Top/Bottom performers from holdings
   const sortedHoldings = [...state.holdings].filter(h => h.change !== undefined).sort((a,b) => (b.change||0)-(a.change||0));
   const top = sortedHoldings[0];
@@ -2909,10 +2929,10 @@ function initPhase12() {
       <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;">${p.name}</div>
       <div style="font-size:16px;font-family:var(--font-serif);color:${p.color};">${p.val}</div>
     </div>`).join('');
-
+ 
   window._p12Data = { monthPL, dcaTotal, monthExpenses, saveRate, label, top, bot };
 }
-
+ 
 async function p12RunReview() {
   initPhase12();
   if (!window._p12Data) return;
@@ -2923,14 +2943,14 @@ async function p12RunReview() {
   btn.disabled = true; sp.style.display = 'block';
   box.style.display = 'block';
   txt.innerHTML = '<span style="color:var(--text3);">AI กำลังสรุปเดือนนี้...</span>';
-
+ 
   const { monthPL, dcaTotal, monthExpenses, saveRate, label, top, bot } = window._p12Data;
   const yoy = window._p9Data;
   const rebal = window._p10Data;
-
+ 
   const prompt = `คุณคือที่ปรึกษาการลงทุน AI
 สรุปรีวิวประจำเดือน ${label} สำหรับนักลงทุน DCA เป้าหมาย 10% YoY
-
+ 
 ข้อมูลเดือนนี้:
 - P&L จากการซื้อขาย: ${monthPL >= 0 ? '+' : ''}฿${Math.round(monthPL).toLocaleString()}
 - DCA รวม: ฿${dcaTotal.toLocaleString()}/เดือน
@@ -2940,9 +2960,9 @@ async function p12RunReview() {
 - แย่สุด: ${bot ? `${bot.name||bot.ticker} ${(bot.change||0).toFixed(1)}%` : '—'}
 ${yoy ? `- YoY ปัจจุบัน: ${yoy.currentYoy.toFixed(1)}% (เป้า 10%, gap ${yoy.gapPct.toFixed(1)}%)` : ''}
 ${rebal ? `- Rebalance status: ${Object.entries(rebal.actual).map(([t,v]) => `${t} ${v.toFixed(0)}%`).join(', ')}` : ''}
-
+ 
 เขียนสรุป 4-5 ประโยค ภาษาไทย กระชับ ชมเชยสิ่งที่ดี และแนะนำสิ่งที่ต้องปรับปรุงเดือนหน้า`;
-
+ 
   try {
     const key = getActiveKey('GEMINI');
     if (!key) throw new Error('no_key');
@@ -2959,7 +2979,7 @@ ${rebal ? `- Rebalance status: ${Object.entries(rebal.actual).map(([t,v]) => `${
   }
   btn.disabled = false; sp.style.display = 'none';
 }
-
+ 
 async function p9RefreshAI() {
   if (!window._p9Data) { showToast('โหลด Holdings ก่อนนะครับ'); return; }
   const btn = document.getElementById('p9AiBtn');
@@ -2969,26 +2989,26 @@ async function p9RefreshAI() {
   btn.disabled = true; sp.style.display = 'block';
   box.style.display = 'block';
   list.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:8px;">AI กำลังวิเคราะห์พอร์ต...</div>';
-
+ 
   const { holdings, totalCost, totalValue, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft } = window._p9Data;
   const holdingSummary = holdings.map(h => {
     const ret = h.avgPrice > 0 ? (((h.value||h.shares*h.avgPrice) - h.shares*h.avgPrice) / (h.shares*h.avgPrice) * 100).toFixed(1) : '0';
     const label = h.type === 'fund' ? `กองทุน ${h.name}` : h.ticker;
     return `${label}: return ${ret}%, DCA ฿${h.monthlyDca||0}/เดือน`;
   }).join('\n');
-
+ 
   const prompt = `คุณคือที่ปรึกษาลงทุน AI
 พอร์ต: YoY ${currentYoy.toFixed(1)}%, เป้า 10%, gap ${gapPct.toFixed(1)}% (฿${Math.abs(gapBaht).toFixed(0)})
 เดือนที่เหลือ: ${monthsLeft}
-
+ 
 Holdings:
 ${holdingSummary}
-
+ 
 แนะนำจัดสรร DCA เพิ่ม ฿${dcaNeeded.toLocaleString('th-TH',{maximumFractionDigits:0})}/เดือน โดยพิจารณาจาก performance
 ตอบ JSON array เท่านั้น ห้ามมี markdown:
 [{"asset":"ชื่อ","amount":NUMBER,"reason":"เหตุผล 1-2 ประโยค"}]
 รวมกันให้ครบ ฿${dcaNeeded.toLocaleString('th-TH',{maximumFractionDigits:0})} แนะนำ 2-4 รายการ`;
-
+ 
   try {
     const key = getActiveKey('GEMINI');
     if (!key) throw new Error('no_key');
@@ -3010,7 +3030,7 @@ ${holdingSummary}
   }
   btn.disabled = false; sp.style.display = 'none';
 }
-
+ 
 function init() {
   loadSettings();
   renderApiStatus();
@@ -3018,7 +3038,7 @@ function init() {
   startApp();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
-
+ 
 init();
 const SCENARIO_CHIPS = [
   'ถ้าเพิ่ม DCA PTT เป็น ฿8,000/เดือน',
@@ -3027,7 +3047,7 @@ const SCENARIO_CHIPS = [
   'ถ้าลงทุนเพิ่มอีก ฿50,000 ใน AAPL',
   'ถ้าเปลี่ยนสัดส่วน crypto เป็น 10%',
 ];
-
+ 
 function initChips() {
   const el = document.getElementById('scenarioChips');
   el.innerHTML = SCENARIO_CHIPS.map(c => `
@@ -3037,37 +3057,37 @@ function initChips() {
       border-radius:20px;padding:4px 12px;cursor:pointer;transition:all 0.15s;
     ">${c}</button>`).join('');
 }
-
+ 
 function useChip(btn) {
   document.getElementById('scenarioInput').value = btn.textContent;
   document.getElementById('scenarioInput').focus();
 }
-
+ 
 // ─── Simulator ───
 let simChartInstance = null;
-
+ 
 async function runSimulator() {
   const input = document.getElementById('scenarioInput').value.trim();
   if (!input) { showToast('กรุณากรอกสถานการณ์ก่อน'); return; }
-
+ 
   const btn = document.getElementById('simBtn');
   const spinner = document.getElementById('simSpinner');
   btn.disabled = true; spinner.style.display = 'block';
   document.getElementById('simResult').style.display = 'none';
-
+ 
   const portfolioSummary = state.holdings.map(h =>
     `${h.ticker}: ${h.shares} หน่วย ราคาเฉลี่ย ${h.currency==='THB'?'฿':'$'}${h.avgPrice}`
   ).join(', ');
   const dcaSummary = state.dcaSchedules.map(d => `${d.ticker} ฿${d.amount}/${d.freq}`).join(', ');
-
+ 
   const prompt = `คุณคือที่ปรึกษาการลงทุน AI ตอบเป็น JSON เท่านั้น ห้ามมี text หรือ markdown อื่นใด
-
+ 
 พอร์ตปัจจุบัน: ${portfolioSummary}
 DCA: ${dcaSummary}
 YoY ปัจจุบัน: 6.8% (เป้า 10%)
-
+ 
 สถานการณ์ที่ต้องการจำลอง: "${input}"
-
+ 
 ตอบกลับเป็น JSON นี้เท่านั้น:
 {
   "scenarioLabel": "ชื่อสั้นๆ ของสถานการณ์",
@@ -3081,7 +3101,7 @@ YoY ปัจจุบัน: 6.8% (เป้า 10%)
     "aggressive": [100,101.5,103.2,101.8,105.0,107.2,104.5,109.1,111.3,108.2,113.0,115.0]
   }
 }`;
-
+ 
   try {
     const geminiKey = getActiveKey('GEMINI');
     if (!geminiKey) throw new Error('no_key');
@@ -3100,7 +3120,7 @@ YoY ปัจจุบัน: 6.8% (เป้า 10%)
   }
   btn.disabled = false; spinner.style.display = 'none';
 }
-
+ 
 function renderSimulator(r, input) {
   // Chart
   if (simChartInstance) simChartInstance.destroy();
@@ -3132,10 +3152,10 @@ function renderSimulator(r, input) {
       }
     }
   });
-
+ 
   // Legend
   const legendColors = { [r.scenarioLabel]: '#D95070', 'อนุรักษ์นิยม': '#1D4ED8', 'สมดุล': '#F59E0B', 'เชิงรุก': '#7E22CE' };
-
+ 
   // Comparison cards
   const scenarioFinal = r.monthlyData.scenario[11];
   const returns = {
@@ -3150,7 +3170,7 @@ function renderSimulator(r, input) {
       <div style="font-size:18px;font-family:var(--font-serif);color:${d.color};">+${(d.val-100).toFixed(1)}%</div>
       <div style="font-size:10px;color:#999;margin-top:3px;">ใน 12 เดือน</div>
     </div>`).join('');
-
+ 
   // Legend row
   const legendHtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;font-size:11px;color:var(--text2);">
     ${Object.entries(legendColors).map(([label,color]) => `
@@ -3159,25 +3179,25 @@ function renderSimulator(r, input) {
       </span>`).join('')}
   </div>`;
   document.getElementById('simChart').closest('div').insertAdjacentHTML('beforebegin', legendHtml);
-
+ 
   // Analysis
   document.getElementById('simAnalysis').innerHTML = `
     <strong style="color:var(--text);">การวิเคราะห์:</strong> ${r.analysis}
     <span style="margin-left:8px;background:var(--accent-light);color:var(--accent);font-size:10px;font-weight:500;padding:2px 8px;border-radius:4px;">${r.verdict}</span>`;
-
+ 
   document.getElementById('simResult').style.display = 'block';
 }
-
+ 
 // Init chips on load
 document.addEventListener('DOMContentLoaded', initChips);
-
+ 
 // ─── Phase 13: Weekly Execution Plan ───
 async function p13GeneratePlan() {
   if (!state.holdings.length) { showToast('เพิ่ม Holdings ก่อนนะครับ'); return; }
   const btn = document.getElementById('p13AiBtn');
   const sp  = document.getElementById('p13Spinner');
   btn.disabled = true; sp.style.display = 'block';
-
+ 
   // Build scenario data (Base / Best / Worst)
   const p9 = window._p9Data;
   const p10 = window._p10Data;
@@ -3187,12 +3207,12 @@ async function p13GeneratePlan() {
   const gapPct     = p9 ? p9.gapPct     : 0;
   const dcaMonthly = p9 ? p9.totalMonthly : 0;
   const monthsLeft = p9 ? p9.monthsLeft  : 1;
-
+ 
   // Scenario calculations
   const base = currentYoy + (dcaMonthly * monthsLeft / Math.max(totalCost, 1)) * 100;
   const best = Math.min(base * 1.3, base + 4);
   const worst = Math.max(base * 0.7, base - 4);
-
+ 
   // Render scenario cards
   const scEl = document.getElementById('p13Scenarios');
   const scenarios = [
@@ -3206,7 +3226,7 @@ async function p13GeneratePlan() {
       <div style="font-size:20px;font-family:var(--font-serif);color:${s.color};">${s.val>=0?'+':''}${s.val.toFixed(1)}%</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px;">${s.note}</div>
     </div>`).join('');
-
+ 
   // AI weekly action plan
   const holdingSummary = state.holdings.map(h => `${h.name||h.ticker} (${h.type}, return ${h.change||0}%)`).join(', ');
   const dcaSummary = state.dcaSchedules.map(d => `${d.ticker} ฿${d.amount}/${d.freq} ครั้งถัดไป ${d.next}`).join(', ');
@@ -3214,17 +3234,17 @@ async function p13GeneratePlan() {
     .filter(t => Math.abs((p10.actual[t]||0)-(p10.targets[t]||0)) > 2)
     .map(t => `${t}: จริง ${(p10.actual[t]||0).toFixed(0)}% เป้า ${p10.targets[t]||0}%`)
     .join(', ') : '';
-
+ 
   const prompt = `คุณคือที่ปรึกษาลงทุน AI วางแผนสัปดาห์นี้
 YoY: ${currentYoy.toFixed(1)}%, gap ${gapPct.toFixed(1)}%, เดือนเหลือ ${monthsLeft}
 Holdings: ${holdingSummary}
 DCA: ${dcaSummary}
 ${rebalSummary ? 'ต้อง Rebalance: ' + rebalSummary : ''}
-
+ 
 สร้างแผนปฏิบัติการสัปดาห์นี้ ตอบ JSON array ห้ามมี markdown:
 [{"priority":"สูง/กลาง/ต่ำ","action":"คำสั่งสั้นๆ ไม่เกิน 10 คำ","detail":"รายละเอียด 1-2 ประโยค","deadline":"วันนี้/สัปดาห์นี้/เดือนนี้"}]
 แนะนำ 3-5 รายการ เรียงจาก priority สูงสุดก่อน`;
-
+ 
   const actEl = document.getElementById('p13Actions');
   try {
     const key = getActiveKey('GEMINI');
@@ -3253,23 +3273,23 @@ ${rebalSummary ? 'ต้อง Rebalance: ' + rebalSummary : ''}
   }
   btn.disabled = false; sp.style.display = 'none';
 }
-
+ 
 // ─── Phase 14: Max Drawdown Tracking (extends Phase 11) ───
 function p14TrackDrawdown() {
   if (!state.holdings.length) return;
   const totalValue = state.holdings.reduce((s,h) => s+(h.value||h.shares*h.avgPrice), 0);
   const totalCost  = state.holdings.reduce((s,h) => s+(h.currency==='USD'?h.shares*h.avgPrice*state.usdThb:h.shares*h.avgPrice), 0);
   if (!totalCost) return;
-
+ 
   // Track peak value in localStorage
   const peakKey = 'folio_peak_value';
   const storedPeak = parseFloat(localStorage.getItem(peakKey) || '0');
   const peak = Math.max(storedPeak, totalValue);
   localStorage.setItem(peakKey, peak.toString());
-
+ 
   const drawdown = peak > 0 ? ((totalValue - peak) / peak) * 100 : 0;
   window._p14Data = { totalValue, totalCost, peak, drawdown };
-
+ 
   // Update Phase 10 card with expected returns per asset type
   const expReturnEl = document.getElementById('p14ExpectedReturn');
   if (expReturnEl) {
@@ -3282,7 +3302,7 @@ function p14TrackDrawdown() {
       expReturnEl.style.color = weightedReturn >= 10 ? 'var(--green)' : 'var(--amber)';
     }
   }
-
+ 
   // Inject drawdown alert into Phase 11 if severe
   if (drawdown < -10) {
     const list = document.getElementById('p11AlertsList');
@@ -3296,32 +3316,32 @@ function p14TrackDrawdown() {
     }
   }
 }
-
+ 
 // Hook Phase 14 into fetchAllPrices and Firebase listeners
 const _origFetchAllPrices = fetchAllPrices;
 // Override: call p14 after prices update — patched via initPhase11 hook below
-
+ 
 // ─── Phase 15: Benchmark Comparison ───
 const P15_BENCHMARKS = [
   { id:'bitcoin', label:'BTC (Crypto)', color:'var(--orange)', icon:'🟡', source:'coingecko' },
   { id:'spy',    label:'S&P 500',       color:'var(--blue)',   icon:'🇺🇸', source:'av' },
 ];
-
+ 
 async function p15FetchBenchmarks() {
   const btn = document.getElementById('p15RefreshBtn');
   const rows = document.getElementById('p15Rows');
   btn.disabled = true;
   rows.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;">กำลังดึงข้อมูลตลาด...</div>';
-
+ 
   const results = [];
-
+ 
   // Your portfolio YTD
   const p9 = window._p9Data;
   const portfolioYtd = p9 ? p9.currentYoy : null;
   if (portfolioYtd !== null) {
     results.push({ label:'พอร์ตของคุณ', icon:'🌸', ytd: portfolioYtd, color:'var(--accent)', note:'คำนวณจาก Holdings จริง' });
   }
-
+ 
   // BTC YTD via CoinGecko
   try {
     const now = new Date();
@@ -3337,7 +3357,7 @@ async function p15FetchBenchmarks() {
       results.push({ label:'BTC YTD', icon:'🟡', ytd, color:'var(--orange)', note:`$${Math.round(endPrice).toLocaleString()}` });
     }
   } catch(e) {}
-
+ 
   // S&P500 via Alpha Vantage
   try {
     const avKey = getActiveKey('AV');
@@ -3351,7 +3371,7 @@ async function p15FetchBenchmarks() {
       }
     }
   } catch(e) {}
-
+ 
   // SET Index via our proxy
   try {
     const r = await fetch(`${SET_PROXY}/?ticker=^SET.BK`);
@@ -3360,13 +3380,13 @@ async function p15FetchBenchmarks() {
       results.push({ label:'SET Index', icon:'🇹🇭', ytd: d.change, color:'var(--purple)', note:`฿${d.price.toLocaleString()}` });
     }
   } catch(e) {}
-
+ 
   if (!results.length) {
     rows.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;">ไม่สามารถดึงข้อมูลได้ — ตรวจสอบ API key ใน ⚙️ ตั้งค่า</div>';
     btn.disabled = false;
     return;
   }
-
+ 
   const maxAbs = Math.max(...results.map(r => Math.abs(r.ytd)), 1);
   rows.innerHTML = results.map(r => {
     const barW = Math.min(100, (Math.abs(r.ytd) / maxAbs) * 100).toFixed(1);
@@ -3387,10 +3407,10 @@ async function p15FetchBenchmarks() {
       </div>
     </div>`;
   }).join('');
-
+ 
   btn.disabled = false;
 }
-
+ 
 // ─── Hook Phase 14 into fetchAllPrices ───
 // Extend the existing fetchAllPrices to call p14 after completion
 const _p14_origUpdate = updatePortfolioSummary;
