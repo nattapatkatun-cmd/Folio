@@ -2321,12 +2321,16 @@ const activeKeyIndex = { FINNHUB: 0, MARKETAUX: 0, AV: 0, GEMINI: 0 };
 // ─── Safe JSON parser ───
 function safeParseJSON(text) {
   if (!text) return null;
+  // Strip markdown fences
   let t = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  // Direct parse
   try { return JSON.parse(t); } catch(_) {}
-  const mo = t.match(/\{[\s\S]*\}/);
-  if (mo) try { return JSON.parse(mo[0]); } catch(_) {}
-  const ma = t.match(/\[[\s\S]*\]/);
-  if (ma) try { return JSON.parse(ma[0]); } catch(_) {}
+  // Find outermost { } — greedy from first { to last }
+  const s1 = t.indexOf('{'), e1 = t.lastIndexOf('}');
+  if (s1 >= 0 && e1 > s1) try { return JSON.parse(t.slice(s1, e1+1)); } catch(_) {}
+  // Find outermost [ ] — greedy from first [ to last ]
+  const s2 = t.indexOf('['), e2 = t.lastIndexOf(']');
+  if (s2 >= 0 && e2 > s2) try { return JSON.parse(t.slice(s2, e2+1)); } catch(_) {}
   return null;
 }
 
@@ -3630,7 +3634,7 @@ async function mpAnalyzeImage() {
       });
     const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const parsed = safeParseJSON(txt);
-    if (!parsed) { showToast('Raw: ' + txt.substring(0,120)); throw new Error('Gemini ตอบผิดรูปแบบ'); }
+    if (!parsed) { showToast('Raw: ' + txt.replace(/\n/g,' ').substring(0,200)); throw new Error('Gemini ตอบผิดรูปแบบ'); }
 
     // Smart matching: score each parsed key against each holding
     function matchScore(parsedKey, holding) {
