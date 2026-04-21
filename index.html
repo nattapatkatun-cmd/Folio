@@ -2572,11 +2572,15 @@ async function callGemini(body) {
     try {
       const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
       const d = await res.json();
-      if (d.error?.status === 'RESOURCE_EXHAUSTED' || res.status === 429) {
+      const isRateLimit = d.error?.status === 'RESOURCE_EXHAUSTED' || res.status === 429;
+      const isOverload = res.status === 503 || d.error?.status === 'UNAVAILABLE' ||
+        (d.error?.message && (d.error.message.includes('high demand') || d.error.message.includes('overloaded')));
+      if (isRateLimit || isOverload) {
         rotateKey('GEMINI');
         if (attempt < keys.length * 2 - 1) {
-          for (let s = 30; s > 0; s -= 5) {
-            showToast('⏳ Rate limit -- รอ ' + s + 'วิ...');
+          const waitSec = isOverload ? 15 : 30;
+          for (let s = waitSec; s > 0; s -= 5) {
+            showToast((isOverload ? '⏳ Gemini busy -- รอ ' : '⏳ Rate limit -- รอ ') + s + 'วิ...');
             await new Promise(r => setTimeout(r, 5000));
           }
           continue;
@@ -2987,22 +2991,11 @@ if (isRebalance || (!isNewMoney && rebalancePlan.length)) {
 var prompt = promptLines.join('\n');
 
   try {
-    var keys = getKeys('GEMINI');
-    if (!keys.length) throw new Error('no_key');
-    var key = getActiveKey('GEMINI');
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-
-    var res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        tools: [{ google_search: {} }],
-        generationConfig: { maxOutputTokens: 4000 }
-      })
+    var d = await callGemini({
+      contents: [{ parts: [{ text: prompt }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { maxOutputTokens: 4000 }
     });
-    var d = await res.json();
-    if (d.error) throw new Error(d.error.message);
     var text = '';
     if (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) {
       var part = d.candidates[0].content.parts.find(function(p){ return p.text; });
