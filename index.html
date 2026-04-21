@@ -2857,7 +2857,7 @@ if (window._p17SheetData && window._p17SheetData.holdings) {
   sh.forEach(function(h) {
     var currentW = Number(h['Current Allocation %']||0);  // 0-1 scale
     var targetW  = Number(h['Target Allocation %']||0);   // 0-1 scale
-    var drift    = (currentW - targetW) * 100;            // % points
+    var drift    = (targetW - currentW) * 100;            // % points: positive=underweight(ขาด), negative=overweight(เกิน)
     var buyScore = Number(h['Buy Priority Score']||0);    // 0-10
     var expRet   = Number(h['Expected Return %']||0)*100; // %
     var val      = Number(h['Market Value']||0);
