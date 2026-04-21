@@ -1098,7 +1098,8 @@ service cloud.firestore {
 <!-- ─── Add Trade Modal ─── -->
 <div class="modal-overlay" id="trade-modal">
   <div class="modal">
-    <h3>บันทึกธุรกรรม</h3>
+    <h3 id="trade-modal-title">บันทึกธุรกรรม</h3>
+    <input type="hidden" id="t-edit-id" value="">
     <div class="modal-form">
       <div class="form-group">
         <label class="form-label">ประเภท</label>
@@ -1131,7 +1132,7 @@ service cloud.firestore {
       </div>
       <div class="modal-actions">
         <button class="btn-ghost" onclick="closeModal('trade-modal')">ยกเลิก</button>
-        <button class="btn-primary" onclick="addTrade()">บันทึก</button>
+        <button class="btn-primary" id="trade-submit-btn" onclick="saveTrade()">บันทึก</button>
       </div>
     </div>
   </div>
@@ -2245,8 +2246,45 @@ async function addDCA() {
   showToast('เพิ่มแผน DCA แล้ว: ' + ticker);
 }
 
-// --- Add Trade ---
-async function addTrade() {
+// --- Trade: save / edit / delete ---
+// --- Holdings sync helper (direction: +1=apply, -1=reverse) ---
+async function syncHoldingFromTrade(type, asset, price, qty, direction) {
+  const matched = state.holdings.filter(h => (h.ticker || h.name || '').toUpperCase() === asset);
+  if (!matched.length) return false;
+  const h = matched[0];
+  if (!h.id || !window.FB) return false;
+  if (type === 'BUY') {
+    if (direction === 1) {
+      // Apply BUY: add qty, recalc weighted avg
+      const newShares = parseFloat((h.shares + qty).toFixed(4));
+      const newAvg = parseFloat(((h.avgPrice * h.shares + price * qty) / (h.shares + qty)).toFixed(4));
+      await window.FB.update('holdings', h.id, { shares: newShares, avgPrice: newAvg });
+    } else {
+      // Reverse BUY: remove qty, recalc avg (reverse weighted avg)
+      const newShares = parseFloat((h.shares - qty).toFixed(4));
+      if (newShares < 0) return false;
+      const newAvg = newShares > 0
+        ? parseFloat(((h.avgPrice * h.shares - price * qty) / newShares).toFixed(4))
+        : h.avgPrice;
+      await window.FB.update('holdings', h.id, { shares: newShares, avgPrice: Math.max(0, newAvg) });
+    }
+  } else if (type === 'SELL') {
+    if (direction === 1) {
+      // Apply SELL: reduce qty
+      const newShares = parseFloat((h.shares - qty).toFixed(4));
+      if (newShares < 0) return false;
+      await window.FB.update('holdings', h.id, { shares: newShares });
+    } else {
+      // Reverse SELL: add qty back
+      const newShares = parseFloat((h.shares + qty).toFixed(4));
+      await window.FB.update('holdings', h.id, { shares: newShares });
+    }
+  }
+  return true;
+}
+
+async function saveTrade() {
+  const editId = document.getElementById('t-edit-id').value;
   const type = document.getElementById('t-type').value;
   const asset = document.getElementById('t-asset').value.trim().toUpperCase();
   const price = parseFloat(document.getElementById('t-price').value);
@@ -2258,17 +2296,59 @@ async function addTrade() {
   const totalThb = currency === 'USD' ? Math.round(price * qty * state.usdThb) : Math.round(price * qty);
   const priceDisplay = currency === 'USD' ? `$${price}` : `฿${price}`;
   const data = { type, asset, price, priceDisplay, qty, currency, totalThb, dateStr };
-  if (window.FB) {
-    await window.FB.add('trades', data);
+
+  if (editId) {
+    // EDIT MODE: reverse old trade, apply new trade
+    const old = state.trades.find(t => t.id === editId);
+    if (old) await syncHoldingFromTrade(old.type, old.asset, old.price, old.qty, -1);
+    if (window.FB) await window.FB.update('trades', editId, data);
+    await syncHoldingFromTrade(type, asset, price, qty, 1);
+    showToast(`✅ แก้ไข trade ${asset} แล้ว`);
   } else {
-    state.trades.unshift(data);
-    renderTrades();
+    // ADD MODE
+    if (window.FB) {
+      await window.FB.add('trades', data);
+    } else {
+      state.trades.unshift(data);
+      renderTrades();
+    }
+    const synced = await syncHoldingFromTrade(type, asset, price, qty, 1);
+    showToast(synced ? `✅ ${type==='BUY'?'ซื้อ':'ขาย'} ${asset} — อัพเดต port แล้ว` : `✅ บันทึก ${type} ${asset} (ไม่พบ holding — port ไม่เปลี่ยน)`);
+    syncTradesToSheets(data);
+    p17PostTradeToSheet(data);
   }
   closeModal('trade-modal');
-  showToast('บันทึกธุรกรรมแล้ว: ' + type + ' ' + asset);
-  syncTradesToSheets(data);
-  p17PostTradeToSheet(data);
 }
+
+function openEditTrade(id) {
+  const t = state.trades.find(t => t.id === id);
+  if (!t) return;
+  document.getElementById('t-edit-id').value = id;
+  document.getElementById('t-type').value = t.type;
+  document.getElementById('t-asset').value = t.asset;
+  document.getElementById('t-price').value = t.price;
+  document.getElementById('t-currency').value = t.currency || 'THB';
+  document.getElementById('t-qty').value = t.qty;
+  document.getElementById('t-date').value = '';
+  document.getElementById('trade-modal-title').textContent = 'แก้ไขธุรกรรม';
+  document.getElementById('trade-submit-btn').textContent = 'บันทึกการแก้ไข';
+  openModal('trade-modal');
+}
+
+async function deleteTrade(id) {
+  if (!confirm('ลบ trade นี้? holdings จะถูกปรับตาม')) return;
+  const t = state.trades.find(t => t.id === id);
+  if (t) await syncHoldingFromTrade(t.type, t.asset, t.price, t.qty, -1);
+  if (window.FB && id) {
+    await window.FB.del('trades', id);
+  } else {
+    state.trades = state.trades.filter(t => t.id !== id);
+    renderTrades();
+  }
+  showToast('🗑️ ลบ trade แล้ว — port อัพเดต');
+}
+
+
 
 // --- Render Trades ---
 function renderTrades() {
@@ -2286,6 +2366,10 @@ function renderTrades() {
         <td>${priceShow}</td>
         <td>${t.qty}</td>
         <td style="color:var(--text2);font-size:11px;">${totalShow}</td>
+        <td style="white-space:nowrap;">
+          <button onclick="openEditTrade('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;" title="แก้ไข">✏️</button>
+          <button onclick="deleteTrade('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;" title="ลบ">🗑️</button>
+        </td>
       </tr>`;
     }).join('');
   }
@@ -4271,6 +4355,11 @@ function mpSwitchTab(tab) {
 // Open modal and build manual input rows
 const _origOpenModal = openModal;
 window.openModal = function(id) {
+  if (id === 'trade-modal') {
+    document.getElementById('t-edit-id').value = '';
+    document.getElementById('trade-modal-title').textContent = 'บันทึกธุรกรรม';
+    document.getElementById('trade-submit-btn').textContent = 'บันทึก';
+  }
   _origOpenModal(id);
   if (id === 'manual-price-modal') mpBuildManualList();
 };
