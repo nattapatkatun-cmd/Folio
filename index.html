@@ -3210,7 +3210,7 @@ function loadSettings() {
     }
   });
   window._PROXY_URL = SET_PROXY;
-  window._SHEETS_URL = SHEETS_URL;
+  window._SHEETS_URL = localStorage.getItem('folio_SHEETS_URL') || SHEETS_URL;
   window._NAV_SHEET_URL = localStorage.getItem('folio_NAV_SHEET_URL') || NAV_SHEET_DEFAULT;
   const navSheetEl = document.getElementById('cfg-nav-sheet');
   if (navSheetEl) navSheetEl.value = window._NAV_SHEET_URL;
@@ -3333,7 +3333,10 @@ async function fetchFromNavSheet(manual = false) {
     const now = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     const tc = document.getElementById('todayChange');
     if (tc) { tc.textContent = 'ดึงจาก Sheet เมื่อ ' + now + ' น.'; tc.style.color = 'var(--text3)'; }
-    if (manual) showToast('อัพเดต ' + updated + ' รายการจาก Google Sheet ✓');
+    if (manual) {
+      if (updated === 0) showToast('⚠️ ดึงราคาได้ 0 รายการ — ตรวจสอบ Portfolio Sheet URL ใน ⚙️ ตั้งค่า แล้วกด บันทึก');
+      else showToast('อัพเดต ' + updated + ' รายการจาก Google Sheet ✓');
+    }
   } catch(e) {
     if (manual) showToast('ดึงราคาจาก Sheet ไม่ได้: ' + e.message);
   }
@@ -3349,7 +3352,7 @@ async function autoFetchNavSheet() {
 
 // --- Google Sheets Sync ---
 async function syncToSheets(tab, rows, headers) {
-  const url = SHEETS_URL;
+  const url = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
   if (!url) return;
   try {
     await fetch(url, {
