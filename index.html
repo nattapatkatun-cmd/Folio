@@ -2646,7 +2646,7 @@ async function p17SyncSheet(manual = false) {
   if (btn) btn.disabled = true;
   showToast('กำลังดึงข้อมูลจาก Portfolio Sheet...');
   try {
-    const resp = await fetch(url, { redirect: 'follow', mode: 'cors' });
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     window._p17SheetData = data;
@@ -3106,22 +3106,18 @@ var prompt = promptLines.join('\n');
   btn.disabled = false; sp.style.display = 'none';
 }
 async function p17PostTradeToSheet(trade) {
-  const url = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
-  if (!url) return;
+  const base = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
+  if (!base) return;
   try {
-    await fetch(url, {
-      method: 'POST',
-      redirect: 'follow',
-      mode: 'cors',
-      body: JSON.stringify({
-        action: 'update_holding',
-        asset: trade.asset,
-        tradeType: trade.type,
-        qty: trade.qty,
-        price: trade.price,
-        currency: trade.currency || 'THB'
-      })
+    const params = new URLSearchParams({
+      action: 'update_holding',
+      asset: trade.asset,
+      tradeType: trade.type,
+      qty: String(trade.qty),
+      price: String(trade.price),
+      currency: trade.currency || 'THB'
     });
+    await fetch(base + '?' + params.toString());
   } catch(e) {}
 }
 
@@ -3285,7 +3281,7 @@ async function fetchFromNavSheet(manual = false) {
   if (!url) { if (manual) showToast('ยังไม่ได้ใส่ Portfolio Sheet URL ใน ⚙️ ตั้งค่า'); return; }
   if (manual) showToast('กำลังดึงราคาจาก Google Sheet...');
   try {
-    const resp = await fetch(url, { redirect: 'follow', mode: 'cors' });
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -3351,15 +3347,15 @@ async function autoFetchNavSheet() {
 
 // --- Google Sheets Sync ---
 async function syncToSheets(tab, rows, headers) {
-  const url = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
-  if (!url) return;
+  const base = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
+  if (!base) return;
   try {
-    await fetch(url, {
-      method: 'POST',
-      redirect: 'follow',
-      mode: 'cors',
-      body: JSON.stringify({ tab, action: 'clear_append', headers, rows })
+    const params = new URLSearchParams({
+      action: 'clear_append',
+      tab: tab,
+      data: JSON.stringify({ headers, rows })
     });
+    await fetch(base + '?' + params.toString());
   } catch(e) {}
 }
 
