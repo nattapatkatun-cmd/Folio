@@ -2646,7 +2646,7 @@ async function p17SyncSheet(manual = false) {
   if (btn) btn.disabled = true;
   showToast('กำลังดึงข้อมูลจาก Portfolio Sheet...');
   try {
-    const resp = await fetch(url);
+    const resp = await fetch(url, { redirect: 'follow', mode: 'cors' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     window._p17SheetData = data;
@@ -3111,6 +3111,8 @@ async function p17PostTradeToSheet(trade) {
   try {
     await fetch(url, {
       method: 'POST',
+      redirect: 'follow',
+      mode: 'cors',
       body: JSON.stringify({
         action: 'update_holding',
         asset: trade.asset,
@@ -3283,7 +3285,7 @@ async function fetchFromNavSheet(manual = false) {
   if (!url) { if (manual) showToast('ยังไม่ได้ใส่ Portfolio Sheet URL ใน ⚙️ ตั้งค่า'); return; }
   if (manual) showToast('กำลังดึงราคาจาก Google Sheet...');
   try {
-    const resp = await fetch(url);
+    const resp = await fetch(url, { redirect: 'follow', mode: 'cors' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -3333,10 +3335,7 @@ async function fetchFromNavSheet(manual = false) {
     const now = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     const tc = document.getElementById('todayChange');
     if (tc) { tc.textContent = 'ดึงจาก Sheet เมื่อ ' + now + ' น.'; tc.style.color = 'var(--text3)'; }
-    if (manual) {
-      if (updated === 0) showToast('⚠️ ดึงราคาได้ 0 รายการ — ตรวจสอบ Portfolio Sheet URL ใน ⚙️ ตั้งค่า แล้วกด บันทึก');
-      else showToast('อัพเดต ' + updated + ' รายการจาก Google Sheet ✓');
-    }
+    if (manual) showToast('อัพเดต ' + updated + ' รายการจาก Google Sheet ✓');
   } catch(e) {
     if (manual) showToast('ดึงราคาจาก Sheet ไม่ได้: ' + e.message);
   }
@@ -3357,6 +3356,8 @@ async function syncToSheets(tab, rows, headers) {
   try {
     await fetch(url, {
       method: 'POST',
+      redirect: 'follow',
+      mode: 'cors',
       body: JSON.stringify({ tab, action: 'clear_append', headers, rows })
     });
   } catch(e) {}
