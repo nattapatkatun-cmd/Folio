@@ -2230,6 +2230,7 @@ async function addHolding() {
     const params = new URLSearchParams({
       action: 'update_holding',
       asset: name,
+      platform: broker,
       tradeType: 'SET',
       qty: String(shares),
       price: String(price)
