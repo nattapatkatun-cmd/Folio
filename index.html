@@ -2224,6 +2224,18 @@ async function addHolding() {
   onHoldingTypeChange();
   showToast((isEdit ? 'อัพเดตแล้ว: ' : 'เพิ่มหลักทรัพย์แล้ว: ') + name);
   syncHoldingsToSheets();
+  // Sync Qty + AvgCost back to Portfolio_NAV sheet
+  const base = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
+  if (base) {
+    const params = new URLSearchParams({
+      action: 'update_holding',
+      asset: name,
+      tradeType: 'SET',
+      qty: String(shares),
+      price: String(price)
+    });
+    fetch(base + '?' + params.toString()).catch(() => {});
+  }
 }
 
 // --- Add DCA ---
