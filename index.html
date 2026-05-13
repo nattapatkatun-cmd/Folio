@@ -3847,8 +3847,9 @@ function syncHoldingsToSheets() {
 }
 
 function syncTradesToSheets(trade) {
-  syncToSheets('Trades', [[trade.dateStr, trade.type, trade.asset, trade.price, trade.qty]],
-    ['วันที่','ประเภท','หลักทรัพย์','ราคา','จำนวน']);
+  // Send ALL trades so clear_append preserves full history (not just the new one)
+  const allRows = state.trades.map(t => [t.dateStr||'', t.type, t.asset, t.price, t.qty, t.totalThb||'']);
+  syncToSheets('Trades', allRows, ['วันที่','ประเภท','หลักทรัพย์','ราคา','จำนวน','มูลค่า(THB)']);
 }
 
 // --- YoY Snapshot (Time-Weighted baseline) ---
