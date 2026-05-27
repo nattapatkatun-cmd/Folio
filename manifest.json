@@ -1,0 +1,16 @@
+{
+  "name": "Folio — ความมั่งคั่งของคุณ",
+  "short_name": "Folio",
+  "description": "แดชบอร์ดติดตามการลงทุนส่วนตัว",
+  "start_url": "/Folio/",
+  "scope": "/Folio/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FCE8EE",
+  "theme_color": "#D95070",
+  "lang": "th",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
