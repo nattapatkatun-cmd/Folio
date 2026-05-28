@@ -2476,7 +2476,7 @@ async function addHolding() {
   showToast((isEdit ? 'อัพเดตแล้ว: ' : 'เพิ่มหลักทรัพย์แล้ว: ') + name);
   syncHoldingsToSheets();
   // Sync Qty + AvgCost back to Portfolio_NAV sheet
-  const base = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
+  const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (base) {
     const params = new URLSearchParams({
       action: 'update_holding',
@@ -2901,7 +2901,7 @@ function getKey(name) {
 window._p17SheetData = null;
 
 async function p17SyncSheet(manual = false) {
-  const url = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
+  const url = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (!url) { showToast('ใส่ Portfolio Sheet URL ใน ⚙️ ตั้งค่าก่อน'); return; }
   const btn = document.getElementById('p17SyncBtn');
   if (btn) btn.disabled = true;
@@ -3647,7 +3647,7 @@ async function p17ReviewRun() {
 }
 
 async function p17PostTradeToSheet(trade) {
-  const base = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
+  const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (!base) return;
   try {
     const params = new URLSearchParams({
@@ -3734,29 +3734,70 @@ const CFG_KEYS = {
   'cfg-fb-appid': 'FB_APP_ID',
 };
 
-function loadSettings() {
-  // Single-value fields
+// URL keys that are stored in Firestore (not API keys)
+const URL_FIELDS = ['PROXY_URL','SHEETS_URL','NAV_SHEET_URL','PORTFOLIO_SHEET_URL'];
+
+function _applyUrlsToWindow(urls) {
+  window._PROXY_URL    = urls.PROXY_URL    || SET_PROXY;
+  window._SHEETS_URL   = urls.SHEETS_URL   || SHEETS_URL;
+  window._NAV_SHEET_URL = urls.NAV_SHEET_URL || NAV_SHEET_DEFAULT;
+  window._PORTFOLIO_SHEET_URL = urls.PORTFOLIO_SHEET_URL || '';
+  // Also update localStorage as offline cache
+  URL_FIELDS.forEach(k => {
+    if (urls[k]) localStorage.setItem('folio_' + k, urls[k]);
+  });
+}
+
+function _applyUrlsToInputs(urls) {
+  const map = {
+    'cfg-proxy': 'PROXY_URL',
+    'cfg-sheets': 'SHEETS_URL',
+    'cfg-nav-sheet': 'NAV_SHEET_URL',
+    'cfg-portfolio-sheet': 'PORTFOLIO_SHEET_URL',
+  };
+  Object.entries(map).forEach(([elId, key]) => {
+    const el = document.getElementById(elId);
+    if (el && urls[key]) el.value = urls[key];
+  });
+}
+
+async function loadSettings() {
+  // 1. Load API keys from localStorage (never go to Firestore)
   Object.entries(CFG_KEYS).forEach(([inputId, storageKey]) => {
+    if (URL_FIELDS.includes(storageKey)) return; // handled separately
     const val = localStorage.getItem('folio_' + storageKey) || '';
     const el = document.getElementById(inputId);
     if (el) el.value = val;
   });
-  // Multi-key fields
   ['AV','GEMINI'].forEach(svc => {
     for (let i = 0; i < 4; i++) {
       const el = document.getElementById(`cfg-${svc.toLowerCase()}-${i}`);
       if (el) el.value = localStorage.getItem(`folio_${svc}_KEY_${i}`) || '';
     }
   });
-  window._PROXY_URL = SET_PROXY;
-  window._SHEETS_URL = localStorage.getItem('folio_SHEETS_URL') || SHEETS_URL;
-  window._NAV_SHEET_URL = localStorage.getItem('folio_NAV_SHEET_URL') || NAV_SHEET_DEFAULT;
-  const navSheetEl = document.getElementById('cfg-nav-sheet');
-  if (navSheetEl) navSheetEl.value = window._NAV_SHEET_URL;
+
+  // 2. Load URLs: try Firestore first, fallback to localStorage
+  const localUrls = {};
+  URL_FIELDS.forEach(k => { localUrls[k] = localStorage.getItem('folio_' + k) || ''; });
+  _applyUrlsToWindow(localUrls);
+  _applyUrlsToInputs(localUrls);
+
+  try {
+    const docs = await window.FB.getAll('settings');
+    const urlDoc = docs.find(d => d.id === 'urls');
+    if (urlDoc) {
+      _applyUrlsToWindow(urlDoc);
+      _applyUrlsToInputs(urlDoc);
+    }
+  } catch(e) {
+    // Firebase not ready yet — already applied localStorage fallback above
+  }
 }
 
-function saveSettings() {
+async function saveSettings() {
+  // Save API keys to localStorage only
   Object.entries(CFG_KEYS).forEach(([inputId, storageKey]) => {
+    if (URL_FIELDS.includes(storageKey)) return; // handled separately
     const el = document.getElementById(inputId);
     if (el) localStorage.setItem('folio_' + storageKey, el.value.trim());
   });
@@ -3766,12 +3807,30 @@ function saveSettings() {
       if (el) localStorage.setItem(`folio_${svc}_KEY_${i}`, el.value.trim());
     }
   });
-  window._PROXY_URL = localStorage.getItem('folio_PROXY_URL') || 'https://folio-proxy.ojo0308.workers.dev';
-  window._SHEETS_URL = localStorage.getItem('folio_SHEETS_URL') || '';
-  window._NAV_SHEET_URL = localStorage.getItem('folio_NAV_SHEET_URL') || NAV_SHEET_DEFAULT;
-  // Reset active key indices
+
+  // Save URLs to both Firestore + localStorage
+  const urlMap = {
+    'cfg-proxy': 'PROXY_URL',
+    'cfg-sheets': 'SHEETS_URL',
+    'cfg-nav-sheet': 'NAV_SHEET_URL',
+    'cfg-portfolio-sheet': 'PORTFOLIO_SHEET_URL',
+  };
+  const urlData = {};
+  Object.entries(urlMap).forEach(([elId, key]) => {
+    const el = document.getElementById(elId);
+    const val = el ? el.value.trim() : '';
+    urlData[key] = val;
+    localStorage.setItem('folio_' + key, val);
+  });
+  try {
+    await window.FB.setDoc('settings', 'urls', urlData);
+  } catch(e) {
+    showToast('⚠️ บันทึก URL ลง Firebase ไม่ได้ (เก็บ local แล้ว)');
+  }
+
+  _applyUrlsToWindow(urlData);
   Object.keys(activeKeyIndex).forEach(k => activeKeyIndex[k] = 0);
-  showToast('บันทึก API Keys เรียบร้อยแล้ว ✓');
+  showToast('บันทึกเรียบร้อยแล้ว ✓');
   renderApiStatus();
 }
 
@@ -3783,8 +3842,8 @@ function renderApiStatus() {
     { name: 'Alpha Vantage', icon: '📈', has: getKeys('AV').length > 0, keys: getKeys('AV').length },
     { name: 'SET Proxy', icon: '🔌', has: true, keys: 1 },
     { name: 'Google Sheets', icon: '📊', has: true, keys: 1 },
-    { name: 'NAV Sheet', icon: '📈', has: !!(localStorage.getItem('folio_NAV_SHEET_URL') || NAV_SHEET_DEFAULT), keys: 1 },
-    { name: 'Portfolio Sheet', icon: '📊', has: !!localStorage.getItem('folio_PORTFOLIO_SHEET_URL'), keys: 1 },
+    { name: 'NAV Sheet', icon: '📈', has: !!(window._NAV_SHEET_URL || NAV_SHEET_DEFAULT), keys: 1 },
+    { name: 'Portfolio Sheet', icon: '📊', has: !!(window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL')), keys: 1 },
   ];
   el.innerHTML = checks.map(c => `
     <div style="text-align:center;padding:10px 6px;background:${c.has?'var(--green-bg)':'var(--bg)'};border-radius:8px;border:0.5px solid ${c.has?'#BBF7D0':'var(--border)'};">
@@ -3815,8 +3874,8 @@ async function testConnections() {
 // ใช้ Portfolio Sheet (folio_PORTFOLIO_SHEET_URL) เป็น source หลัก
 // รองรับ 2 formats: {FUND_NAME:{nav}} (NAV Sheet) หรือ {holdings:[{Asset,Price}]} (Portfolio Sheet)
 async function fetchFromNavSheet(manual = false) {
-  const url = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') ||
-              window._NAV_SHEET_URL || localStorage.getItem('folio_NAV_SHEET_URL') || NAV_SHEET_DEFAULT;
+  const url = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') ||
+              window._NAV_SHEET_URL || NAV_SHEET_DEFAULT;
   if (!url) { if (manual) showToast('ยังไม่ได้ใส่ Portfolio Sheet URL ใน ⚙️ ตั้งค่า'); return; }
   if (manual) showToast('กำลังดึงราคาจาก Google Sheet...');
   try {
@@ -3892,7 +3951,7 @@ async function autoFetchNavSheet() {
 
 // --- Google Sheets Sync ---
 async function syncToSheets(tab, rows, headers) {
-  const base = localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
+  const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
   if (!base) return;
   try {
     const params = new URLSearchParams({
@@ -4609,10 +4668,9 @@ function aiCacheRestore() {
 }
 
 
-function init() {
-  loadSettings();
+async function init() {
+  await loadSettings();
   aiCacheRestore();
-  window._NAV_SHEET_URL = localStorage.getItem('folio_NAV_SHEET_URL') || NAV_SHEET_DEFAULT;
   autoFetchNavSheet();
   renderApiStatus();
   renderBudget();
