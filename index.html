@@ -3660,7 +3660,8 @@ async function p17PostTradeToSheet(trade) {
       tradeType: trade.type,
       qty: String(trade.qty),
       price: String(trade.price),
-      currency: trade.currency || 'THB'
+      currency: trade.currency || 'THB',
+      broker: trade.broker || ''
     });
     await fetch(base + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
   } catch(e) {}
@@ -3700,8 +3701,20 @@ function doPost(e) {
       const assetCol = headers.indexOf('Asset');
       const qtyCol = headers.indexOf('Qty');
       const avgCostCol = headers.indexOf('Avg Cost / Unit');
+      const brokerCol = headers.indexOf('Broker') !== -1 ? headers.indexOf('Broker') : headers.indexOf('Platform') !== -1 ? headers.indexOf('Platform') : -1;
+      const assetLower = String(payload.asset).toLowerCase();
+      const brokerLower = String(payload.broker || '').toLowerCase();
+      // Find row: prefer asset+broker exact match, fallback to asset-only
+      let matchRow = -1;
       for (let i = 1; i < data.length; i++) {
-        if (String(data[i][assetCol]).toLowerCase().includes(String(payload.asset).toLowerCase())) {
+        if (!String(data[i][assetCol]).toLowerCase().includes(assetLower)) continue;
+        if (brokerCol !== -1 && brokerLower && String(data[i][brokerCol]).toLowerCase().includes(brokerLower)) {
+          matchRow = i; break; // exact broker match — stop here
+        }
+        if (matchRow === -1) matchRow = i; // asset-only fallback (first match)
+      }
+      if (matchRow !== -1) {
+        const i = matchRow;
           const oldQty = Number(data[i][qtyCol]) || 0;
           const oldAvg = Number(data[i][avgCostCol]) || 0;
           const tradeQty = Number(payload.qty) || 0;
@@ -3715,7 +3728,6 @@ function doPost(e) {
             const newQty = Math.max(0, oldQty - tradeQty);
             sheet.getRange(i + 1, qtyCol + 1).setValue(newQty);
           }
-          break;
         }
       }
     }
