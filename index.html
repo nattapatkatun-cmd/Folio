@@ -2512,10 +2512,14 @@ async function addDCA() {
 
 // --- Trade: save / edit / delete ---
 // --- Holdings sync helper (direction: +1=apply, -1=reverse) ---
-async function syncHoldingFromTrade(type, asset, price, qty, direction) {
-  const matched = state.holdings.filter(h => (h.ticker || h.name || '').toUpperCase() === asset);
-  if (!matched.length) return false;
-  const h = matched[0];
+async function syncHoldingFromTrade(type, asset, price, qty, direction, broker) {
+  const nameMatched = state.holdings.filter(h => (h.ticker || h.name || '').toUpperCase() === asset);
+  if (!nameMatched.length) return false;
+  // Prefer broker-specific match when broker is provided and multiple holdings share same name
+  const matched = (broker && nameMatched.length > 1)
+    ? nameMatched.filter(h => (h.broker || '').toLowerCase() === broker.toLowerCase())
+    : [];
+  const h = (matched.length ? matched : nameMatched)[0];
   if (!h.id || !window.FB) return false;
   if (type === 'BUY') {
     if (direction === 1) {
@@ -2573,9 +2577,9 @@ async function saveTrade() {
   if (editId) {
     // EDIT MODE: reverse old trade, apply new trade
     const old = state.trades.find(t => t.id === editId);
-    if (old) await syncHoldingFromTrade(old.type, old.asset, old.price, old.qty, -1);
+    if (old) await syncHoldingFromTrade(old.type, old.asset, old.price, old.qty, -1, old.broker);
     if (window.FB) await window.FB.update('trades', editId, data);
-    await syncHoldingFromTrade(type, asset, price, qty, 1);
+    await syncHoldingFromTrade(type, asset, price, qty, 1, broker);
     showToast(`✅ แก้ไข trade ${asset} แล้ว`);
   } else {
     // ADD MODE
@@ -2585,7 +2589,7 @@ async function saveTrade() {
       state.trades.unshift(data);
       renderTrades();
     }
-    const synced = await syncHoldingFromTrade(type, asset, price, qty, 1);
+    const synced = await syncHoldingFromTrade(type, asset, price, qty, 1, broker);
     showToast(synced ? `✅ ${type==='BUY'?'ซื้อ':'ขาย'} ${asset} — อัพเดต port แล้ว` : `✅ บันทึก ${type} ${asset} (ไม่พบ holding — port ไม่เปลี่ยน)`);
     syncTradesToSheets(data);
     p17PostTradeToSheet(data);
@@ -2612,7 +2616,7 @@ function openEditTrade(id) {
 async function deleteTrade(id) {
   if (!confirm('ลบ trade นี้? holdings จะถูกปรับตาม')) return;
   const t = state.trades.find(t => t.id === id);
-  if (t) await syncHoldingFromTrade(t.type, t.asset, t.price, t.qty, -1);
+  if (t) await syncHoldingFromTrade(t.type, t.asset, t.price, t.qty, -1, t.broker);
   if (window.FB && id) {
     await window.FB.del('trades', id);
   } else {
