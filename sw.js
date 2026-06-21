@@ -16,6 +16,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   const url = e.request.url;
   // Always network for Firebase, Gemini, APIs
   if (url.includes('firestore') || url.includes('googleapis') ||
