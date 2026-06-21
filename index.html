@@ -1732,7 +1732,7 @@ function updatePortfolioSummary() {
   // Realized P&L this year from trades
   const thisYear = new Date().getFullYear();
   const realizedPL = state.trades.filter(t => {
-    if (t.type !== 'ขาย') return false;
+    if (t.type !== 'SELL') return false;
     const yr = t.dateStr ? (new Date(t.dateStr).getFullYear() || thisYear) : thisYear;
     return yr === thisYear;
   }).reduce((s,t) => s + (t.totalThb || 0) - (t.fee || 0), 0);
@@ -2091,8 +2091,8 @@ function renderHoldings() {
   // Filter: show if Top OR Drift > 5% OR BuyScore top 20% OR bottom 3 return
   // Limit to max 10 items
   var filtered = groups.filter(function(h) {
-    var tags = getTags(h);
-    return tags.length > 0;
+    h._cachedTags = getTags(h);
+    return h._cachedTags.length > 0;
   });
 
   // If < 5 items shown, add remaining top by value up to 5 total
@@ -2114,7 +2114,7 @@ function renderHoldings() {
 
   el.innerHTML = filtered.map(function(h) {
     var gi = gi_map[(h.name||h.ticker)+'|'+(h.broker||'')];
-    var tags = getTags(h);
+    var tags = h._cachedTags || getTags(h);
     var val = h.value || Math.round(h.shares * h.avgPrice);
     var tagsHtml = tags.map(function(t) {
       return '<span style="background:'+t.bg+';color:'+t.color+';border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;margin-left:3px;">'+t.label+'</span>';
@@ -2608,8 +2608,8 @@ async function addDCA() {
 async function syncHoldingFromTrade(type, asset, price, qty, direction, broker) {
   const nameMatched = state.holdings.filter(h => (h.ticker || h.name || '').toUpperCase() === asset);
   if (!nameMatched.length) return false;
-  // Prefer broker-specific match when broker is provided and multiple holdings share same name
-  const matched = (broker && nameMatched.length > 1)
+  // Prefer broker-specific match when broker is provided; fall back to first name match only if no broker hit
+  const matched = broker
     ? nameMatched.filter(h => (h.broker || '').toLowerCase() === broker.toLowerCase())
     : [];
   const h = (matched.length ? matched : nameMatched)[0];
@@ -2620,7 +2620,7 @@ async function syncHoldingFromTrade(type, asset, price, qty, direction, broker) 
       const newShares = parseFloat((h.shares + qty).toFixed(4));
       const newAvg = parseFloat(((h.avgPrice * h.shares + price * qty) / (h.shares + qty)).toFixed(4));
       await window.FB.update('holdings', h.id, { shares: newShares, avgPrice: newAvg });
-      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 1) : price * qty;
+      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 33) : price * qty;
       yoyAddBuy(amountThb);
     } else {
       // Reverse BUY: remove qty, recalc avg (reverse weighted avg)
@@ -2630,7 +2630,7 @@ async function syncHoldingFromTrade(type, asset, price, qty, direction, broker) 
         ? parseFloat(((h.avgPrice * h.shares - price * qty) / newShares).toFixed(4))
         : h.avgPrice;
       await window.FB.update('holdings', h.id, { shares: newShares, avgPrice: Math.max(0, newAvg) });
-      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 1) : price * qty;
+      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 33) : price * qty;
       yoyAddSell(amountThb);
     }
   } else if (type === 'SELL') {
@@ -2639,13 +2639,13 @@ async function syncHoldingFromTrade(type, asset, price, qty, direction, broker) 
       const newShares = parseFloat((h.shares - qty).toFixed(4));
       if (newShares < 0) return false;
       await window.FB.update('holdings', h.id, { shares: newShares });
-      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 1) : price * qty;
+      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 33) : price * qty;
       yoyAddSell(amountThb);
     } else {
       // Reverse SELL: add qty back
       const newShares = parseFloat((h.shares + qty).toFixed(4));
       await window.FB.update('holdings', h.id, { shares: newShares });
-      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 1) : price * qty;
+      const amountThb = h.currency === 'USD' ? price * qty * (state.usdThb || 33) : price * qty;
       yoyAddBuy(amountThb);
     }
   }
@@ -2688,8 +2688,8 @@ async function saveTrade() {
     }
     const synced = await syncHoldingFromTrade(type, asset, price, qty, 1, broker);
     showToast(synced ? `✅ ${type==='BUY'?'ซื้อ':'ขาย'} ${asset} — อัพเดต port แล้ว` : `✅ บันทึก ${type} ${asset} (ไม่พบ holding — port ไม่เปลี่ยน)`);
-    syncTradesToSheets(data);
-    p17PostTradeToSheet(data);
+    syncTradesToSheets(data).catch(e => console.error('syncTradesToSheets:', e));
+    p17PostTradeToSheet(data).catch(e => console.error('p17PostTradeToSheet:', e));
   }
   closeModal('trade-modal');
   const _tfc = document.getElementById('t-fee'); if (_tfc) _tfc.value = '';
@@ -3839,7 +3839,7 @@ function doPost(e) {
       let matchRow = -1;
       for (let i = 1; i < data.length; i++) {
         if (!String(data[i][assetCol]).toLowerCase().includes(assetLower)) continue;
-        if (brokerCol !== -1 && brokerLower && String(data[i][brokerCol]).toLowerCase().includes(brokerLower)) {
+        if (brokerCol !== -1 && brokerLower && String(data[i][brokerCol]).toLowerCase() === brokerLower) {
           matchRow = i; break; // exact broker match — stop here
         }
         if (matchRow === -1) matchRow = i; // asset-only fallback (first match)
@@ -4327,7 +4327,7 @@ function initPhase9() {
   window._p9Data = { holdings: state.holdings, totalCost, snapshotCost, totalValue, totalMonthly, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft, projectedYoy: projYoy };
 
   // Save daily snapshot (1 write/day — foundation for trajectory data)
-  savePortfolioSnapshot();
+  savePortfolioSnapshot().catch(e => console.error('snapshot failed:', e));
 }
 
 // --- Phase 10: Rebalancing Engine ---
