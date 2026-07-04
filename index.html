@@ -1329,8 +1329,12 @@ service cloud.firestore {
     <h3>เพิ่มแผน DCA</h3>
     <div class="modal-form">
       <div class="form-group">
-        <label class="form-label">Ticker</label>
-        <input class="form-input" id="d-ticker" placeholder="เช่น PTT.BK / BTC / NVDA">
+        <label class="form-label">Ticker / ชื่อกองทุน</label>
+        <div class="ac-wrap">
+          <input class="form-input" id="d-ticker" placeholder="เช่น PTT / BTC / NVDA / K-USA-A(A)" autocomplete="off"
+            oninput="acFilter('d-ticker','d-ticker-dd','dca')" onfocus="acFilter('d-ticker','d-ticker-dd','dca')" onblur="setTimeout(function(){var d=document.getElementById('d-ticker-dd');if(d)d.classList.remove('open');},150)" onkeydown="acKeyNav(event,'d-ticker-dd')">
+          <div class="ac-dropdown" id="d-ticker-dd"></div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">ประเภท</label>
@@ -1896,35 +1900,105 @@ var TYPE_COLORS = { set:'var(--blue)', us:'var(--orange)', crypto:'var(--green)'
 var TYPE_BG = { set:'var(--blue-bg)', us:'var(--orange-bg)', crypto:'var(--green-bg)', tech:'var(--purple-bg)', fund:'var(--amber-bg)' };
 var TYPE_LABELS = { set:'SET', us:'US', crypto:'Crypto', tech:'Tech', fund:'Fund' };
 
+// ─── Security master: seed list for autocomplete + auto-fill (type/region/currency/tax) ───
+// รายชื่อเริ่มต้นสำหรับช่วยพิมพ์เท่านั้น — ผู้ใช้ยังพิมพ์ชื่อเองได้เสมอถ้าไม่เจอในลิสต์
+var SET_STOCKS = [ // SET50 blue chips
+  'PTT','PTTEP','AOT','CPALL','ADVANC','SCB','KBANK','BBL','KTB','TTB',
+  'SCC','CPN','CRC','GULF','GPSC','EGCO','RATCH','BGRIM','TOP','IRPC',
+  'IVL','BANPU','DELTA','HANA','KCE','TU','CBG','OSP','MINT','CENTEL',
+  'BDMS','BH','TIDLOR','MTC','SAWAD','TISCO','TCAP','KKP','BAM','AWC',
+  'WHA','AMATA','TRUE','COM7','HMPRO','GLOBAL','DOHOME','CPF','TVO','STA'
+];
+var US_STOCKS = [
+  'AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','JPM','V','MA',
+  'UNH','HD','PG','JNJ','XOM','CVX','ABBV','MRK','KO','PEP',
+  'COST','WMT','BAC','DIS','NFLX','ADBE','CRM','ORCL','AMD','INTC',
+  'QCOM','CSCO','IBM','TXN','AVGO','PYPL','SBUX','NKE','MCD','BA',
+  'GE','CAT','HON','LMT','UPS','F','GM','T','VZ','PFE'
+];
+var CRYPTO_TICKERS = ['BTC','ETH','BNB','SOL','XRP','ADA','DOGE','AVAX','DOT','LINK'];
+// { name, region } — region ตรงกับ h-fund-region select values; taxType เดาจากคำต่อท้ายชื่อ (RMF/SSF)
+var THAI_FUNDS = [
+  { name:'K-USA-A(A)', region:'us' }, { name:'K-USXNDQ-A(A)', region:'us' },
+  { name:'K-CHINA-A(A)', region:'china' }, { name:'K-CHINA-RMF', region:'china' },
+  { name:'K-GTECH-A(A)', region:'global' }, { name:'K-GHEALTH-A(A)', region:'global' },
+  { name:'K-EUROPE-A(A)', region:'global' }, { name:'K-JP-A(A)', region:'asia' },
+  { name:'K-VIETNAM-A(A)', region:'asia' }, { name:'K-GOLD-A(A)', region:'global' },
+  { name:'K-FIXEDPLUS-A(A)', region:'bond' }, { name:'K-STAR-A(A)', region:'thai' },
+  { name:'KFSDIV-A', region:'thai' }, { name:'KFSGOV-A', region:'bond' },
+  { name:'KFGBRAND-A', region:'global' }, { name:'KFHTECH-A', region:'global' },
+  { name:'KFACHINA-A', region:'china' }, { name:'KFGOLD-A', region:'global' },
+  { name:'KFSMART-RMF', region:'thai' },
+  { name:'SCBS&P500', region:'us' }, { name:'SCBS&P500-SSF', region:'us' },
+  { name:'SCBNDQ(A)', region:'us' }, { name:'SCBNDQ(SSF)', region:'us' },
+  { name:'SCBRMS&P500', region:'us' }, { name:'SCBGOLD', region:'global' },
+  { name:'SCBGOLDH', region:'global' }, { name:'SCBSET', region:'thai' },
+  { name:'SCBDV', region:'thai' }, { name:'SCBLT1', region:'bond' },
+  { name:'TISCOUS', region:'us' }, { name:'TISCOCHINA', region:'china' },
+  { name:'TISCOGOLD', region:'global' }, { name:'TISCOEUR', region:'global' },
+  { name:'B-INNOTECH', region:'global' }, { name:'B-CHINE-EQ', region:'china' },
+  { name:'B-ASIA', region:'asia' }, { name:'B-GLOBAL', region:'global' },
+  { name:'PRINCIPAL GOPPORTUNITY', region:'global' }, { name:'PRINCIPAL GFUND', region:'global' },
+  { name:'PRINCIPAL VNEQ-A', region:'asia' },
+  { name:'ONE-UGG-RA', region:'global' }, { name:'ONE-GINNO-RA', region:'global' },
+  { name:'UOBSGC', region:'global' }, { name:'UOBSA', region:'thai' },
+  { name:'ASP-DIGIBLOC', region:'global' }, { name:'ASP-EVOLUX', region:'global' },
+  { name:'TMBGQG', region:'global' }, { name:'KKP GNP', region:'global' },
+  { name:'PHATRA GNP', region:'global' }, { name:'K-CASH', region:'bond' }
+];
+function fundTaxTypeGuess(name) {
+  var u = name.toUpperCase();
+  if (u.indexOf('RMF') !== -1) return 'RMF';
+  if (u.indexOf('SSF') !== -1) return 'SSF';
+  return '';
+}
+
 function acGetCandidates(mode) {
   var h = state.holdings || [];
   if (mode === 'ticker') {
-    // unique tickers from non-fund holdings
+    // unique tickers from non-fund holdings, merged with SET/US/crypto master list
     var seen = {};
-    return h.filter(function(x){ return x.type !== 'fund'; }).map(function(x){
+    var out = h.filter(function(x){ return x.type !== 'fund'; }).map(function(x){
       var key = (x.ticker || '').toUpperCase();
       if (!key || seen[key]) return null;
       seen[key] = true;
       return { label: key, sub: x.broker || '', type: x.type };
     }).filter(Boolean);
+    SET_STOCKS.forEach(function(t){ if (!seen[t]) { seen[t]=true; out.push({ label:t, sub:'SET50', type:'set', currency:'THB' }); } });
+    US_STOCKS.forEach(function(t){ if (!seen[t]) { seen[t]=true; out.push({ label:t, sub:'US stock', type:'us', currency:'USD' }); } });
+    CRYPTO_TICKERS.forEach(function(t){ if (!seen[t]) { seen[t]=true; out.push({ label:t, sub:'Crypto', type:'crypto', currency:'USD' }); } });
+    return out;
   }
   if (mode === 'name') {
     var seen2 = {};
-    return h.filter(function(x){ return x.type === 'fund'; }).map(function(x){
+    var out2 = h.filter(function(x){ return x.type === 'fund'; }).map(function(x){
       var key = (x.name || x.ticker || '').toUpperCase();
       if (!key || seen2[key]) return null;
       seen2[key] = true;
       return { label: x.name || x.ticker, sub: x.broker || '', type: 'fund' };
     }).filter(Boolean);
+    THAI_FUNDS.forEach(function(f){
+      var key = f.name.toUpperCase();
+      if (seen2[key]) return;
+      seen2[key] = true;
+      var tax = fundTaxTypeGuess(f.name);
+      out2.push({ label: f.name, sub: (tax ? tax + ' · ' : '') + 'กองทุนไทย', type: 'fund', fundRegion: f.region, taxType: tax, currency: 'THB' });
+    });
+    return out2;
   }
-  if (mode === 'trade') {
+  if (mode === 'trade' || mode === 'dca') {
     var seen3 = {};
-    return h.map(function(x){
+    var out3 = h.map(function(x){
       var key = (x.ticker || x.name || '').toUpperCase();
       if (!key || seen3[key]) return null;
       seen3[key] = true;
       return { label: x.ticker || x.name, sub: x.broker || '', type: x.type };
     }).filter(Boolean);
+    SET_STOCKS.forEach(function(t){ if (!seen3[t]) { seen3[t]=true; out3.push({ label:t, sub:'SET50', type:'set' }); } });
+    US_STOCKS.forEach(function(t){ if (!seen3[t]) { seen3[t]=true; out3.push({ label:t, sub:'US stock', type:'us' }); } });
+    CRYPTO_TICKERS.forEach(function(t){ if (!seen3[t]) { seen3[t]=true; out3.push({ label:t, sub:'Crypto', type:'crypto' }); } });
+    THAI_FUNDS.forEach(function(f){ var key=f.name.toUpperCase(); if (!seen3[key]) { seen3[key]=true; out3.push({ label:f.name, sub:'กองทุนไทย', type:'fund' }); } });
+    return out3;
   }
   if (mode === 'broker') {
     var bseen = {};
@@ -1990,6 +2064,26 @@ function acFilter(inputId, ddId, mode) {
   dd.classList.add('open');
 }
 
+// หาข้อมูล ticker จาก holdings เดิมก่อน ถ้าไม่เจอค่อยหาจาก security master (SET/US/Crypto)
+function acLookupTicker(val) {
+  var key = val.toUpperCase();
+  var hh = (state.holdings || []).find(function(x){ return (x.ticker || '').toUpperCase() === key; });
+  if (hh) return { type: hh.type, currency: hh.currency, broker: hh.broker };
+  if (SET_STOCKS.indexOf(key) !== -1) return { type: 'set', currency: 'THB' };
+  if (US_STOCKS.indexOf(key) !== -1) return { type: 'us', currency: 'USD' };
+  if (CRYPTO_TICKERS.indexOf(key) !== -1) return { type: 'crypto', currency: 'USD' };
+  return null;
+}
+// หาข้อมูลกองทุนจาก holdings เดิมก่อน ถ้าไม่เจอค่อยหาจาก THAI_FUNDS
+function acLookupFund(val) {
+  var key = val.toUpperCase();
+  var hf = (state.holdings || []).find(function(x){ return (x.name || x.ticker || '').toUpperCase() === key; });
+  if (hf) return { fundRegion: hf.fundRegion, broker: hf.broker, taxType: hf.taxType };
+  var f = THAI_FUNDS.find(function(x){ return x.name.toUpperCase() === key; });
+  if (f) return { fundRegion: f.region, taxType: fundTaxTypeGuess(f.name) };
+  return null;
+}
+
 function acPick(inputId, ddId, val, mode) {
   var inp = document.getElementById(inputId);
   if (inp) { inp.value = val; inp.focus(); }
@@ -2003,21 +2097,34 @@ function acPick(inputId, ddId, val, mode) {
       if (tb && !tb.value) tb.value = h.broker;
     }
   }
-  // auto-fill type + region in holding modal when ticker picked
+  // auto-fill type + currency in holding modal when ticker picked (from holdings, or SET/US/Crypto master list)
   if (mode === 'ticker') {
-    var hh = (state.holdings || []).find(function(x){ return (x.ticker || '').toUpperCase() === val.toUpperCase(); });
+    var hh = acLookupTicker(val);
     if (hh) {
       var ht = document.getElementById('h-type'); if (ht) ht.value = hh.type || 'set';
       var hc = document.getElementById('h-currency'); if (hc) hc.value = hh.currency || 'THB';
-      var hb = document.getElementById('h-broker'); if (hb) hb.value = hh.broker || '';
+      var hb = document.getElementById('h-broker'); if (hb && hh.broker) hb.value = hh.broker;
       onHoldingTypeChange();
     }
   }
+  // auto-fill fund region + SSF/RMF in holding modal when a fund name is picked (from holdings, or THAI_FUNDS master list)
   if (mode === 'name') {
-    var hf = (state.holdings || []).find(function(x){ return (x.name || x.ticker || '').toUpperCase() === val.toUpperCase(); });
+    var hf = acLookupFund(val);
     if (hf) {
       var hfr = document.getElementById('h-fund-region'); if (hfr && hf.fundRegion) hfr.value = hf.fundRegion;
       var hfb = document.getElementById('h-broker'); if (hfb && hf.broker) hfb.value = hf.broker;
+      var het = document.getElementById('h-tax-type');
+      if (het && hf.taxType) { het.value = hf.taxType; onTaxTypeChange(); }
+    }
+  }
+  // auto-fill type in DCA modal when ticker picked
+  if (mode === 'dca') {
+    var hd = acLookupTicker(val);
+    if (hd) {
+      var dt = document.getElementById('d-type'); if (dt && hd.type) dt.value = hd.type;
+    } else {
+      var hdf = acLookupFund(val);
+      if (hdf) { var dtf = document.getElementById('d-type'); if (dtf) dtf.value = 'fund'; }
     }
   }
 }
