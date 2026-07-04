@@ -336,12 +336,15 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
   position: fixed; inset: 0; background: rgba(0,0,0,0.25);
   display: none; align-items: center; justify-content: center;
   z-index: 200; backdrop-filter: blur(3px);
+  padding: 16px; /* กันขอบ modal ชิดจอ + เหลือพื้นที่ overlay ให้คลิกปิด */
 }
 .modal-overlay.open { display: flex; }
 .modal {
   background: var(--surface); border-radius: var(--radius-lg); border: 0.5px solid var(--border);
   padding: 24px; width: 380px; max-width: 94vw;
   box-shadow: var(--shadow-md);
+  /* ฟอร์มยาว (เช่น ตั้งเป้าหมายน้ำหนักพอร์ต) ต้องเลื่อนในตัว modal ได้ ไม่ล้นจอ */
+  max-height: 88vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
 .modal h3 { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 16px; }
 .modal-form { display: flex; flex-direction: column; gap: 12px; }
@@ -802,6 +805,9 @@ if (window._folioReady) {
           <div id="p17MonthlyBuy" style="font-size:clamp(12px,3.5vw,18px);font-family:var(--font-serif);color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</div>
         </div>
       </div>
+
+      <!-- Executive summary table — ข้อมูลดิบจาก Sheet ล้วน ไม่ผ่าน AI -->
+      <div id="p17ExecTable" style="display:none;margin-bottom:14px;"></div>
 
       <!-- AI Analysis Result - single scrollable panel -->
       <div id="p17AiResult" style="display:none;">
@@ -2197,6 +2203,13 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
 });
+// Escape closes any open modal (autocomplete dropdown's own Escape handler runs first and stops here via open-check order)
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const openDD = document.querySelector('.ac-dropdown.open');
+  if (openDD) return; // ให้ Escape แรกปิด dropdown ก่อน (acKeyNav จัดการเอง)
+  document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+});
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -3113,6 +3126,64 @@ function safeParseJSON(text) {
   return null;
 }
 
+// --- Source badge: บอกที่มาของแต่ละคำแนะนำ (Sheet data vs ข่าว/ตลาด) ---
+function srcBadge(source) {
+  if (source === 'news') return '<span style="font-size:9px;background:var(--blue-bg);color:var(--blue);border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📰 ข่าว/ตลาด</span>';
+  return '<span style="font-size:9px;background:var(--amber-bg);color:var(--amber);border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📊 Sheet</span>';
+}
+
+// --- Footer แหล่งข้อมูล ต่อท้ายผล AI ทุกกล่อง ---
+function aiSourceFooter(usedNews) {
+  var syncPart = window._p17SyncTime
+    ? 'Google Sheet (sync ล่าสุด ' + window._p17SyncTime + ' น.)'
+    : 'Google Sheet (ยังไม่ได้ sync — ใช้ข้อมูลใน Folio แทน)';
+  var newsPart = usedNews ? ' + ข่าวสดผ่าน Google Search' : '';
+  return '<div style="font-size:10px;color:var(--text3);border-top:0.5px dashed var(--border);margin-top:10px;padding-top:8px;line-height:1.6;">' +
+    'แหล่งข้อมูล: ' + syncPart + newsPart + ' · AI เป็นความเห็นประกอบ ไม่ใช่คำแนะนำการลงทุน</div>';
+}
+
+// --- Lite markdown -> HTML: กัน Gemini ตอบ markdown แล้วขึ้นจอเป็น text ขีด ๆ ---
+function mdLiteToHtml(text) {
+  if (!text) return '';
+  var lines = String(text).split('\n');
+  var html = '';
+  var tableRows = [];
+  function flushTable() {
+    if (!tableRows.length) return;
+    var rows = tableRows.filter(function(r){ return !/^\s*\|?[\s:|-]+\|?\s*$/.test(r); }); // ตัดแถวคั่น |---|---|
+    if (rows.length) {
+      html += '<div style="overflow-x:auto;margin:8px 0;"><table style="border-collapse:collapse;font-size:11.5px;min-width:280px;">';
+      rows.forEach(function(r, ri) {
+        var cells = r.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|');
+        var tag = ri === 0 ? 'th' : 'td';
+        html += '<tr>' + cells.map(function(c) {
+          return '<' + tag + ' style="border:0.5px solid var(--border);padding:4px 8px;text-align:left;' + (ri === 0 ? 'background:var(--bg);font-weight:600;color:var(--text2);' : '') + '">' + inline(c.trim()) + '</' + tag + '>';
+        }).join('') + '</tr>';
+      });
+      html += '</table></div>';
+    }
+    tableRows = [];
+  }
+  function inline(s) {
+    return esc(s)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  }
+  lines.forEach(function(line) {
+    if (/^\s*\|.*\|\s*$/.test(line)) { tableRows.push(line); return; }
+    flushTable();
+    var t = line.trim();
+    if (!t) { html += '<div style="height:6px;"></div>'; return; }
+    var hm = t.match(/^#{1,4}\s+(.*)$/);
+    if (hm) { html += '<div style="font-size:11px;font-weight:600;color:var(--accent);margin:12px 0 4px;">' + inline(hm[1]) + '</div>'; return; }
+    var bm = t.match(/^[-•*]\s+(.*)$/);
+    if (bm) { html += '<div style="padding-left:14px;position:relative;"><span style="position:absolute;left:2px;">•</span>' + inline(bm[1]) + '</div>'; return; }
+    html += '<div>' + inline(t) + '</div>';
+  });
+  flushTable();
+  return html;
+}
+
 // --- Gemini helper: auto-rotate keys on quota exhaustion ---
 // Gemini helper: v1beta + x-goog-api-key header (works for all key formats)
 async function callGemini(body) {
@@ -3192,6 +3263,71 @@ function getKey(name) {
 // --- Phase 17: Portfolio Analyzer ---
 window._p17SheetData = null;
 
+// Executive summary table — render ตรงจาก Sheet data (deterministic, ไม่ผ่าน AI)
+// ใช้สแกนสถานะพอร์ตรายวันได้โดยไม่ต้องกดวิเคราะห์
+function p17RenderExecTable() {
+  var el = document.getElementById('p17ExecTable');
+  if (!el) return;
+  var data = window._p17SheetData;
+  if (!data || !data.holdings || !data.holdings.length) { el.style.display = 'none'; return; }
+
+  var rows = data.holdings.map(function(h) {
+    return {
+      asset: h['Asset'],
+      value: Number(h['Market Value']) || 0,
+      pl: (Number(h['P/L %']) || 0) * 100,
+      drift: (Number(h['Drift %']) || 0) * 100,
+      score: Number(h['Buy Priority Score']) || 0
+    };
+  }).sort(function(a, b) { return b.value - a.value; });
+
+  var totalValue = rows.reduce(function(s, r) { return s + r.value; }, 0);
+  var totalPL = data.holdings.reduce(function(s, h) { return s + (Number(h['Unrealized P/L']) || 0); }, 0);
+  // เกณฑ์ BuyScore "สูง" = top 20% ของพอร์ต (เกณฑ์เดียวกับ smart filter ใน renderHoldings)
+  var scores = rows.map(function(r) { return r.score; }).sort(function(a, b) { return b - a; });
+  var scoreThreshold = scores.length ? (scores[Math.floor(scores.length * 0.2)] || 5) : 5;
+
+  function statusTag(r) {
+    if (r.drift > 5) {
+      return taxLockInfo(r.asset)
+        ? '<span style="background:var(--amber-bg);color:var(--amber);border-radius:4px;padding:1px 6px;font-size:9.5px;font-weight:600;white-space:nowrap;">🔒 ล็อก</span>'
+        : '<span style="background:var(--orange-bg);color:var(--orange);border-radius:4px;padding:1px 6px;font-size:9.5px;font-weight:600;">ลด</span>';
+    }
+    if (r.drift < -5 || (r.score >= scoreThreshold && r.score > 0)) {
+      return '<span style="background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 6px;font-size:9.5px;font-weight:600;">ซื้อ</span>';
+    }
+    return '<span style="background:var(--bg2);color:var(--text3);border-radius:4px;padding:1px 6px;font-size:9.5px;font-weight:600;">ถือ</span>';
+  }
+
+  var th = 'font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:6px 8px;text-align:right;border-bottom:0.5px solid var(--border);white-space:nowrap;';
+  var td = 'font-size:11.5px;padding:6px 8px;text-align:right;border-bottom:0.5px solid var(--bg2);white-space:nowrap;';
+  var html = '<div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">📋 สรุปพอร์ต <span style="font-weight:400;color:var(--text3);">(ข้อมูลดิบจาก Sheet' + (window._p17SyncTime ? ' · sync ' + window._p17SyncTime + ' น.' : '') + ' — ไม่ผ่าน AI)</span></div>';
+  html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="border-collapse:collapse;width:100%;min-width:520px;">';
+  html += '<tr><th style="' + th + 'text-align:left;">Asset</th><th style="' + th + '">มูลค่า ฿</th><th style="' + th + '">น้ำหนัก</th><th style="' + th + '">P/L</th><th style="' + th + '">Drift</th><th style="' + th + '">BuyScore</th><th style="' + th + 'text-align:center;">สถานะ</th></tr>';
+  rows.forEach(function(r) {
+    var w = totalValue > 0 ? (r.value / totalValue * 100) : 0;
+    html += '<tr>' +
+      '<td style="' + td + 'text-align:left;font-weight:500;color:var(--text);">' + esc(r.asset) + '</td>' +
+      '<td style="' + td + '">' + Math.round(r.value).toLocaleString() + '</td>' +
+      '<td style="' + td + 'color:var(--text2);">' + w.toFixed(1) + '%</td>' +
+      '<td style="' + td + 'color:' + (r.pl >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + (r.pl >= 0 ? '+' : '') + r.pl.toFixed(1) + '%</td>' +
+      '<td style="' + td + 'color:' + (Math.abs(r.drift) > 5 ? 'var(--amber)' : 'var(--text2)') + ';">' + (r.drift >= 0 ? '+' : '') + r.drift.toFixed(1) + '%</td>' +
+      '<td style="' + td + 'color:' + (r.score >= scoreThreshold && r.score > 0 ? 'var(--green)' : 'var(--text2)') + ';">' + r.score.toFixed(1) + '</td>' +
+      '<td style="' + td + 'text-align:center;">' + statusTag(r) + '</td>' +
+    '</tr>';
+  });
+  html += '<tr>' +
+    '<td style="' + td + 'text-align:left;font-weight:600;color:var(--text);border-bottom:none;">รวม (' + rows.length + ')</td>' +
+    '<td style="' + td + 'font-weight:600;color:var(--text);border-bottom:none;">' + Math.round(totalValue).toLocaleString() + '</td>' +
+    '<td style="' + td + 'border-bottom:none;">100%</td>' +
+    '<td style="' + td + 'font-weight:600;color:' + (totalPL >= 0 ? 'var(--green)' : 'var(--red)') + ';border-bottom:none;">' + (totalPL >= 0 ? '+' : '') + '฿' + Math.round(totalPL).toLocaleString() + '</td>' +
+    '<td style="' + td + 'border-bottom:none;" colspan="3"></td>' +
+  '</tr>';
+  html += '</table></div>';
+  el.innerHTML = html;
+  el.style.display = '';
+}
+
 async function p17SyncSheet(manual = false) {
   const url = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (!url) { showToast('ใส่ Portfolio Sheet URL ใน ⚙️ ตั้งค่าก่อน'); return; }
@@ -3221,8 +3357,10 @@ async function p17SyncSheet(manual = false) {
     const em = document.getElementById('p17Empty');
     if (sr) { sr.style.display = 'grid'; }
     if (em) em.style.display = 'none';
+    window._p17SyncTime = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
     const ls = document.getElementById('p17LastSync');
-    if (ls) ls.textContent = 'อัพเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) + ' น. · ' + holdings.length + ' holdings';
+    if (ls) ls.textContent = 'อัพเดตล่าสุด ' + window._p17SyncTime + ' น. · ' + holdings.length + ' holdings';
+    p17RenderExecTable();
     showToast('ดึงข้อมูล ' + holdings.length + ' holdings สำเร็จ ✓');
   } catch(e) {
     showToast('ดึงข้อมูลไม่ได้: ' + e.message);
@@ -3315,7 +3453,7 @@ async function p17RunAnalysis() {
     html = html.split('[ถือ]').join('<span style="background:var(--blue-bg);color:var(--blue);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;margin-right:4px;">ถือ</span>');
     html = html.split('[ลด]').join('<span style="background:var(--orange-bg);color:var(--orange);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;margin-right:4px;">ลด</span>');
 
-    panel.innerHTML = html;
+    panel.innerHTML = html + aiSourceFooter(true);
     aiCacheSave('p17_analysis', panel.innerHTML);
     var ls = document.getElementById('p17LastSync');
     if (ls) ls.textContent = 'วิเคราะห์เสร็จ ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) + ' น. -- Gemini + Google Search';
@@ -3624,9 +3762,11 @@ promptLines.push('');
   promptLines.push('- รวม Layer 1 + Layer 2 ไม่เกิน 6 รายการ');
   promptLines.push('- top_actions = สรุป 3 ข้อที่สำคัญที่สุด (ซื้อ/ถือ/ลด)');
   promptLines.push('- bonus_funds ต้องมี is_new_fund: true เพื่อแยก UI');
+  promptLines.push('- ทุก item ต้องมี "source": "sheet" (อิง Drift/BuyScore จากพอร์ต) หรือ "news" (อิงข่าว/สภาวะตลาดที่ค้นเจอจริง)');
+  promptLines.push('- reason ของ item ที่ source เป็น news ต้องอ้างเหตุการณ์/ข่าวจริงที่ Google Search เจอ ห้ามอ้างข่าวลอย ๆ ที่ไม่ได้ค้น');
   promptLines.push('');
   promptLines.push('ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น ห้ามใช้ ```json:');
-  promptLines.push('{"top_actions":[{"rank":1,"action":"ชื่อ action ภาษาไทย","amount":XXXX,"reason":"5 คำ","layer":1}],"allocation":[{"asset":"ชื่อ","amount":XXXX,"reason":"5 คำ","is_new_fund":false}],"bonus_funds":[{"asset":"ชื่อกอง","amount":XXXX,"reason":"ทำไมน่าสนใจตอนนี้","is_new_fund":true}],"expected_yoy":{"conservative":"'+yoyConserv+'","base":"'+yoyBase+'","aggressive":"'+yoyAggr+'"},"risk":{"level":"High/Med/Low","note":"exposure X%"},"triggers":["asset -X% -> action"]}');
+  promptLines.push('{"top_actions":[{"rank":1,"action":"ชื่อ action ภาษาไทย","amount":XXXX,"reason":"5 คำ","layer":1,"source":"sheet"}],"allocation":[{"asset":"ชื่อ","amount":XXXX,"reason":"5 คำ","is_new_fund":false,"source":"sheet"}],"bonus_funds":[{"asset":"ชื่อกอง","amount":XXXX,"reason":"ทำไมน่าสนใจตอนนี้ อ้างข่าวจริง","is_new_fund":true,"source":"news"}],"expected_yoy":{"conservative":"'+yoyConserv+'","base":"'+yoyBase+'","aggressive":"'+yoyAggr+'"},"risk":{"level":"High/Med/Low","note":"exposure X%"},"triggers":["asset -X% -> action"]}');
 var prompt = promptLines.join('\n');
 
   try {
@@ -3636,6 +3776,7 @@ var prompt = promptLines.join('\n');
       generationConfig: { maxOutputTokens: 4000 }
     });
     var text = '';
+    var finishReason = (d.candidates && d.candidates[0]) ? d.candidates[0].finishReason : '';
     if (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) {
       var part = d.candidates[0].content.parts.find(function(p){ return p.text; });
       if (part) text = part.text;
@@ -3661,11 +3802,13 @@ var prompt = promptLines.join('\n');
         (parsed.top_actions||[]).slice(0,3).forEach(function(a) {
           var colors = ['var(--red)','var(--accent)','var(--amber)'];
           var c = colors[a.rank-1] || 'var(--text2)';
+          // layer 2 = กองใหม่จากข่าว; หรือใช้ field source ที่ prompt ขอ
+          var src = a.source || (a.layer === 2 ? 'news' : 'sheet');
           html += '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">';
           html += '<span style="background:'+c+';color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;">'+a.rank+'</span>';
           html += '<div style="flex:1;">';
-          html += '<div style="font-size:13px;font-weight:500;color:var(--text);">'+a.action+'</div>';
-          html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+(a.amount||0).toLocaleString()+' — '+a.reason+'</div>';
+          html += '<div style="font-size:13px;font-weight:500;color:var(--text);">'+esc(a.action)+' '+srcBadge(src)+'</div>';
+          html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+(a.amount||0).toLocaleString()+' — '+esc(a.reason)+'</div>';
           html += '</div></div>';
         });
         html += '</div>';
@@ -3687,11 +3830,11 @@ var prompt = promptLines.join('\n');
         var grandTotal = allAlloc.reduce(function(s,x){ return s+(x.amount||0); },0) + bonusFunds.reduce(function(s,x){ return s+(x.amount||0); },0);
         if (allAlloc.length) {
           html += '<div style="margin-bottom:12px;">';
-          html += '<div style="font-size:10px;font-weight:600;color:var(--text2);letter-spacing:0.5px;margin-bottom:8px;">📊 กองที่มีในพอร์ต</div>';
+          html += '<div style="font-size:10px;font-weight:600;color:var(--text2);letter-spacing:0.5px;margin-bottom:8px;">📊 กองที่มีในพอร์ต <span style="font-weight:400;color:var(--text3);">— จัดสรรตาม Drift/BuyScore ใน Sheet</span></div>';
           allAlloc.forEach(function(a) {
             var pct = grandTotal > 0 ? Math.round((a.amount||0)/grandTotal*100) : 0;
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border);">';
-            html += '<span style="font-size:12px;color:var(--text);">'+a.asset+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+a.reason+'</span></span>';
+            html += '<span style="font-size:12px;color:var(--text);">'+esc(a.asset)+' '+srcBadge('sheet')+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+esc(a.reason)+'</span></span>';
             html += '<span style="font-size:13px;font-weight:600;color:var(--accent);">฿'+(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
             html += '</div>';
           });
@@ -3700,13 +3843,13 @@ var prompt = promptLines.join('\n');
         // Bonus new funds block
         if (bonusFunds.length) {
           html += '<div style="margin-bottom:12px;background:var(--green-bg);border-radius:10px;padding:10px 12px;border:0.5px solid var(--border2);">';
-          html += '<div style="font-size:10px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px;">✨ กองแนะนำเพิ่มเติมจากตลาดปัจจุบัน</div>';
+          html += '<div style="font-size:10px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px;">✨ กองแนะนำเพิ่มเติมจากตลาดปัจจุบัน <span style="font-weight:400;">— AI เสริมจากข่าว ไม่ได้อยู่ใน Sheet</span></div>';
           bonusFunds.forEach(function(a) {
             var pct = grandTotal > 0 ? Math.round((a.amount||0)/grandTotal*100) : 0;
             html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:0.5px solid var(--border);">';
             html += '<div style="flex:1;">';
-            html += '<span style="font-size:12px;font-weight:500;color:var(--text);">'+a.asset+'</span>';
-            html += '<span style="display:block;font-size:10px;color:var(--text2);margin-top:2px;">'+a.reason+'</span>';
+            html += '<span style="font-size:12px;font-weight:500;color:var(--text);">'+esc(a.asset)+' '+srcBadge('news')+'</span>';
+            html += '<span style="display:block;font-size:10px;color:var(--text2);margin-top:2px;">'+esc(a.reason)+'</span>';
             html += '</div>';
             html += '<span style="font-size:13px;font-weight:600;color:var(--green);white-space:nowrap;margin-left:10px;">฿'+(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
             html += '</div>';
@@ -3730,7 +3873,7 @@ var prompt = promptLines.join('\n');
           html += '<div style="background:var(--bg);border-radius:8px;padding:8px 10px;">';
           html += '<div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:6px;">🎯 TRIGGERS</div>';
           (parsed.triggers).forEach(function(t) {
-            html += '<div style="font-size:11px;color:var(--text2);padding:2px 0;">• '+t+'</div>';
+            html += '<div style="font-size:11px;color:var(--text2);padding:2px 0;">• '+esc(t)+'</div>';
           });
           html += '</div>';
         }
@@ -3759,12 +3902,15 @@ var prompt = promptLines.join('\n');
           html += '</div>';
         }
       }
+    } else if (finishReason === 'MAX_TOKENS') {
+      // JSON ถูกตัดกลางทาง — บอกให้ลองใหม่แทนการโชว์ text ขาด ๆ
+      html = '<div style="color:var(--amber);">⚠️ คำตอบ AI ยาวเกินจนถูกตัด — กด 🤖 แนะนำเลย อีกครั้ง (มักสำเร็จในครั้งที่ 2)</div>';
     } else {
-      // Fallback: plain text with basic formatting
-      html = rawText.replace(/\n/g,'<br>');
+      // Fallback: แปลง markdown ที่ AI ตอบมาเป็น HTML อ่านได้ แทน text ดิบมีขีด/ดาว
+      html = mdLiteToHtml(rawText);
     }
 
-    result.innerHTML = html;
+    result.innerHTML = html + aiSourceFooter(true);
     aiCacheSave('p17b_advisor', result.innerHTML);
   } catch(e) {
     var msg = e.message==='no_key'?'ใส่ Gemini Key ก่อน':'วิเคราะห์ไม่ได้: '+e.message;
@@ -3920,9 +4066,9 @@ async function p17ReviewRun() {
         html += '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">';
         html += '<span style="background:'+c+';color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;">'+label+'</span>';
         html += '<div style="flex:1;">';
-        html += '<div style="font-size:13px;font-weight:600;color:var(--text);">'+(a.asset||'')+'</div>';
-        html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">'+(a.reason||'')+'</div>';
-        if (a.headline) html += '<div style="font-size:10px;color:var(--text3);margin-top:2px;">↳ '+a.headline+'</div>';
+        html += '<div style="font-size:13px;font-weight:600;color:var(--text);">'+esc(a.asset||'')+' '+srcBadge('news')+'</div>';
+        html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">'+esc(a.reason||'')+'</div>';
+        if (a.headline) html += '<div style="font-size:10px;color:var(--text3);margin-top:2px;">↳ '+esc(a.headline)+'</div>';
         html += '</div></div>';
       });
     }
@@ -3932,18 +4078,18 @@ async function p17ReviewRun() {
       html += '<div style="border-top:0.5px dashed var(--border);margin-top:12px;padding-top:12px;">';
       html += '<div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:0.8px;margin-bottom:8px;">⚖️ REBALANCING — ลดเฉพาะตอนปรับสัดส่วน (ไม่ใช่จากข่าว)</div>';
       trimFlags.forEach(function(t) {
-        html += '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;">'+t.asset+' เกินเป้า '+t.driftPct.toFixed(1)+'% — พิจารณาลด ~฿'+t.reduceAmt.toLocaleString()+' เมื่อ rebalance</div>';
+        html += '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;">'+esc(t.asset)+' '+srcBadge('sheet')+' เกินเป้า '+t.driftPct.toFixed(1)+'% — พิจารณาลด ~฿'+t.reduceAmt.toLocaleString()+' เมื่อ rebalance</div>';
       });
       if (_lockSkipped.length) {
-        html += '<div style="font-size:10px;color:var(--text3);margin-top:4px;">🔒 ข้าม '+_lockSkipped.join(', ')+' — ติดเงื่อนไข SSF/RMF ขายไม่ได้ (ปรับสัดส่วนด้วยการซื้อกองอื่นแทน)</div>';
+        html += '<div style="font-size:10px;color:var(--text3);margin-top:4px;">🔒 ข้าม '+esc(_lockSkipped.join(', '))+' — ติดเงื่อนไข SSF/RMF ขายไม่ได้ (ปรับสัดส่วนด้วยการซื้อกองอื่นแทน)</div>';
       }
       html += '</div>';
     } else if (src === 'Firebase') {
       html += '<div style="font-size:10px;color:var(--text3);margin-top:10px;border-top:0.5px dashed var(--border);padding-top:8px;">ℹ️ ไม่มีข้อมูล drift (ยังไม่ได้ sync Sheet) — ส่วนลดสัดส่วน rebalancing จะแสดงเมื่อกด 🔄 ดึงข้อมูล Sheet</div>';
     }
 
-    result.innerHTML = html;
-    if (typeof aiCacheSave === 'function') aiCacheSave('p17_review', html);
+    result.innerHTML = html + aiSourceFooter(true);
+    if (typeof aiCacheSave === 'function') aiCacheSave('p17_review', result.innerHTML);
   } catch(e) {
     var msg = e.message==='no_key' ? 'ใส่ Gemini Key ก่อน' : 'รีวิวไม่ได้: '+e.message;
     showToast(msg);
@@ -4750,24 +4896,80 @@ async function p10RefreshAI() {
   txt.innerHTML='<span style="color:var(--text3);">AI กำลังวิเคราะห์...</span>';
 
   const { actual, targets, totalValue, activeTypes } = window._p10Data;
-  const summary = activeTypes.map(t =>
-    `${P10_LABELS[t]}: จริง ${(actual[t]||0).toFixed(1)}% เป้า ${targets[t]||0}% (${((actual[t]||0)-(targets[t]||0))>=0?'เกิน':'ขาด'} ${Math.abs((actual[t]||0)-(targets[t]||0)).toFixed(1)}%)`
-  ).join('\n');
-  const yoyData = window._p9Data;
-  const yoyLine = yoyData ? `YoY ปัจจุบัน: ${yoyData.currentYoy.toFixed(1)}%, gap ${yoyData.gapPct.toFixed(1)}%` : '';
+  const classSummary = activeTypes.map(t => {
+    const dev = (actual[t]||0)-(targets[t]||0);
+    const devBaht = Math.round(Math.abs(dev)/100 * totalValue);
+    return `${P10_LABELS[t]}: จริง ${(actual[t]||0).toFixed(1)}% เป้า ${targets[t]||0}% (${dev>=0?'เกิน':'ขาด'} ${Math.abs(dev).toFixed(1)}% ≈ ฿${devBaht.toLocaleString()})`;
+  }).join('\n');
 
-  const prompt = `คุณคือที่ปรึกษาลงทุน AI วิเคราะห์การ Rebalance พอร์ต
+  // รายตัว holding พร้อมมูลค่า (THB) เพื่อให้ AI ระบุชื่อจริงได้ ไม่ใช่แค่ asset class
+  const holdingLines = state.holdings.map(h => {
+    const v = Math.round(valueThb(h));
+    const w = totalValue > 0 ? (v/totalValue*100).toFixed(1) : '0';
+    const cls = h.type === 'fund' ? (FUND_REGION_KEY[h.fundRegion]||'fund_thai') : h.type;
+    return `- ${h.name||h.ticker} [${P10_LABELS[cls]||cls}] มูลค่า ฿${v.toLocaleString()} (${w}%)` + (h.change ? ` P/L ${h.change.toFixed(1)}%` : '');
+  }).join('\n');
+
+  const monthlyDca = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
+  const yoyData = window._p9Data;
+  const yoyLine = yoyData ? `YoY ปัจจุบัน: ${yoyData.currentYoy.toFixed(1)}% (เป้า ${yoyTargetPct().toFixed(0)}%, gap ${yoyData.gapPct.toFixed(1)}%)` : '';
+  const lockedNames = taxLockedAssetNames();
+
+  // BuyScore/Drift รายตัวจาก Sheet (ถ้า sync แล้ว) ช่วยให้จัดลำดับแม่นขึ้น
+  let sheetLines = '';
+  if (window._p17SheetData && window._p17SheetData.holdings) {
+    sheetLines = '\nข้อมูลจาก Google Sheet (Drift รายตัว, BuyScore 0-10):\n' +
+      window._p17SheetData.holdings.map(sh =>
+        `- ${sh['Asset']}: Drift ${((Number(sh['Drift %'])||0)*100).toFixed(1)}%, BuyScore ${Number(sh['Buy Priority Score']||0).toFixed(1)}`
+      ).join('\n');
+  }
+
+  const prompt = `คุณคือที่ปรึกษาลงทุนอาวุโส วางแผน Rebalance พอร์ตด้วยเงินใหม่เป็นหลัก (ซื้อฝั่งที่ขาดก่อน ขายเฉพาะจำเป็น)
 ${yoyLine}
-มูลค่าพอร์ตรวม: ฿${Math.round(totalValue).toLocaleString()}
-สัดส่วน:
-${summary}
-แนะนำว่าควร Rebalance อย่างไร asset ไหนควรซื้อก่อนเพื่อให้เข้าใกล้เป้าหมายและช่วยเรื่อง YoY
-ตอบเป็นภาษาไทย 3-5 ประโยค กระชับ ให้คำแนะนำที่นำไปใช้ได้จริง`;
+มูลค่าพอร์ตรวม: ฿${Math.round(totalValue).toLocaleString()} · งบ DCA ต่อเดือน: ฿${monthlyDca.toLocaleString()}
+สัดส่วนราย asset class เทียบเป้า:
+${classSummary}
+
+Holdings รายตัว:
+${holdingLines}${sheetLines}
+${lockedNames.length ? '\nLOCKED (SSF/RMF ห้ามแนะนำขาย/ลด): ' + lockedNames.join(', ') : ''}
+
+กติกา:
+- ยอดซื้อรวมทั้งแผนต้องไม่เกินงบ DCA ต่อเดือน (฿${monthlyDca.toLocaleString()}) ถ้างบ 0 ให้เสนอแผนขั้นต่ำ ฿5,000
+- ระบุชื่อ holding จริงจากรายการข้างบน ห้ามแต่งชื่อใหม่
+- action "ลด" ใช้เฉพาะตัวที่เกินเป้าชัดเจนและไม่ติด LOCKED
+- source = "sheet" เมื่ออิง Drift/BuyScore/สัดส่วน, "news" เมื่ออิงสภาวะตลาด
+
+ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น ห้ามใช้ code fence:
+{"summary":"ภาพรวม 1 ประโยค","actions":[{"asset":"ชื่อจริง","action":"ซื้อ/ลด/ถือ","amountThb":NUMBER,"priority":1,"reason":"เหตุผลสั้น ไม่เกิน 15 คำ","source":"sheet"}]}`;
 
   try {
-    const data = await callGemini({ contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:600,temperature:0.5} });
+    const data = await callGemini({ contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:1200,temperature:0.3} });
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    txt.innerHTML = text.replace(/\n/g,'<br>');
+    const parsed = safeParseJSON(text);
+    if (!parsed || !Array.isArray(parsed.actions) || !parsed.actions.length) {
+      txt.innerHTML = '<span style="color:var(--amber);">AI ตอบไม่อยู่ในรูปแบบที่อ่านได้ — กด 🤖 อีกครั้งเพื่อลองใหม่</span>';
+    } else {
+      const actColor = { 'ซื้อ':'var(--green)', 'ลด':'var(--orange)', 'ถือ':'var(--text3)' };
+      const actBg = { 'ซื้อ':'var(--green-bg)', 'ลด':'var(--orange-bg)', 'ถือ':'var(--bg2)' };
+      let html = parsed.summary ? '<div style="font-size:12px;color:var(--text);margin-bottom:10px;line-height:1.7;">' + esc(parsed.summary) + '</div>' : '';
+      parsed.actions
+        .slice().sort((a,b) => (a.priority||9) - (b.priority||9))
+        .slice(0, 6)
+        .forEach(a => {
+          const act = String(a.action||'ถือ');
+          html += '<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:0.5px solid var(--border);">' +
+            '<span style="background:' + (actBg[act]||'var(--bg2)') + ';color:' + (actColor[act]||'var(--text2)') + ';border-radius:4px;padding:2px 8px;font-size:10px;font-weight:600;min-width:32px;text-align:center;flex-shrink:0;">' + esc(act) + '</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:12px;font-weight:500;color:var(--text);">' + esc(a.asset||'') +
+                (a.amountThb ? ' <strong style="color:var(--accent);">฿' + Number(a.amountThb).toLocaleString() + '</strong>' : '') + ' ' + srcBadge(a.source) + '</div>' +
+              (a.reason ? '<div style="font-size:11px;color:var(--text2);margin-top:1px;">' + esc(a.reason) + '</div>' : '') +
+            '</div></div>';
+        });
+      html += aiSourceFooter(false);
+      txt.innerHTML = html;
+      aiCacheSave('p10_rebalance', txt.innerHTML);
+    }
   } catch(e) {
     txt.innerHTML=`<span style="color:var(--red);">${e.message==='no_key'?'ใส่ Gemini Key ในหน้า ⚙️ ตั้งค่าก่อน':e.message==='all_quota'?'Gemini ทุก key หมด quota':'เกิดข้อผิดพลาด กรุณาลองใหม่'}</span>`;
   }
