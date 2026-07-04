@@ -2420,13 +2420,17 @@ function renderDCA() {
         (overdueDays === 0 ? 'ครบกำหนดวันนี้' : 'เลยกำหนด ' + overdueDays + ' วัน') + '</span>'
       : '';
     var nextLabel = d.nextISO ? dcaDisplayDate(d.nextISO) : (d.next || 'ยังไม่ระบุ');
+    var avgPrice = (d.boughtTotalQty > 0) ? (d.boughtTotalAmount / d.boughtTotalQty) : null;
+    var avgLine = avgPrice
+      ? ' · ซื้อแล้ว ' + d.boughtCount + ' ครั้ง เฉลี่ย ฿' + avgPrice.toLocaleString(undefined,{maximumFractionDigits:4})
+      : '';
     return '<div class="holding" style="' + (isDue ? 'background:var(--amber-bg);border-radius:8px;' : '') + '">' +
       '<div class="holding-info">' +
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
           '<span class="dca-ticker ' + (d.type ? ('t-' + d.type) : '') + '" style="font-weight:600;">' + esc(d.ticker || '—') + '</span>' +
           dueBadge +
         '</div>' +
-        '<div class="holding-sub">' + esc(freqLabel[d.freq] || d.freq || '') + ' · ครั้งถัดไป: ' + esc(nextLabel) + '</div>' +
+        '<div class="holding-sub">' + esc(freqLabel[d.freq] || d.freq || '') + ' · ครั้งถัดไป: ' + esc(nextLabel) + avgLine + '</div>' +
       '</div>' +
       '<div class="holding-right"><div class="holding-val">฿' + Number(d.amount).toLocaleString() + '</div></div>' +
       '<div style="display:flex;flex-direction:column;gap:4px;margin-left:6px;">' +

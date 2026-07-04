@@ -1,4 +1,4 @@
-const CACHE = 'folio-v2';
+const CACHE = 'folio-v3';
 const SHELL = ['/Folio/', '/Folio/index.html'];
 
 self.addEventListener('install', e => {
