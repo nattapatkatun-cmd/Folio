@@ -1,4 +1,4 @@
-const CACHE = 'folio-v3';
+const CACHE = 'folio-v4';
 const SHELL = ['/Folio/', '/Folio/index.html'];
 
 self.addEventListener('install', e => {
@@ -26,7 +26,20 @@ self.addEventListener('fetch', e => {
       url.includes('script.google') || url.includes('fonts.googleapis')) {
     return;
   }
-  // Cache-first for app shell
+  // App shell: network-first so a new deploy shows up immediately on refresh;
+  // cache is only a fallback when offline. Avoids needing to bump CACHE on every release.
+  const isShell = e.request.mode === 'navigate' || SHELL.some(s => url.endsWith(s));
+  if (isShell) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+  // Cache-first for other static assets (icons, manifest, etc. - rarely change)
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );

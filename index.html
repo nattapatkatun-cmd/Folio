@@ -5222,7 +5222,20 @@ async function init() {
   renderApiStatus();
   renderBudget();
   startApp();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if ('serviceWorker' in navigator) {
+    // controllerchange also fires on the very first install (when clients.claim() first takes control) —
+    // only reload when a controller already existed, i.e. this is a genuine update replacing an older SW
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.update(); // check for a newer sw.js right away instead of waiting for the browser's own schedule
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded || !hadController) return; // avoid a reload loop, and skip the initial no-op claim
+        reloaded = true;
+        window.location.reload();
+      });
+    }).catch(()=>{});
+  }
 }
 
 init();
