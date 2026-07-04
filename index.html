@@ -806,8 +806,17 @@ if (window._folioReady) {
         </div>
       </div>
 
-      <!-- Executive summary table — ข้อมูลดิบจาก Sheet ล้วน ไม่ผ่าน AI -->
-      <div id="p17ExecTable" style="display:none;margin-bottom:14px;"></div>
+      <!-- Sheet data table — ข้อมูลดิบจาก Sheet ล้วน ไม่ผ่าน AI, ซ่อนไว้เป็นค่าเริ่มต้น -->
+      <div id="p17ExecTableWrap" style="display:none;margin-bottom:14px;">
+        <div class="ai-section-toggle" onclick="p17ToggleExecTable()" id="p17ExecTableToggle" style="background:var(--bg);padding:8px 12px;">
+          <div class="ai-section-toggle-left">
+            <span class="ai-section-toggle-icon" style="font-size:14px;">📋</span>
+            <div class="ai-section-toggle-title" style="font-size:11.5px;">ตารางสรุปจาก Sheet (ข้อมูลดิบ)</div>
+          </div>
+          <span class="ai-section-toggle-chevron" id="p17ExecTableChevron">▾</span>
+        </div>
+        <div class="ai-section-body" id="p17ExecTable" style="padding-top:10px;"></div>
+      </div>
 
       <!-- AI Analysis Result - single scrollable panel -->
       <div id="p17AiResult" style="display:none;">
@@ -3087,6 +3096,7 @@ function renderAllocation() {
 function startApp() {
   setDate();
   restoreAiSection();
+  p17RestoreExecTableState();
   renderHoldings();
   renderDCA();
   renderAllocation();
@@ -3124,6 +3134,29 @@ function safeParseJSON(text) {
   const ma = t.match(/\[[\s\S]*\]/);
   if (ma) try { return JSON.parse(ma[0]); } catch(_) {}
   return null;
+}
+
+// เมื่อ Gemini ตอบ JSON ไม่ครบ (โดนตัดกลาง เช่น MAX_TOKENS) แต่ array ของ object ที่ต้องการ
+// ถูกตัดกลางคัน — ไล่นับวงเล็บเก็บเฉพาะ object ที่ปิดสมบูรณ์ก่อนโดนตัด แทนที่จะทิ้งทั้งหมด
+function salvageJsonArrayByKey(text, key) {
+  if (!text) return [];
+  try {
+    var kIdx = text.indexOf('"' + key + '"');
+    if (kIdx === -1) return [];
+    var arrStart = text.indexOf('[', kIdx);
+    if (arrStart === -1) return [];
+    var objs = [];
+    var depth = 0, objStart = -1;
+    for (var ci = arrStart + 1; ci < text.length; ci++) {
+      var ch = text[ci];
+      if (ch === '{') { if (depth === 0) objStart = ci; depth++; }
+      else if (ch === '}') { depth--; if (depth === 0 && objStart !== -1) { objs.push(text.slice(objStart, ci + 1)); objStart = -1; } }
+      else if (ch === ']' && depth === 0) break;
+    }
+    var recovered = [];
+    objs.forEach(function(o) { try { recovered.push(JSON.parse(o)); } catch(_) {} });
+    return recovered;
+  } catch(_) { return []; }
 }
 
 // --- Source badge: บอกที่มาของแต่ละคำแนะนำ (Sheet data vs ข่าว/ตลาด) ---
@@ -3267,9 +3300,10 @@ window._p17SheetData = null;
 // ใช้สแกนสถานะพอร์ตรายวันได้โดยไม่ต้องกดวิเคราะห์
 function p17RenderExecTable() {
   var el = document.getElementById('p17ExecTable');
+  var wrap = document.getElementById('p17ExecTableWrap');
   if (!el) return;
   var data = window._p17SheetData;
-  if (!data || !data.holdings || !data.holdings.length) { el.style.display = 'none'; return; }
+  if (!data || !data.holdings || !data.holdings.length) { if (wrap) wrap.style.display = 'none'; return; }
 
   var rows = data.holdings.map(function(h) {
     return {
@@ -3301,7 +3335,7 @@ function p17RenderExecTable() {
 
   var th = 'font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:6px 8px;text-align:right;border-bottom:0.5px solid var(--border);white-space:nowrap;';
   var td = 'font-size:11.5px;padding:6px 8px;text-align:right;border-bottom:0.5px solid var(--bg2);white-space:nowrap;';
-  var html = '<div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">📋 สรุปพอร์ต <span style="font-weight:400;color:var(--text3);">(ข้อมูลดิบจาก Sheet' + (window._p17SyncTime ? ' · sync ' + window._p17SyncTime + ' น.' : '') + ' — ไม่ผ่าน AI)</span></div>';
+  var html = '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;">' + (window._p17SyncTime ? 'sync ' + window._p17SyncTime + ' น. · ' : '') + 'ไม่ผ่าน AI</div>';
   html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="border-collapse:collapse;width:100%;min-width:520px;">';
   html += '<tr><th style="' + th + 'text-align:left;">Asset</th><th style="' + th + '">มูลค่า ฿</th><th style="' + th + '">น้ำหนัก</th><th style="' + th + '">P/L</th><th style="' + th + '">Drift</th><th style="' + th + '">BuyScore</th><th style="' + th + 'text-align:center;">สถานะ</th></tr>';
   rows.forEach(function(r) {
@@ -3325,7 +3359,27 @@ function p17RenderExecTable() {
   '</tr>';
   html += '</table></div>';
   el.innerHTML = html;
-  el.style.display = '';
+  if (wrap) wrap.style.display = '';
+}
+
+// ─── Sheet data table toggle (collapsed by default — raw data, opt-in view) ───
+function p17ToggleExecTable() {
+  var body = document.getElementById('p17ExecTable');
+  var chevron = document.getElementById('p17ExecTableChevron');
+  if (!body) return;
+  body.classList.toggle('open');
+  if (chevron) chevron.classList.toggle('open');
+  try { localStorage.setItem('folio_p17_exectable_open', body.classList.contains('open') ? '1' : '0'); } catch(e) {}
+}
+function p17RestoreExecTableState() {
+  try {
+    if (localStorage.getItem('folio_p17_exectable_open') === '1') {
+      var body = document.getElementById('p17ExecTable');
+      var chevron = document.getElementById('p17ExecTableChevron');
+      if (body) body.classList.add('open');
+      if (chevron) chevron.classList.add('open');
+    }
+  } catch(e) {}
 }
 
 async function p17SyncSheet(manual = false) {
@@ -3422,6 +3476,8 @@ async function p17RunAnalysis() {
       (taxLockedAssetNames().length ? '\nLOCKED (SSF/RMF — ห้ามแนะนำขาย/ลด ขายแล้วเสียสิทธิภาษี): ' + taxLockedAssetNames().join(', ') : '') +
       '\nRisk Profile ผู้ลงทุน: ' + (_p17bRiskLevel === 'low' ? 'Conservative (อนุรักษ์)' : _p17bRiskLevel === 'high' ? 'Aggressive (เชิงรุก)' : 'Base (สมดุล)') +
       '\n\nโปรดค้นหาข่าวตลาดล่าสุดที่เกี่ยวข้องกับ holdings เหล่านี้ แล้วเขียนรายงานวิเคราะห์ภาษาไทย แบ่งเป็นหัวข้อชัดเจนดังนี้:' +
+      '\n\n**สรุปสำหรับผู้บริหาร**' +
+      '\nสรุป 3-4 bullet สั้นๆ ต้องมีตัวเลข/ชื่อ asset จริงจากพอร์ต ไม่ใช่คำพูดกว้างๆ: ยอดซื้อ/ลดรวมที่แนะนำเดือนนี้, action ที่สำคัญที่สุด 1 ข้อพร้อมชื่อ asset, ความเสี่ยงหลัก 1 ข้อ ขึ้นบรรทัดใหม่แต่ละ bullet' +
       '\n\n**ภาพรวมตลาดและพอร์ต**' +
       '\nสรุปข่าวตลาดล่าสุดที่กระทบพอร์ต 3-4 ประโยค' +
       '\n\n**ความน่าเชื่อถือของข้อมูลใน Sheet**' +
@@ -3441,10 +3497,34 @@ async function p17RunAnalysis() {
       d.candidates[0].content.parts && d.candidates[0].content.parts.find(function(p) { return p.text; })) ?
       d.candidates[0].content.parts.find(function(p) { return p.text; }).text : '';
 
-    // Format: bold headers, colored buy/hold/sell tags
-    var html = text.replace(/\n/g, '<br>');
-    // Section headers - make them stand out
     var headers = ['ภาพรวมตลาดและพอร์ต','ความน่าเชื่อถือของข้อมูลใน Sheet','คำแนะนำซื้อ/ถือ/ลด','แผน Rebalance'];
+    var execHeader = 'สรุปสำหรับผู้บริหาร';
+
+    // ดึงส่วน "สรุปสำหรับผู้บริหาร" ออกมาวางเด่นแยกต่างหากด้านบนสุด — เป็น summary จากคำตอบ AI เดียวกันจริงๆ ไม่ใช่คำนวณเอง
+    var execSummaryHtml = '';
+    var bodyText = text;
+    var execIdx = text.indexOf(execHeader);
+    if (execIdx !== -1) {
+      var afterExec = text.slice(execIdx + execHeader.length);
+      var nextIdx = -1;
+      headers.forEach(function(h) {
+        var idx = afterExec.indexOf(h);
+        if (idx !== -1 && (nextIdx === -1 || idx < nextIdx)) nextIdx = idx;
+      });
+      var execBody = nextIdx !== -1 ? afterExec.slice(0, nextIdx) : afterExec;
+      bodyText = nextIdx !== -1 ? text.slice(0, execIdx) + afterExec.slice(nextIdx) : text.slice(0, execIdx);
+      var bulletLines = execBody.split('\n').map(function(l){ return l.trim().replace(/^[-•*]\s*/,''); }).filter(Boolean);
+      if (bulletLines.length) {
+        execSummaryHtml = '<div style="background:var(--accent-light);border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:14px;">' +
+          '<div style="font-size:10.5px;font-weight:700;color:var(--accent);letter-spacing:0.5px;margin-bottom:8px;">📌 สรุปสำหรับผู้บริหาร</div>' +
+          bulletLines.map(function(l){ return '<div style="font-size:12.5px;color:var(--text);line-height:1.7;padding-left:14px;position:relative;"><span style="position:absolute;left:0;">•</span>' + esc(l) + '</div>'; }).join('') +
+          '</div>';
+      }
+    }
+
+    // Format: bold headers, colored buy/hold/sell tags
+    var html = bodyText.replace(/\n/g, '<br>');
+    // Section headers - make them stand out
     headers.forEach(function(h) {
       html = html.split(h).join('<div style="font-size:11px;font-weight:600;color:var(--accent);margin:14px 0 6px;letter-spacing:0.3px;">' + h + '</div>');
     });
@@ -3453,7 +3533,7 @@ async function p17RunAnalysis() {
     html = html.split('[ถือ]').join('<span style="background:var(--blue-bg);color:var(--blue);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;margin-right:4px;">ถือ</span>');
     html = html.split('[ลด]').join('<span style="background:var(--orange-bg);color:var(--orange);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;margin-right:4px;">ลด</span>');
 
-    panel.innerHTML = html + aiSourceFooter(true);
+    panel.innerHTML = execSummaryHtml + html + aiSourceFooter(true);
     aiCacheSave('p17_analysis', panel.innerHTML);
     var ls = document.getElementById('p17LastSync');
     if (ls) ls.textContent = 'วิเคราะห์เสร็จ ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) + ' น. -- Gemini + Google Search';
@@ -3773,7 +3853,7 @@ var prompt = promptLines.join('\n');
     var d = await callGemini({
       contents: [{ parts: [{ text: prompt }] }],
       tools: [{ google_search: {} }],
-      generationConfig: { maxOutputTokens: 4000 }
+      generationConfig: { maxOutputTokens: 6000, thinkingConfig: { thinkingBudget: 0 } }
     });
     var text = '';
     var finishReason = (d.candidates && d.candidates[0]) ? d.candidates[0].finishReason : '';
@@ -3792,26 +3872,41 @@ var prompt = promptLines.join('\n');
       if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch(_) {} }
     }
 
-    var html = '';
+    // Salvage: คำตอบโดนตัดกลาง JSON (มักเกิดตอน MAX_TOKENS) — กู้เท่าที่ array แต่ละตัวพาร์สได้
+    var wasPartial = false;
+    if (!parsed && rawText) {
+      var salvTop = salvageJsonArrayByKey(rawText, 'top_actions');
+      var salvAlloc = salvageJsonArrayByKey(rawText, 'allocation');
+      var salvBonus = salvageJsonArrayByKey(rawText, 'bonus_funds');
+      if (salvTop.length || salvAlloc.length || salvBonus.length) {
+        parsed = { top_actions: salvTop, allocation: salvAlloc, bonus_funds: salvBonus };
+        wasPartial = true;
+      }
+    }
 
-    if (parsed && (parsed.top_actions || parsed.rebalance_plan)) {
+    var html = wasPartial ? '<div style="font-size:10.5px;color:var(--amber);margin-bottom:10px;">⚠️ ผลลัพธ์บางส่วน (คำตอบถูกตัดกลาง) — แสดงเท่าที่กู้ได้</div>' : '';
+
+    var hasNewMoneyData = parsed && ((parsed.top_actions && parsed.top_actions.length) || (parsed.allocation && parsed.allocation.length) || (parsed.bonus_funds && parsed.bonus_funds.length));
+    if (parsed && (hasNewMoneyData || parsed.rebalance_plan)) {
       // ─── NEW MONEY mode renderer ───
-      if (parsed.top_actions) {
-        html += '<div style="background:var(--accent-light);border:0.5px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px;">';
-        html += '<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.8px;margin-bottom:12px;">🔥 TOP 3 ACTIONS — สัปดาห์นี้</div>';
-        (parsed.top_actions||[]).slice(0,3).forEach(function(a) {
-          var colors = ['var(--red)','var(--accent)','var(--amber)'];
-          var c = colors[a.rank-1] || 'var(--text2)';
-          // layer 2 = กองใหม่จากข่าว; หรือใช้ field source ที่ prompt ขอ
-          var src = a.source || (a.layer === 2 ? 'news' : 'sheet');
-          html += '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">';
-          html += '<span style="background:'+c+';color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;">'+a.rank+'</span>';
-          html += '<div style="flex:1;">';
-          html += '<div style="font-size:13px;font-weight:500;color:var(--text);">'+esc(a.action)+' '+srcBadge(src)+'</div>';
-          html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+(a.amount||0).toLocaleString()+' — '+esc(a.reason)+'</div>';
-          html += '</div></div>';
-        });
-        html += '</div>';
+      if (hasNewMoneyData) {
+        if (parsed.top_actions && parsed.top_actions.length) {
+          html += '<div style="background:var(--accent-light);border:0.5px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px;">';
+          html += '<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.8px;margin-bottom:12px;">🔥 TOP 3 ACTIONS — สัปดาห์นี้</div>';
+          parsed.top_actions.slice(0,3).forEach(function(a) {
+            var colors = ['var(--red)','var(--accent)','var(--amber)'];
+            var c = colors[a.rank-1] || 'var(--text2)';
+            // layer 2 = กองใหม่จากข่าว; หรือใช้ field source ที่ prompt ขอ
+            var src = a.source || (a.layer === 2 ? 'news' : 'sheet');
+            html += '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">';
+            html += '<span style="background:'+c+';color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;">'+a.rank+'</span>';
+            html += '<div style="flex:1;">';
+            html += '<div style="font-size:13px;font-weight:500;color:var(--text);">'+esc(a.action)+' '+srcBadge(src)+'</div>';
+            html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+(a.amount||0).toLocaleString()+' — '+esc(a.reason)+'</div>';
+            html += '</div></div>';
+          });
+          html += '</div>';
+        }
 
         // Allocation block — existing portfolio + bonus new funds
         // Build whitelist: prefer allocationPlan (Sheet), fall back to Firebase state.holdings
@@ -4015,24 +4110,8 @@ async function p17ReviewRun() {
 
     // Salvage: if Gemini truncated mid-JSON, recover the actions that DID complete.
     if (!parsed && text) {
-      try {
-        var aIdx = text.indexOf('"actions"');
-        if (aIdx !== -1) {
-          var arrStart = text.indexOf('[', aIdx);
-          // collect complete {...} objects inside the actions array
-          var objs = [];
-          var depth = 0, objStart = -1;
-          for (var ci = arrStart + 1; ci < text.length; ci++) {
-            var ch = text[ci];
-            if (ch === '{') { if (depth === 0) objStart = ci; depth++; }
-            else if (ch === '}') { depth--; if (depth === 0 && objStart !== -1) { objs.push(text.slice(objStart, ci + 1)); objStart = -1; } }
-            else if (ch === ']' && depth === 0) break;
-          }
-          var recovered = [];
-          objs.forEach(function(o){ try { recovered.push(JSON.parse(o)); } catch(_){} });
-          if (recovered.length) parsed = { actions: recovered };
-        }
-      } catch(_) {}
+      var recovered = salvageJsonArrayByKey(text, 'actions');
+      if (recovered.length) parsed = { actions: recovered };
     }
 
     // ─── Guard: drop any AI action that isn't a real holding or sneaks in a SELL ───
@@ -4944,15 +5023,25 @@ ${lockedNames.length ? '\nLOCKED (SSF/RMF ห้ามแนะนำขาย/�
 {"summary":"ภาพรวม 1 ประโยค","actions":[{"asset":"ชื่อจริง","action":"ซื้อ/ลด/ถือ","amountThb":NUMBER,"priority":1,"reason":"เหตุผลสั้น ไม่เกิน 15 คำ","source":"sheet"}]}`;
 
   try {
-    const data = await callGemini({ contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:1200,temperature:0.3} });
+    const data = await callGemini({ contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:3000,temperature:0.3,thinkingConfig:{thinkingBudget:0}} });
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const parsed = safeParseJSON(text);
+    const finishReason = data.candidates?.[0]?.finishReason || '';
+    let parsed = safeParseJSON(text);
+    let partial = false;
+    if ((!parsed || !Array.isArray(parsed.actions) || !parsed.actions.length) && text) {
+      // คำตอบโดนตัดกลาง JSON — กู้เท่าที่ action พาร์สได้แทนที่จะทิ้งทั้งหมด
+      const recovered = salvageJsonArrayByKey(text, 'actions');
+      if (recovered.length) { parsed = { actions: recovered }; partial = true; }
+    }
     if (!parsed || !Array.isArray(parsed.actions) || !parsed.actions.length) {
-      txt.innerHTML = '<span style="color:var(--amber);">AI ตอบไม่อยู่ในรูปแบบที่อ่านได้ — กด 🤖 อีกครั้งเพื่อลองใหม่</span>';
+      txt.innerHTML = finishReason === 'MAX_TOKENS'
+        ? '<span style="color:var(--amber);">⚠️ คำตอบ AI ยาวเกินจนถูกตัด — กด 🤖 อีกครั้งเพื่อลองใหม่</span>'
+        : '<span style="color:var(--amber);">AI ตอบไม่อยู่ในรูปแบบที่อ่านได้ — กด 🤖 อีกครั้งเพื่อลองใหม่</span>';
     } else {
       const actColor = { 'ซื้อ':'var(--green)', 'ลด':'var(--orange)', 'ถือ':'var(--text3)' };
       const actBg = { 'ซื้อ':'var(--green-bg)', 'ลด':'var(--orange-bg)', 'ถือ':'var(--bg2)' };
-      let html = parsed.summary ? '<div style="font-size:12px;color:var(--text);margin-bottom:10px;line-height:1.7;">' + esc(parsed.summary) + '</div>' : '';
+      let html = partial ? '<div style="font-size:10.5px;color:var(--amber);margin-bottom:8px;">⚠️ ผลลัพธ์บางส่วน (คำตอบถูกตัดกลาง) — แสดงเท่าที่กู้ได้</div>' : '';
+      html += parsed.summary ? '<div style="font-size:12px;color:var(--text);margin-bottom:10px;line-height:1.7;">' + esc(parsed.summary) + '</div>' : '';
       parsed.actions
         .slice().sort((a,b) => (a.priority||9) - (b.priority||9))
         .slice(0, 6)
