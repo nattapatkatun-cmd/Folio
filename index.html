@@ -1901,50 +1901,92 @@ var TYPE_BG = { set:'var(--blue-bg)', us:'var(--orange-bg)', crypto:'var(--green
 var TYPE_LABELS = { set:'SET', us:'US', crypto:'Crypto', tech:'Tech', fund:'Fund' };
 
 // ─── Security master: seed list for autocomplete + auto-fill (type/region/currency/tax) ───
-// รายชื่อเริ่มต้นสำหรับช่วยพิมพ์เท่านั้น — ผู้ใช้ยังพิมพ์ชื่อเองได้เสมอถ้าไม่เจอในลิสต์
-var SET_STOCKS = [ // SET50 blue chips
+// รายชื่อเริ่มต้นสำหรับช่วยพิมพ์เท่านั้น ไม่ใช่ข้อมูลอ้างอิงที่ยืนยันความถูกต้อง — ผู้ใช้ยังพิมพ์ชื่อเองได้เสมอถ้าไม่เจอในลิสต์
+// (ชื่อกองทุนบางกองอาจคลาดเคลื่อน/เปลี่ยนชื่อไปแล้ว โปรดตรวจสอบกับ AMC ก่อนใช้งานจริง — ไม่กระทบการคำนวณราคา/NAV ใด ๆ เพราะเป็นแค่ตัวช่วยกรอกฟอร์ม)
+var SET_STOCKS = [ // SET50 + mid-caps ยอดนิยม
   'PTT','PTTEP','AOT','CPALL','ADVANC','SCB','KBANK','BBL','KTB','TTB',
   'SCC','CPN','CRC','GULF','GPSC','EGCO','RATCH','BGRIM','TOP','IRPC',
   'IVL','BANPU','DELTA','HANA','KCE','TU','CBG','OSP','MINT','CENTEL',
   'BDMS','BH','TIDLOR','MTC','SAWAD','TISCO','TCAP','KKP','BAM','AWC',
-  'WHA','AMATA','TRUE','COM7','HMPRO','GLOBAL','DOHOME','CPF','TVO','STA'
+  'WHA','AMATA','TRUE','COM7','HMPRO','GLOBAL','DOHOME','CPF','TVO','STA',
+  // mid-caps เพิ่มเติม (SET100)
+  'BJC','ERW','MAJOR','JMART','JMT','SINGER','KTC','SPALI','AP','LH',
+  'ORI','SIRI','QH','PSL','SCCC','GUNKUL','CKP','EA','BCPG','PLANB',
+  'VGI','BEC','MC','TFG','GFPT','CHG','BCH','SYNEX','TTA','UAC',
+  'EASTW','JAS','SABUY'
 ];
 var US_STOCKS = [
   'AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','JPM','V','MA',
   'UNH','HD','PG','JNJ','XOM','CVX','ABBV','MRK','KO','PEP',
   'COST','WMT','BAC','DIS','NFLX','ADBE','CRM','ORCL','AMD','INTC',
   'QCOM','CSCO','IBM','TXN','AVGO','PYPL','SBUX','NKE','MCD','BA',
-  'GE','CAT','HON','LMT','UPS','F','GM','T','VZ','PFE'
+  'GE','CAT','HON','LMT','UPS','F','GM','T','VZ','PFE',
+  // เพิ่มเติม: การเงิน, เทคโนโลยี, health care, industrials, utilities, real estate
+  'GS','MS','BLK','AXP','SPGI','RTX','UNP','ABNB','UBER','SHOP',
+  'SQ','COIN','PLTR','SNOW','NOW','INTU','ADI','LRCX','AMAT','MU',
+  'ISRG','REGN','VRTX','GILD','BMY','CI','ELV','MDT','SYK','DE',
+  'EMR','ITW','PH','NSC','CSX','SO','DUK','NEE','AEP','PSA',
+  'PLD','AMT','CCI','PANW','CRWD','ZS','DDOG','NET','TEAM','WDAY',
+  'ADSK','ANET'
 ];
 var CRYPTO_TICKERS = ['BTC','ETH','BNB','SOL','XRP','ADA','DOGE','AVAX','DOT','LINK'];
 // { name, region } — region ตรงกับ h-fund-region select values; taxType เดาจากคำต่อท้ายชื่อ (RMF/SSF)
 var THAI_FUNDS = [
+  // Kasikorn Asset Management (K-)
   { name:'K-USA-A(A)', region:'us' }, { name:'K-USXNDQ-A(A)', region:'us' },
   { name:'K-CHINA-A(A)', region:'china' }, { name:'K-CHINA-RMF', region:'china' },
   { name:'K-GTECH-A(A)', region:'global' }, { name:'K-GHEALTH-A(A)', region:'global' },
   { name:'K-EUROPE-A(A)', region:'global' }, { name:'K-JP-A(A)', region:'asia' },
   { name:'K-VIETNAM-A(A)', region:'asia' }, { name:'K-GOLD-A(A)', region:'global' },
   { name:'K-FIXEDPLUS-A(A)', region:'bond' }, { name:'K-STAR-A(A)', region:'thai' },
+  { name:'K-CASH', region:'bond' }, { name:'K-MIDSMALL', region:'thai' },
+  { name:'K-FIT', region:'thai' },
+  // Krungsri Asset Management (KF-)
   { name:'KFSDIV-A', region:'thai' }, { name:'KFSGOV-A', region:'bond' },
   { name:'KFGBRAND-A', region:'global' }, { name:'KFHTECH-A', region:'global' },
   { name:'KFACHINA-A', region:'china' }, { name:'KFGOLD-A', region:'global' },
-  { name:'KFSMART-RMF', region:'thai' },
+  { name:'KFSMART-RMF', region:'thai' }, { name:'KFAFIX-A', region:'bond' },
+  { name:'KFCASH-A', region:'bond' }, { name:'KFGG-A', region:'global' },
+  { name:'KFVIET-A', region:'asia' }, { name:'KFTECH-A', region:'global' },
+  // SCB Asset Management (SCB-)
   { name:'SCBS&P500', region:'us' }, { name:'SCBS&P500-SSF', region:'us' },
   { name:'SCBNDQ(A)', region:'us' }, { name:'SCBNDQ(SSF)', region:'us' },
   { name:'SCBRMS&P500', region:'us' }, { name:'SCBGOLD', region:'global' },
   { name:'SCBGOLDH', region:'global' }, { name:'SCBSET', region:'thai' },
   { name:'SCBDV', region:'thai' }, { name:'SCBLT1', region:'bond' },
+  { name:'SCBLEQ', region:'thai' }, { name:'SCBPGF', region:'global' },
+  // TISCO Asset Management
   { name:'TISCOUS', region:'us' }, { name:'TISCOCHINA', region:'china' },
   { name:'TISCOGOLD', region:'global' }, { name:'TISCOEUR', region:'global' },
+  { name:'TISCOEQ', region:'thai' }, { name:'TISCOJP', region:'asia' },
+  // Bangkok Bank Asset Management / BBLAM (B-)
   { name:'B-INNOTECH', region:'global' }, { name:'B-CHINE-EQ', region:'china' },
   { name:'B-ASIA', region:'asia' }, { name:'B-GLOBAL', region:'global' },
+  { name:'B-FUTURE', region:'global' }, { name:'BCHIP', region:'thai' },
+  { name:'B-TNTV', region:'thai' },
+  // Principal (CIMB-Principal)
   { name:'PRINCIPAL GOPPORTUNITY', region:'global' }, { name:'PRINCIPAL GFUND', region:'global' },
-  { name:'PRINCIPAL VNEQ-A', region:'asia' },
+  { name:'PRINCIPAL VNEQ-A', region:'asia' }, { name:'PRINCIPAL SET50', region:'thai' },
+  { name:'PRINCIPAL DIVIDEND', region:'thai' },
+  // One Asset Management
   { name:'ONE-UGG-RA', region:'global' }, { name:'ONE-GINNO-RA', region:'global' },
+  { name:'ONE-DIVIDEND', region:'thai' },
+  // UOB Asset Management
   { name:'UOBSGC', region:'global' }, { name:'UOBSA', region:'thai' },
+  { name:'UOBSM', region:'thai' }, { name:'UOBSCI', region:'china' },
+  { name:'UOBGB', region:'bond' }, { name:'UOBGOLD', region:'global' },
+  // Asset Plus
   { name:'ASP-DIGIBLOC', region:'global' }, { name:'ASP-EVOLUX', region:'global' },
-  { name:'TMBGQG', region:'global' }, { name:'KKP GNP', region:'global' },
-  { name:'PHATRA GNP', region:'global' }, { name:'K-CASH', region:'bond' }
+  { name:'ASP-SME', region:'thai' },
+  // ttb Asset Management (formerly TMB)
+  { name:'TMBGQG', region:'global' }, { name:'TMB50', region:'thai' },
+  // Krungthai Asset Management (KTAM)
+  { name:'KTSTAR', region:'thai' }, { name:'KT-PROPERTY', region:'mixed' },
+  // Land and House Fund Management
+  { name:'LHTPROP', region:'mixed' }, { name:'LHGOLD', region:'global' },
+  { name:'LHSTRATEGY', region:'mixed' },
+  // Kiatnakin Phatra
+  { name:'KKP GNP', region:'global' }, { name:'PHATRA GNP', region:'global' }
 ];
 function fundTaxTypeGuess(name) {
   var u = name.toUpperCase();
