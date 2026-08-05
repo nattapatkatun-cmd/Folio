@@ -4180,18 +4180,31 @@ async function p17ReviewRun() {
 async function p17PostTradeToSheet(trade) {
   const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (!base) return;
+  const params = new URLSearchParams({
+    action: 'update_holding',
+    asset: trade.asset,
+    tradeType: trade.type,
+    qty: String(trade.qty),
+    price: String(trade.price),
+    currency: trade.currency || 'THB',
+    broker: trade.broker || ''
+  });
   try {
-    const params = new URLSearchParams({
-      action: 'update_holding',
-      asset: trade.asset,
-      tradeType: trade.type,
-      qty: String(trade.qty),
-      price: String(trade.price),
-      currency: trade.currency || 'THB',
-      broker: trade.broker || ''
-    });
-    await fetch(base + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
-  } catch(e) {}
+    const res = await fetch(base + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
+    const result = await res.json();
+    if (!result.ok) {
+      showToast(`⚠️ Sheet sync ล้มเหลว: ${result.error || 'ไม่ทราบสาเหตุ'}`);
+    } else if (result.row === -1 || result.row == null) {
+      showToast(`⚠️ ไม่พบ "${trade.asset}" ใน Portfolio_NAV — Cost Basis ในชีตยังไม่อัปเดต`);
+    } else {
+      const qtyTxt = result.newQty != null ? Number(result.newQty).toLocaleString('th-TH', { maximumFractionDigits: 6 }) : '';
+      const avgTxt = result.newAvgCost != null ? Number(result.newAvgCost).toLocaleString('th-TH', { maximumFractionDigits: 4 }) : '';
+      showToast(`✅ Sync Sheet แล้ว: ${trade.asset} Qty ${qtyTxt} @ ฿${avgTxt}`);
+    }
+  } catch(e) {
+    showToast(`⚠️ Sync Sheet ไม่สำเร็จ: ${e.message}`);
+    throw e;
+  }
 }
 
 function p17CopyAppScript() {
