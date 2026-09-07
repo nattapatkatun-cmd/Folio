@@ -1552,6 +1552,7 @@ const state = {
 const SET_PROXY = 'https://folio-proxy.ojo0308.workers.dev';
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxjdzzg_dDVC2fSHdF7PpajatdfieI4C5yjhUWxW9PCxnz2O9LTdQv-0rqaYcwzQbks/exec';
 const NAV_SHEET_DEFAULT = 'https://script.google.com/macros/s/AKfycbx7nhAqsew76aq0rKUsfjPCEG8Aaz4KexYN6i9onNdiV7d7_iN8stlVtABV4bK1-dLf/exec';
+const PORTFOLIO_SHEET_DEFAULT = 'https://script.google.com/macros/s/AKfycbxKHbm-Ge9XTk5CRKstK1UEMhamsXpvWCAJCcEcnYqyLqEoXWgGXzg0ubzEJpZeIxo/exec';
 const CRYPTO_MAP = { BTC: 'bitcoin', ETH: 'ethereum', BNB: 'binancecoin', SOL: 'solana', XRP: 'ripple' };
 
 // --- Currency helpers: h.value always stores THB market value ---
@@ -4320,7 +4321,7 @@ function _applyUrlsToWindow(urls) {
   window._PROXY_URL    = urls.PROXY_URL    || SET_PROXY;
   window._SHEETS_URL   = urls.SHEETS_URL   || SHEETS_URL;
   window._NAV_SHEET_URL = urls.NAV_SHEET_URL || NAV_SHEET_DEFAULT;
-  window._PORTFOLIO_SHEET_URL = urls.PORTFOLIO_SHEET_URL || '';
+  window._PORTFOLIO_SHEET_URL = urls.PORTFOLIO_SHEET_URL || PORTFOLIO_SHEET_DEFAULT;
   // Also update localStorage as offline cache
   URL_FIELDS.forEach(k => {
     if (urls[k]) localStorage.setItem('folio_' + k, urls[k]);
@@ -4338,6 +4339,9 @@ function _applyUrlsToInputs(urls) {
     const el = document.getElementById(elId);
     if (el && urls[key]) el.value = urls[key];
   });
+  // Show built-in default in the Portfolio field when nothing is stored yet
+  const pf = document.getElementById('cfg-portfolio-sheet');
+  if (pf && !pf.value) pf.value = PORTFOLIO_SHEET_DEFAULT;
 }
 
 async function loadSettings() {
