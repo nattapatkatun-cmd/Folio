@@ -551,8 +551,8 @@ async function savePortfolioSnapshot() {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const lastKey = 'folio_last_snapshot_date';
   if (localStorage.getItem(lastKey) === today) return; // 1 write/day max
-  const totalValue = state.holdings.reduce((s,h) => s + valueThb(h), 0);
-  const totalCost  = state.holdings.reduce((s,h) => s + costThb(h), 0);
+  const totalValue = portfolioValueThb();
+  const totalCost  = portfolioCostThb();
   const snap       = yoyGetSnapshot();
   const snapshotCost = snap ? snap.snapshotCost : totalCost;
   if (!totalValue || !totalCost) return;
@@ -673,6 +673,7 @@ if (window._folioReady) {
           <div class="bar-note" id="yoyNote">รอข้อมูลพอร์ต...</div>
           <div class="bar-note" id="twrLine" style="margin-top:3px;"></div>
           <div class="bar-note" id="fxLine" style="margin-top:3px;"></div>
+          <div class="bar-note" id="reconcileNote" style="margin-top:3px;color:var(--amber);display:none;"></div>
         </div>
       </div>
 
@@ -1537,6 +1538,7 @@ service cloud.firestore {
 // --- State (defaults shown until Firebase loads) ---
 const state = {
   holdings: [],
+  sheetTotals: null,   // ยอดรวมจาก Portfolio Sheet (แหล่งข้อมูลจริง) — null = ยังไม่ sync
   dcaSchedules: [],
   news: [],
   trades: [],
@@ -1558,10 +1560,29 @@ const CRYPTO_MAP = { BTC: 'bitcoin', ETH: 'ethereum', BNB: 'binancecoin', SOL: '
 // --- Currency helpers: h.value always stores THB market value ---
 function fxRate(h) { return h.currency === 'USD' ? (state.usdThb || 33) : 1; }
 function valueThb(h) {
+  // Portfolio Sheet = source of truth: ถ้า Sheet ส่ง Market Value มา ให้ใช้ค่านั้นตรง ๆ
+  // (หน่วยลงทุนใน Firebase อาจไม่ตรงกับ Sheet ถ้าซื้อ/ขายแล้วไม่ได้แก้ในแอป)
+  if (typeof h._sheetValue === 'number' && isFinite(h._sheetValue)) return h._sheetValue;
   const price = h.livePrice || h.avgPrice || 0;
   return h.shares * price * fxRate(h);
 }
-function costThb(h) { return h.shares * h.avgPrice * fxRate(h); }
+function costThb(h) {
+  if (typeof h._sheetValue === 'number' && typeof h._sheetPL === 'number') return h._sheetValue - h._sheetPL;
+  return h.shares * h.avgPrice * fxRate(h);
+}
+
+// ─── ยอดรวมของทั้งแอป — จุดเดียว ไม่ให้แต่ละหน้าคำนวณเองแล้วได้ตัวเลขคนละตัว ───
+// มี state.sheetTotals (sync Sheet แล้ว) → ใช้ยอดจาก Sheet, ไม่มี → คำนวณจาก holdings ในเครื่อง
+function portfolioValueThb() {
+  const st = state.sheetTotals;
+  if (st && st.count) return st.totalValue;
+  return state.holdings.reduce((s, h) => s + valueThb(h), 0);
+}
+function portfolioCostThb() {
+  const st = state.sheetTotals;
+  if (st && st.count) return st.totalCost;
+  return state.holdings.reduce((s, h) => s + costThb(h), 0);
+}
 
 // --- Escape user-entered text before injecting into innerHTML ---
 function esc(s) {
@@ -1657,10 +1678,13 @@ function savePriceCache() {
     const today = new Date().toISOString().split('T')[0];
     const data = {};
     state.holdings.forEach((h, i) => {
-      if (h.livePrice) {
+      if (h.livePrice || typeof h._sheetValue === 'number') {
         data[(h.id || h.ticker || i) + ''] = {
-          livePrice: h.livePrice, change: h.change || 0,
-          value: h.value || 0, _navDate: h._navDate || ''
+          livePrice: h.livePrice || 0, change: h.change || 0,
+          value: h.value || 0, _navDate: h._navDate || '',
+          _sheetValue: (typeof h._sheetValue === 'number' ? h._sheetValue : null),
+          _sheetPL: (typeof h._sheetPL === 'number' ? h._sheetPL : null),
+          _sheetMatched: h._sheetMatched || null
         };
       }
     });
@@ -1674,17 +1698,22 @@ function loadPriceCache() {
     if (!raw) return false;
     const cache = JSON.parse(raw);
     if (cache.date !== new Date().toISOString().split('T')[0]) return false;
+    if (typeof loadSheetTotalsCache === 'function') loadSheetTotalsCache();
     state.holdings.forEach((h, i) => {
       const c = cache.data[(h.id || h.ticker || i) + ''];
-      if (c && c.livePrice) {
+      if (!c) return;
+      if (typeof c._sheetValue === 'number') h._sheetValue = c._sheetValue;
+      if (typeof c._sheetPL === 'number') h._sheetPL = c._sheetPL;
+      if (c._sheetMatched) h._sheetMatched = c._sheetMatched;
+      if (c.livePrice) {
         h.livePrice = c.livePrice;
         // Recalculate change vs avgPrice (cost) - never vs old livePrice
         h.change = h.avgPrice > 0
           ? parseFloat(((c.livePrice - h.avgPrice) / h.avgPrice * 100).toFixed(2))
           : (c.change || 0);
-        h.value = Math.round(valueThb(h)); // แปลง USD→THB ให้ตรงกับตอน fetch สด
         h._navDate = c._navDate || '';
       }
+      h.value = Math.round(valueThb(h)); // แปลง USD→THB ให้ตรงกับตอน fetch สด
     });
     return true;
   } catch(e) { return false; }
@@ -1779,19 +1808,22 @@ async function fetchAllPrices() {
 }
 
 function updatePortfolioSummary() {
-  // Use livePrice*shares when available, otherwise cost (both in THB)
-  const total = state.holdings.reduce((s, h) => s + valueThb(h), 0);
-  const cost = state.holdings.reduce((s, h) => s + costThb(h), 0);
+  // Sheet sync แล้ว → ใช้ยอดจาก Sheet ทั้งมูลค่าและ P/L (เลขเดียวกับการ์ด Portfolio Analyzer)
+  // ยังไม่ sync → fallback คำนวณจาก holdings ในเครื่องเหมือนเดิม
+  const sheet = state.sheetTotals && state.sheetTotals.count ? state.sheetTotals : null;
+  const total = portfolioValueThb();
+  const cost = portfolioCostThb();
   const fundHoldingsAll = state.holdings.filter(h => h.type === 'fund');
-  const fundsLoaded = fundHoldingsAll.length === 0 || fundHoldingsAll.some(h => h.livePrice);
+  const fundsLoaded = !!sheet || fundHoldingsAll.length === 0 || fundHoldingsAll.some(h => h.livePrice);
   const liveHoldings = state.holdings.filter(h => h.livePrice);
   const liveValue = liveHoldings.reduce((s,h) => s + (h.currency==='USD' ? h.shares*h.livePrice*state.usdThb : h.shares*h.livePrice), 0);
   const liveCost = liveHoldings.reduce((s,h) => s + h.shares*h.avgPrice*(h.currency==='USD'?state.usdThb:1), 0);
-  const pl = fundsLoaded ? liveValue - liveCost : 0;
-  const plBase = fundsLoaded ? liveCost : cost;
-  const plPct = fundsLoaded && plBase > 0 ? ((pl / plBase) * 100).toFixed(1) : 0;
+  const pl = sheet ? sheet.totalPL : (fundsLoaded ? liveValue - liveCost : 0);
+  const plBase = sheet ? sheet.totalCost : (fundsLoaded ? liveCost : cost);
+  const plPct = plBase > 0 ? ((pl / plBase) * 100).toFixed(1) : 0;
 
   document.getElementById('totalValue').textContent = '฿' + Number(total).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  renderReconcileNote();
   if (!fundsLoaded) {
     document.getElementById('unrealizedPL').textContent = 'กด ✏️ ใส่ราคา เพื่อดู P&L';
     document.getElementById('unrealizedPL').className = 'hero-val';
@@ -1840,7 +1872,7 @@ function updatePortfolioSummary() {
 
   // Update subtitle under unrealizedPL
   const plSub = document.getElementById('plPctLabel');
-  if (plSub) plSub.textContent = 'กำไรรวม ' + (pl >= 0 ? '+' : '') + plPct + '%';
+  if (plSub) plSub.textContent = 'กำไรรวม ' + (pl >= 0 ? '+' : '') + plPct + '%' + (sheet ? ' · จาก Sheet' : '');
 
   // Update todayChange to show last price update time
   const tc = document.getElementById('todayChange');
@@ -1852,6 +1884,23 @@ function updatePortfolioSummary() {
       tc.style.color = 'var(--text3)';
     }
   }
+}
+
+// เตือนเมื่อรายการใน Sheet กับ holdings ในแอปจับคู่กันไม่ครบ
+// ยอดรวมยังถูกต้อง (นับจาก Sheet) แต่กราฟสัดส่วน/alert รายตัวจะไม่เห็นรายการที่จับคู่ไม่ได้
+function renderReconcileNote() {
+  const el = document.getElementById('reconcileNote');
+  if (!el) return;
+  const st = state.sheetTotals;
+  if (!st || !st.count) { el.style.display = 'none'; el.textContent = ''; return; }
+  const missIn = (st.unmatchedSheet || []);
+  const missApp = (st.unmatchedLocal || []);
+  if (!missIn.length && !missApp.length) { el.style.display = 'none'; el.textContent = ''; return; }
+  const parts = [];
+  if (missIn.length) parts.push('มีใน Sheet แต่ไม่มีใน holdings: ' + missIn.join(', '));
+  if (missApp.length) parts.push('มีใน holdings แต่จับคู่กับ Sheet ไม่ได้: ' + missApp.join(', '));
+  el.textContent = '⚠️ ' + parts.join(' · ') + ' — ยอดรวมใช้ตัวเลขจาก Sheet, แก้ชื่อให้ตรงกันเพื่อให้กราฟสัดส่วนครบ';
+  el.style.display = '';
 }
 
 // --- Helpers ---
@@ -3393,29 +3442,15 @@ async function p17SyncSheet(manual = false) {
     const resp = await fetch(url, { redirect: 'follow', mode: 'cors' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
-    window._p17SheetData = data;
-    // Show summary row
     const holdings = data.holdings || [];
-    const totalValue = holdings.reduce((s, h) => s + (Number(h['Market Value']) || 0), 0);
-    const totalPL    = holdings.reduce((s, h) => s + (Number(h['Unrealized P/L']) || 0), 0);
-    const execPlan   = data.executionPlan || [];
-    const monthlyBuy = execPlan.reduce((s, r) => s + (Number(r['Suggested Monthly Buy (THB)']) || 0), 0);
-    const tvEl = document.getElementById('p17TotalValue');
-    const plEl = document.getElementById('p17UnrealPL');
-    const acEl = document.getElementById('p17AssetCount');
-    const mbEl = document.getElementById('p17MonthlyBuy');
-    if (tvEl) tvEl.textContent = '฿' + Math.round(totalValue).toLocaleString();
-    if (plEl) { plEl.textContent = (totalPL >= 0 ? '+' : '') + '฿' + Math.round(totalPL).toLocaleString(); plEl.style.color = totalPL >= 0 ? 'var(--green)' : 'var(--red)'; }
-    if (acEl) acEl.textContent = holdings.length + ' รายการ';
-    if (mbEl) mbEl.textContent = '฿' + Math.round(monthlyBuy).toLocaleString();
-    const sr = document.getElementById('p17SummaryRow');
-    const em = document.getElementById('p17Empty');
-    if (sr) { sr.style.display = 'grid'; }
-    if (em) em.style.display = 'none';
     window._p17SyncTime = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-    const ls = document.getElementById('p17LastSync');
-    if (ls) ls.textContent = 'อัพเดตล่าสุด ' + window._p17SyncTime + ' น. · ' + holdings.length + ' holdings';
-    p17RenderExecTable();
+    // เส้นทางเดียวกับหน้าภาพรวม — ยอดรวมของสองหน้าจึงมาจากการคำนวณชุดเดียว
+    applySheetData(data);
+    savePriceCache();
+    p17RenderSummaryRow();
+    updatePortfolioSummary();
+    renderHoldings();
+    renderAllocation(); initPhase9(); initPhase10(); initPhase11(); initPhase12(); p14TrackDrawdown();
     showToast('ดึงข้อมูล ' + holdings.length + ' holdings สำเร็จ ✓');
   } catch(e) {
     showToast('ดึงข้อมูลไม่ได้: ' + e.message);
@@ -4474,6 +4509,140 @@ async function testConnections() {
 // --- Google Sheets NAV Fetch ---
 // ใช้ Portfolio Sheet (folio_PORTFOLIO_SHEET_URL) เป็น source หลัก
 // รองรับ 2 formats: {FUND_NAME:{nav}} (NAV Sheet) หรือ {holdings:[{Asset,Price}]} (Portfolio Sheet)
+// ─── Portfolio Sheet = แหล่งข้อมูลจริงหนึ่งเดียว ───────────────────────────────
+// ก่อนหน้านี้หน้า "ภาพรวม" คำนวณ มูลค่า = หน่วยใน Firebase x ราคาจาก Sheet
+// ส่วนการ์ด Analyzer อ่านคอลัมน์ Market Value จาก Sheet ตรง ๆ → ตัวเลขสองหน้าไม่ตรงกัน
+// ตอนนี้ทั้งสองหน้าอ่าน payload ก้อนเดียวกันผ่าน applySheetData()
+
+function sheetAssetKey(name) {
+  return String(name == null ? '' : name).trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+// หา row ใน Sheet ที่ตรงกับ holding — exact match ก่อน แล้วค่อย fuzzy ด้วย token แรก
+// claimed = row ที่ holding ตัวก่อนหน้าจับไปแล้ว กัน holding สองตัวชี้ row เดียวกันจนมูลค่าซ้ำ
+// fuzzy จะยอมรับเฉพาะเมื่อ token แรกชี้ไป row เดียวเท่านั้น ("K CHINA SSF" กับ "K CHINA A" → ไม่เดา)
+function matchSheetRow(h, rowMap, claimed) {
+  claimed = claimed || {};
+  const candidates = [h.name, h.ticker, (h.ticker || '').replace(/_/g, ' ')];
+  for (let i = 0; i < candidates.length; i++) {
+    const k = sheetAssetKey(candidates[i]);
+    if (k && rowMap[k] && !claimed[k]) return rowMap[k];
+  }
+  const keys = Object.keys(rowMap).filter(k => !claimed[k]);
+  for (let i = 0; i < candidates.length; i++) {
+    const first = sheetAssetKey(candidates[i]).split(' ')[0];
+    if (!first) continue;
+    const hits = keys.filter(k => k.split(' ')[0] === first);
+    if (hits.length === 1) return rowMap[hits[0]];
+  }
+  return null;
+}
+
+// อ่าน payload จาก Sheet → เขียนราคา/มูลค่าลง state.holdings + สรุปยอดรวมลง state.sheetTotals
+// รองรับ 2 format: Portfolio Sheet {holdings:[{Asset,Price,Market Value,...}]} และ NAV Sheet {FUND:{nav}}
+// NAV Sheet ให้แค่ราคา ไม่มียอดรวม → state.sheetTotals จะไม่ถูกตั้ง และแอปกลับไปคำนวณเองเหมือนเดิม
+function applySheetData(data) {
+  if (data && data.inputs) state.sheetInputs = data.inputs;
+  const rows = (data && Array.isArray(data.holdings)) ? data.holdings : null;
+  if (rows) window._p17SheetData = data;
+
+  const rowMap = {};
+  if (rows) {
+    rows.forEach(r => { const k = sheetAssetKey(r['Asset']); if (k) rowMap[k] = r; });
+  } else if (data) {
+    Object.keys(data).forEach(k => {
+      if (data[k] && data[k].nav) rowMap[sheetAssetKey(k)] = { Asset: k, Price: Number(data[k].nav) };
+    });
+  }
+
+  const matchedKeys = {};
+  let updated = 0;
+  state.holdings.forEach(h => {
+    delete h._sheetValue; delete h._sheetPL; delete h._sheetMatched;
+    const row = matchSheetRow(h, rowMap, matchedKeys);
+    if (!row) { h.value = Math.round(valueThb(h)); return; }
+    matchedKeys[sheetAssetKey(row['Asset'])] = true;
+    h._sheetMatched = row['Asset'];
+    const price = Number(row['Price']) || 0;
+    if (price > 0) {
+      // crypto: Sheet เก็บราคาเป็นบาท — แปลงกลับเป็น USD ถ้า holding ถือเป็นสกุล USD
+      h.livePrice = (h.type === 'crypto' && h.currency === 'USD' && state.usdThb > 0)
+        ? price / state.usdThb : price;
+      h.change = h.avgPrice ? ((h.livePrice - h.avgPrice) / h.avgPrice) * 100 : 0;
+      updated++;
+    }
+    const mv = Number(row['Market Value']);
+    if (isFinite(mv) && mv > 0) h._sheetValue = mv;
+    const pl = Number(row['Unrealized P/L']);
+    if (isFinite(pl)) h._sheetPL = pl;
+    h.value = Math.round(valueThb(h));
+  });
+
+  if (rows && rows.length) {
+    const totalValue = rows.reduce((t, r) => t + (Number(r['Market Value']) || 0), 0);
+    const totalPL    = rows.reduce((t, r) => t + (Number(r['Unrealized P/L']) || 0), 0);
+    state.sheetTotals = {
+      totalValue: totalValue,
+      totalPL: totalPL,
+      totalCost: totalValue - totalPL,
+      count: rows.length,
+      syncedAt: Date.now(),
+      // asset ที่มีใน Sheet แต่ไม่มี holding ในแอป — มูลค่าถูกนับ แต่กราฟสัดส่วนจะไม่เห็น
+      unmatchedSheet: rows.map(r => r['Asset']).filter(a => a && !matchedKeys[sheetAssetKey(a)]),
+      // holding ในแอปที่จับคู่กับ Sheet ไม่ได้ — ชื่อน่าจะสะกดไม่ตรงกัน
+      unmatchedLocal: state.holdings.filter(h => !h._sheetMatched).map(h => h.name || h.ticker)
+    };
+    saveSheetTotalsCache();
+  }
+  return { updated: updated, rows: rows ? rows.length : 0 };
+}
+
+// เก็บยอดรวมจาก Sheet ไว้ 1 วัน เพื่อให้ตัวเลขไม่กระโดดตอนเปิดแอปใหม่ก่อน sync เสร็จ
+function saveSheetTotalsCache() {
+  try {
+    localStorage.setItem('folio_sheet_totals', JSON.stringify({
+      date: new Date().toISOString().split('T')[0], totals: state.sheetTotals
+    }));
+  } catch(e) {}
+}
+function loadSheetTotalsCache() {
+  try {
+    const raw = localStorage.getItem('folio_sheet_totals');
+    if (!raw) return false;
+    const c = JSON.parse(raw);
+    if (c.date !== new Date().toISOString().split('T')[0] || !c.totals) return false;
+    state.sheetTotals = c.totals;
+    return true;
+  } catch(e) { return false; }
+}
+
+// เติมแถวสรุปของการ์ด Portfolio Analyzer จาก state.sheetTotals ชุดเดียวกับ hero
+function p17RenderSummaryRow() {
+  const st = state.sheetTotals;
+  const data = window._p17SheetData;
+  if (!st || !st.count || !data) return;
+  const execPlan = data.executionPlan || [];
+  const monthlyBuy = execPlan.reduce((t, r) => t + (Number(r['Suggested Monthly Buy (THB)']) || 0), 0);
+  const tvEl = document.getElementById('p17TotalValue');
+  const plEl = document.getElementById('p17UnrealPL');
+  const acEl = document.getElementById('p17AssetCount');
+  const mbEl = document.getElementById('p17MonthlyBuy');
+  if (tvEl) tvEl.textContent = '฿' + Math.round(st.totalValue).toLocaleString();
+  if (plEl) {
+    plEl.textContent = (st.totalPL >= 0 ? '+' : '') + '฿' + Math.round(st.totalPL).toLocaleString();
+    plEl.style.color = st.totalPL >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+  if (acEl) acEl.textContent = st.count + ' รายการ';
+  if (mbEl) mbEl.textContent = '฿' + Math.round(monthlyBuy).toLocaleString();
+  const sr = document.getElementById('p17SummaryRow');
+  const em = document.getElementById('p17Empty');
+  if (sr) sr.style.display = 'grid';
+  if (em) em.style.display = 'none';
+  const ls = document.getElementById('p17LastSync');
+  if (ls && window._p17SyncTime) ls.textContent = 'อัพเดตล่าสุด ' + window._p17SyncTime + ' น. · ' + st.count + ' holdings';
+  p17RenderExecTable();
+}
+
 async function fetchFromNavSheet(manual = false) {
   const url = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') ||
               window._NAV_SHEET_URL || NAV_SHEET_DEFAULT;
@@ -4485,58 +4654,17 @@ async function fetchFromNavSheet(manual = false) {
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
 
-    // Store inputs from Sheet (e.g. Objective Return)
-    if (data.inputs) state.sheetInputs = data.inputs;
+    const res = applySheetData(data);
 
-    // Build price map: {name -> price}
-    // Support Portfolio Sheet format: {holdings:[{Asset, Price}]}
-    // Support NAV Sheet format: {FUND_NAME:{nav}}
-    const priceMap = {};
-    if (data.holdings && Array.isArray(data.holdings)) {
-      data.holdings.forEach(row => {
-        const name = (row['Asset'] || '').trim();
-        const price = Number(row['Price'] || 0);
-        if (name && price > 0) priceMap[name] = price;
-      });
-    } else {
-      Object.keys(data).forEach(k => {
-        if (data[k] && data[k].nav) priceMap[k] = Number(data[k].nav);
-      });
-    }
-
-    let updated = 0;
-    state.holdings.forEach(h => {
-      const key = h.name ? h.name.trim() : '';
-      let price = priceMap[key];
-      // fuzzy: first token match e.g. "BTC (Bitcoin)" → "BTC"
-      if (!price) {
-        const first = key.split(' ')[0].toUpperCase();
-        const match = Object.keys(priceMap).find(k => k.split(' ')[0].toUpperCase() === first);
-        if (match) price = priceMap[match];
-      }
-      if (price && price > 0) {
-        // For crypto: Sheet stores THB price; convert back to USD if holding is USD
-        if (h.type === 'crypto' && h.currency === 'USD' && state.usdThb > 0) {
-          h.livePrice = price / state.usdThb;
-        } else {
-          h.livePrice = price;
-        }
-        h.change = h.avgPrice ? ((h.livePrice - h.avgPrice) / h.avgPrice) * 100 : 0;
-        h.value = h.currency === 'USD'
-          ? Math.round(h.shares * h.livePrice * (state.usdThb || 33))
-          : Math.round(h.shares * h.livePrice);
-        updated++;
-      }
-    });
-
+    window._p17SyncTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     savePriceCache();
     updatePortfolioSummary();
     renderHoldings();
     renderAllocation(); initPhase9(); initPhase10(); initPhase11(); initPhase12(); p14TrackDrawdown();
-    const now = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    p17RenderSummaryRow();
     const tc = document.getElementById('todayChange');
-    if (tc) { tc.textContent = 'ดึงจาก Sheet เมื่อ ' + now + ' น.'; tc.style.color = 'var(--text3)'; }
-    if (manual) showToast('อัพเดต ' + updated + ' รายการจาก Google Sheet ✓');
+    if (tc) { tc.textContent = 'ดึงจาก Sheet เมื่อ ' + window._p17SyncTime + ' น.'; tc.style.color = 'var(--text3)'; }
+    if (manual) showToast('อัพเดต ' + res.updated + ' รายการจาก Google Sheet ✓');
   } catch(e) {
     if (manual) showToast('ดึงราคาจาก Sheet ไม่ได้: ' + e.message);
   }
@@ -4662,10 +4790,8 @@ let _p9Chart = null;
 function initPhase9() {
   // p9Data computed for Alerts + Monthly Review (UI card removed)
   if (!state.holdings.length) return;
-  const totalCost  = state.holdings.reduce((s,h) => {
-    return s + (h.currency === 'USD' ? h.shares * h.avgPrice * state.usdThb : h.shares * h.avgPrice);
-  }, 0);
-  const totalValue = state.holdings.reduce((s,h) => s + (h.value || h.shares * h.avgPrice), 0);
+  const totalCost  = portfolioCostThb();
+  const totalValue = portfolioValueThb();
   const totalMonthly = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
   if (totalCost === 0) return;
 
@@ -5125,8 +5251,8 @@ function initPhase11() {
 
   // 4. Portfolio all-time loss >10%
   if (state.holdings.length) {
-    const total = state.holdings.reduce((s,h) => s + valueThb(h), 0);
-    const cost  = state.holdings.reduce((s,h) => s + costThb(h), 0);
+    const total = portfolioValueThb();
+    const cost  = portfolioCostThb();
     if (cost > 0 && total < cost * 0.9) {
       alerts.push({ type: 'danger', icon: '🔴', msg: 'พอร์ตติดลบมากกว่า 10% จากต้นทุน -- ควรทบทวนกลยุทธ์' });
     }
@@ -5349,8 +5475,8 @@ init();
 // --- Phase 14: Max Drawdown Tracking (extends Phase 11) ---
 function p14TrackDrawdown() {
   if (!state.holdings.length) return;
-  const totalValue = state.holdings.reduce((s,h) => s + valueThb(h), 0);
-  const totalCost  = state.holdings.reduce((s,h) => s + costThb(h), 0);
+  const totalValue = portfolioValueThb();
+  const totalCost  = portfolioCostThb();
   if (!totalCost) return;
 
   // Track peak value in localStorage
