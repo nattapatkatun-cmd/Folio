@@ -609,6 +609,12 @@ function attachFirebaseListeners() {
   });
 }
 
+// <script type="module"> มี scope ของตัวเอง ฟังก์ชันด้านบนจึงไม่ได้อยู่บน global
+// script ปกติด้านล่างเรียกสามตัวนี้อยู่ ต้อง export ขึ้น window ไม่งั้นได้ ReferenceError
+window.savePortfolioSnapshot = savePortfolioSnapshot;
+window.loadSnapshotHistory   = loadSnapshotHistory;
+window.snapshotDaysAgo       = snapshotDaysAgo;
+
 // Wait for startApp to finish init (it sets up state), then attach listeners
 if (window._folioReady) {
   attachFirebaseListeners();
@@ -1069,6 +1075,16 @@ if (window._folioReady) {
     <div class="page-header">
       <div class="page-greeting">จัดการการเชื่อมต่อ</div>
       <div class="page-title">ตั้งค่า API Keys</div>
+    </div>
+
+    <!-- ตรวจสอบ baseline ผลตอบแทนปีนี้ — อ่านอย่างเดียว ไม่เขียนทับค่าใด ๆ -->
+    <div class="card" style="margin-bottom:14px;border:1.5px solid var(--accent-light);">
+      <div class="card-title">🔍 baseline ผลตอบแทนปีนี้ <span style="font-size:10px;color:var(--text3);font-weight:400;">— ดูว่าแถบ "ความคืบหน้าสู่เป้า" คิดจากอะไร</span></div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.7;margin-bottom:10px;">
+        อ่านค่าที่เก็บไว้ใน localStorage และ snapshot รายวันใน Firestore มาแสดงเฉย ๆ ไม่มีการเขียนทับ
+      </div>
+      <button class="btn-ghost" style="width:100%;font-size:12px;" onclick="yoyInspectBaseline()">📖 อ่านค่าที่เก็บไว้</button>
+      <div id="yoyInspectOut" style="display:none;margin-top:12px;font-size:11.5px;line-height:1.7;"></div>
     </div>
 
     <!-- AI Keys — สำคัญที่สุด -->
@@ -3668,15 +3684,15 @@ async function p17bRun() {
   // Trajectory context: load 90-day history and add momentum lines
   var trajectoryLines = [];
   try {
-    var snapHistory = await loadSnapshotHistory(90);
+    var snapHistory = typeof window.loadSnapshotHistory === 'function' ? await window.loadSnapshotHistory(90) : [];
     var nowValue = window._p9Data ? window._p9Data.totalValue : 0;
     var nowSnap  = window._p9Data ? window._p9Data.snapshotCost : 0;
     var nowYoy   = window._p9Data ? window._p9Data.currentYoy : null;
     var _objRet  = window._p9Data && state.sheetInputs && state.sheetInputs['Objective Return'];
     var TARGET   = _objRet ? Number(_objRet)*100 : 10;
     if (snapHistory.length >= 2 && nowValue) {
-      var s30 = snapshotDaysAgo(snapHistory, 30);
-      var s90 = snapshotDaysAgo(snapHistory, 90);
+      var s30 = window.snapshotDaysAgo(snapHistory, 30);
+      var s90 = window.snapshotDaysAgo(snapHistory, 90);
       if (s30 && s30.totalValue) {
         var chg30 = ((nowValue - s30.totalValue) / s30.totalValue * 100).toFixed(1);
         trajectoryLines.push('มูลค่า 30 วันที่แล้ว: ฿' + Math.round(s30.totalValue).toLocaleString() + ' → ปัจจุบัน ฿' + Math.round(nowValue).toLocaleString() + ' (' + (chg30>=0?'+':'') + chg30 + '%)');
@@ -4784,6 +4800,94 @@ function yoyAddSell(amountThb) {
   localStorage.setItem(yoySnapshotKey(), JSON.stringify(snap));
 }
 
+
+// ─── อ่าน baseline ของ YoY ทุกแหล่งมาเทียบกัน (read-only) ──────────────────────
+// ใช้ตัดสินใจว่าจะตั้ง baseline ปีนี้จากอะไร ไม่มีการเขียนค่าใด ๆ ลง storage
+async function yoyInspectBaseline() {
+  const out = document.getElementById('yoyInspectOut');
+  if (!out) return;
+  out.style.display = '';
+  out.innerHTML = '<span style="color:var(--text3)">กำลังอ่านข้อมูล...</span>';
+
+  const year = new Date().getFullYear();
+  const V1 = portfolioValueThb();
+  const C1 = portfolioCostThb();
+  const fromSheet = !!(state.sheetTotals && state.sheetTotals.count);
+
+  // 1) baseline ที่เก็บใน localStorage
+  let snapObj = null, lsErr = '';
+  try { snapObj = JSON.parse(localStorage.getItem('folio_yoy_snapshot_' + year) || 'null'); }
+  catch(e) { lsErr = e.message; }
+
+  // 2) snapshot รายวันใน Firestore (1 record/วัน)
+  let history = [], fbErr = '';
+  try {
+    history = typeof window.loadSnapshotHistory === 'function' ? await window.loadSnapshotHistory(400) : [];
+    if (typeof window.loadSnapshotHistory !== 'function') fbErr = 'Firebase ยังไม่พร้อม ลองใหม่อีกครั้ง';
+  } catch(e) { fbErr = e.message || 'อ่านไม่ได้'; }
+  const yearRows = history.filter(r => r && typeof r.date === 'string' && r.date.slice(0, 4) === String(year));
+  const firstOfYear = yearRows.length ? yearRows[0] : null;
+  const oldestAny = history.length ? history[0] : null;
+
+  const bt = n => '฿' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pc = n => (n >= 0 ? '+' : '') + Number(n).toFixed(2) + '%';
+  const row = (k, v, color) => '<tr><td style="padding:3px 10px 3px 0;color:var(--text3);">' + esc(k) +
+    '</td><td style="padding:3px 0;text-align:right;font-weight:500;white-space:nowrap;' +
+    (color ? 'color:' + color + ';' : '') + '">' + v + '</td></tr>';
+  const tbl = inner => '<table style="width:100%;border-collapse:collapse;">' + inner + '</table>';
+  const head = t => '<div style="font-weight:600;color:var(--text);margin:12px 0 4px;">' + t + '</div>';
+
+  let html = head('ตัวเลขปัจจุบัน' + (fromSheet ? ' (จาก Sheet)' : ' (คำนวณในเครื่อง)'));
+  html += tbl(row('มูลค่าพอร์ต', bt(V1)) + row('ทุน', bt(C1)) +
+              row('กำไรรวม', C1 > 0 ? pc((V1 - C1) / C1 * 100) : '—'));
+
+  html += head('1. baseline ที่เก็บใน localStorage');
+  if (snapObj && typeof snapObj.snapshotCost === 'number' && snapObj.snapshotCost > 0) {
+    const sc = snapObj.snapshotCost;
+    html += tbl(row('key', '<code>folio_yoy_snapshot_' + year + '</code>') +
+                row('snapshotCost', bt(sc)) +
+                row('ต่างจากทุนจริง', bt(C1 - sc), Math.abs(C1 - sc) > 1 ? 'var(--amber)' : '') +
+                row('YoY ที่แถบแสดงอยู่', pc((V1 - sc) / sc * 100)));
+  } else {
+    html += '<div style="color:var(--text3)">ไม่มีค่าเก็บไว้' + (lsErr ? ' (' + esc(lsErr) + ')' : '') + '</div>';
+  }
+
+  html += head('2. snapshot รายวันใน Firestore');
+  if (fbErr) {
+    html += '<div style="color:var(--red)">อ่านไม่ได้: ' + esc(fbErr) + '</div>';
+  } else if (!history.length) {
+    html += '<div style="color:var(--text3)">ยังไม่มี snapshot เลย</div>';
+  } else {
+    html += tbl(row('จำนวน record ทั้งหมด', history.length + ' วัน') +
+                row('เก่าสุดที่มี', oldestAny ? esc(oldestAny.date) : '—') +
+                row('record ของปี ' + year, yearRows.length + ' วัน'));
+    if (firstOfYear) {
+      const V0 = Number(firstOfYear.totalValue) || 0;
+      const C0 = Number(firstOfYear.totalCost) || 0;
+      const flow = C1 - C0;
+      const base = V0 + flow;
+      html += head('   record แรกสุดของปี ' + year);
+      html += tbl(row('วันที่', esc(firstOfYear.date)) +
+                  row('มูลค่าพอร์ตวันนั้น (V0)', bt(V0)) +
+                  row('ทุนวันนั้น (C0)', bt(C0)) +
+                  row('เงินใหม่ที่ใส่หลังจากนั้น', bt(flow)) +
+                  row('YoY แบบหักเงินใหม่', base > 0 ? pc((V1 - base) / base * 100) : '—', 'var(--accent)'));
+      html += '<div style="color:var(--amber);margin-top:6px;">⚠️ snapshot ที่เขียนก่อนวันที่ 19 ก.ย. 2026 ใช้สูตรมูลค่าแบบเก่าที่ต่ำกว่าจริง ตัวเลข V0 ข้างบนจึงน่าจะต่ำกว่าความจริง ทำให้ YoY ที่ได้สูงเกินจริงอยู่บ้าง</div>';
+    } else {
+      html += '<div style="color:var(--text3);margin-top:4px;">ไม่มี record ของปี ' + year + ' เลย</div>';
+    }
+  }
+
+  html += head('3. ถ้าใช้ทุนปัจจุบัน −6% เป็น baseline');
+  const guess = C1 * 0.94;
+  html += tbl(row('baseline', bt(guess)) +
+              row('YoY แบบหารตรง ๆ', pc((V1 - guess) / guess * 100)) +
+              row('YoY แบบหักเงินใหม่', C1 > 0 ? pc((V1 - C1) / C1 * 100) : '—'));
+
+  html += '<div style="color:var(--text3);margin-top:10px;">อ่านอย่างเดียว ยังไม่มีการเปลี่ยนค่าใด ๆ</div>';
+  out.innerHTML = html;
+}
+
 // --- Phase 9: YoY Gap Calculator ---
 let _p9Chart = null;
 
@@ -4872,6 +4976,15 @@ function initPhase9() {
   });
   const targetLine = labels.map(() => TARGET);
 
+  window._p9Data = { holdings: state.holdings, totalCost, snapshotCost, totalValue, totalMonthly, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft, projectedYoy: projYoy };
+
+  // Save daily snapshot (1 write/day — foundation for trajectory data)
+  // ต้องอยู่ก่อนส่วนกราฟ เพราะการ์ดกราฟ p9Chart ถูกถอดออกจาก UI แล้ว
+  // โค้ดเดิม return ตรงนี้ทุกครั้ง snapshot จึงไม่เคยถูกเขียนเลย
+  if (typeof window.savePortfolioSnapshot === 'function') {
+    window.savePortfolioSnapshot().catch(e => console.error('snapshot failed:', e));
+  }
+
   const p9ChartEl = document.getElementById('p9Chart');
   if (!p9ChartEl) return;
   const ctx = p9ChartEl.getContext('2d');
@@ -4892,10 +5005,6 @@ function initPhase9() {
     }
   });
 
-  window._p9Data = { holdings: state.holdings, totalCost, snapshotCost, totalValue, totalMonthly, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft, projectedYoy: projYoy };
-
-  // Save daily snapshot (1 write/day — foundation for trajectory data)
-  savePortfolioSnapshot().catch(e => console.error('snapshot failed:', e));
 }
 
 // --- Phase 10: Rebalancing Engine ---
