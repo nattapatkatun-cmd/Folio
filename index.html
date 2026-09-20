@@ -557,7 +557,11 @@ async function savePortfolioSnapshot() {
   const snapshotCost = snap ? snap.snapshotCost : totalCost;
   if (!totalValue || !totalCost) return;
   try {
-    await FB.setDoc('portfolioSnapshots', today, { date: today, totalValue, totalCost, snapshotCost, usdThb: state.usdThb || 33 });
+    await FB.setDoc('portfolioSnapshots', today, {
+      date: today, totalValue, totalCost, snapshotCost,
+      baseValue: snap && typeof snap.baseValue === 'number' ? snap.baseValue : null,
+      usdThb: state.usdThb || 33
+    });
     localStorage.setItem(lastKey, today);
   } catch(e) { /* silent -- non-critical */ }
 }
@@ -1866,19 +1870,15 @@ function updatePortfolioSummary() {
 
   // Realized P&L this year from trades = ยอดขาย − ต้นทุน (costBasisThb) − ค่าธรรมเนียม
   // trade เก่าที่ไม่มี costBasisThb คำนวณกำไรไม่ได้ — ข้ามไป (ไม่นับยอดขายทั้งก้อนเป็นกำไร)
-  const thisYear = new Date().getFullYear();
-  const sellsThisYear = state.trades.filter(t => t.type === 'SELL' && tradeYear(t) === thisYear);
-  const realizedTrades = sellsThisYear.filter(t => typeof t.costBasisThb === 'number');
-  const realizedPL = realizedTrades.reduce((s,t) => s + (t.totalThb || 0) - t.costBasisThb - (t.fee || 0), 0);
+  const rz = realizedPlThisYear();
   const realizedEl = document.getElementById('realizedPLLabel');
   if (realizedEl) {
-    if (realizedTrades.length) {
-      const skipped = sellsThisYear.length - realizedTrades.length;
-      realizedEl.textContent = (realizedPL >= 0 ? '+' : '') + '฿' + Math.round(realizedPL).toLocaleString() + (skipped ? ' *' : '');
-      realizedEl.className = realizedPL >= 0 ? 'pos' : 'neg';
-      realizedEl.title = skipped ? skipped + ' รายการเก่าไม่มีข้อมูลต้นทุน — ไม่ถูกนับ' : '';
+    if (rz.counted) {
+      realizedEl.textContent = (rz.pl >= 0 ? '+' : '') + '฿' + Math.round(rz.pl).toLocaleString() + (rz.skipped ? ' *' : '');
+      realizedEl.className = rz.pl >= 0 ? 'pos' : 'neg';
+      realizedEl.title = rz.skipped ? rz.skipped + ' รายการเก่าไม่มีข้อมูลต้นทุน — ไม่ถูกนับ' : '';
     } else if (state.trades.length) {
-      realizedEl.textContent = sellsThisYear.length ? 'ไม่มีข้อมูลต้นทุน' : 'ยังไม่มีการขายปีนี้';
+      realizedEl.textContent = rz.sells ? 'ไม่มีข้อมูลต้นทุน' : 'ยังไม่มีการขายปีนี้';
       realizedEl.className = '';
     } else {
       realizedEl.textContent = 'ยังไม่มี trade';
@@ -4750,12 +4750,71 @@ function yoyGetSnapshot() {
   try { return JSON.parse(localStorage.getItem(yoySnapshotKey()) || 'null'); } catch(e) { return null; }
 }
 
-function yoyInitSnapshot(totalCost) {
-  // Called once per year on first run — baseline = current totalCost
+// baseline ของปี = สภาพพอร์ต ณ ต้นปี เก็บสองค่า
+//   snapshotCost (C0) = ทุน ณ ต้นปี   ใช้วัดว่าหลังจากนั้นใส่เงินใหม่เข้าไปเท่าไร
+//   baseValue    (V0) = มูลค่า ณ ต้นปี ใช้เป็นฐานของผลตอบแทน
+// ตั้งครั้งเดียวต่อปีตอนเปิดแอปครั้งแรกของปีนั้น แล้วไม่แตะอีกเลยจนขึ้นปีใหม่
+function yoyInitSnapshot(totalCost, totalValue) {
   const key = yoySnapshotKey();
-  if (!localStorage.getItem(key)) {
-    localStorage.setItem(key, JSON.stringify({ year: new Date().getFullYear(), snapshotCost: totalCost }));
-  }
+  if (localStorage.getItem(key)) return;
+  if (!(totalCost > 0)) return;
+  localStorage.setItem(key, JSON.stringify({
+    year: new Date().getFullYear(),
+    snapshotCost: totalCost,
+    baseValue: totalValue > 0 ? totalValue : totalCost,
+    seedMethod: 'year-start'
+  }));
+}
+
+// baseline ของปี 2026 ตั้งไว้ผิดมาตั้งแต่ต้น และไม่มี snapshot รายวันของปีนี้ให้ย้อนดู
+// (โค้ดเดิม return ก่อนถึงบรรทัดบันทึก snapshot เพราะการ์ดกราฟ p9Chart ถูกถอดออก)
+// จึงประมาณทุนต้นปีเป็น "ทุนปัจจุบัน − 6%" ตามที่ตกลงไว้ ทำครั้งเดียวแล้วจบ
+// รอจนกว่าจะ sync Sheet ได้ก่อน ไม่งั้นจะ seed จากทุนที่คำนวณในเครื่องซึ่งไม่ตรง
+const YOY_SEED_RATIO = 0.94;
+function yoyMigrateSnapshot(totalCost, totalValue) {
+  const snap = yoyGetSnapshot();
+  if (!snap || typeof snap.baseValue === 'number') return;
+  if (!(state.sheetTotals && state.sheetTotals.count)) return;
+  if (!(totalCost > 0)) return;
+  const c0 = totalCost * YOY_SEED_RATIO;
+  localStorage.setItem(yoySnapshotKey(), JSON.stringify({
+    year: new Date().getFullYear(),
+    snapshotCost: c0,
+    baseValue: c0,
+    seedMethod: 'cost-minus-6pct',
+    seededAt: new Date().toISOString().slice(0, 10),
+    previousSnapshotCost: snap.snapshotCost
+  }));
+}
+
+// กำไรที่รับรู้แล้วปีนี้ — ใช้ทั้งในการ์ดภาพรวมและในการคำนวณเงินเข้าออกของ YoY
+function realizedPlThisYear() {
+  const y = new Date().getFullYear();
+  const sells = (state.trades || []).filter(t => t.type === 'SELL' && tradeYear(t) === y);
+  const withCost = sells.filter(t => typeof t.costBasisThb === 'number');
+  return {
+    pl: withCost.reduce((s, t) => s + (t.totalThb || 0) - t.costBasisThb - (t.fee || 0), 0),
+    counted: withCost.length,
+    skipped: sells.length - withCost.length,
+    sells: sells.length
+  };
+}
+
+// ผลตอบแทนปีนี้ โดยหักเงินที่ใส่เพิ่มระหว่างปีออกจากกำไร
+//   เงินเข้าออกสุทธิ F = (ทุนวันนี้ − ทุนต้นปี) − กำไรที่รับรู้แล้วปีนี้
+//     ทุนลดเพราะขาย จะหักแค่ราคาทุนของที่ขาย ส่วนที่ขายได้เกินทุนคือกำไรที่รับรู้
+//     จึงลบออกอีกที เพื่อให้ F เท่ากับเงินสดที่ถอนออกจริง ไม่ใช่แค่ราคาทุน
+//   ฐาน = V0 + เงินที่ใส่เพิ่ม (ถอนออกไม่ลดฐาน เพราะเงินก้อนนั้นอยู่ในพอร์ตมาก่อนแล้ว)
+// ไม่มี baseline → คืน null ให้ผู้เรียกไปแสดงว่ายังคำนวณไม่ได้
+function yoyCompute(totalValue, totalCost) {
+  const snap = yoyGetSnapshot();
+  if (!snap || !(snap.snapshotCost > 0)) return null;
+  const c0 = snap.snapshotCost;
+  const v0 = typeof snap.baseValue === 'number' && snap.baseValue > 0 ? snap.baseValue : c0;
+  const flows = (totalCost - c0) - realizedPlThisYear().pl;
+  const base = v0 + Math.max(0, flows);
+  if (!(base > 0)) return null;
+  return { v0: v0, c0: c0, flows: flows, base: base, pct: (totalValue - v0 - flows) / base * 100 };
 }
 
 // SSF/RMF lock check — matches a holding name/ticker; returns lock info or null
@@ -4784,21 +4843,12 @@ function yoyTargetPct() {
   var o = state.sheetInputs && state.sheetInputs['Objective Return'];
   return o ? Number(o) * 100 : 10;
 }
-function yoyAddBuy(amountThb) {
-  // Called every BUY — increase snapshotCost so new capital doesn't inflate YoY
-  const snap = yoyGetSnapshot();
-  if (!snap) return;
-  snap.snapshotCost += amountThb;
-  localStorage.setItem(yoySnapshotKey(), JSON.stringify(snap));
-}
-
-function yoyAddSell(amountThb) {
-  // Called every SELL — decrease snapshotCost so capital withdrawal doesn't distort YoY
-  const snap = yoyGetSnapshot();
-  if (!snap) return;
-  snap.snapshotCost = Math.max(0, snap.snapshotCost - amountThb);
-  localStorage.setItem(yoySnapshotKey(), JSON.stringify(snap));
-}
+// เดิมสองฟังก์ชันนี้ขยับ snapshotCost ทุกครั้งที่บันทึก trade ในแอป
+// ซึ่งพลาดเงินที่ DCA ผ่าน Sheet โดยตรง baseline จึงต่ำเกินจริงและ YoY บวมขึ้น
+// ตอนนี้ยอดเงินเข้าออกคำนวณจากทุนใน Sheet ใน yoyCompute() แล้ว
+// ปล่อยไว้เป็น no-op เพื่อไม่ให้ snapshotCost ซึ่งเป็นทุน "ณ ต้นปี" ถูกแก้ระหว่างปี
+function yoyAddBuy() {}
+function yoyAddSell() {}
 
 
 // ─── อ่าน baseline ของ YoY ทุกแหล่งมาเทียบกัน (read-only) ──────────────────────
@@ -4843,11 +4893,17 @@ async function yoyInspectBaseline() {
 
   html += head('1. baseline ที่เก็บใน localStorage');
   if (snapObj && typeof snapObj.snapshotCost === 'number' && snapObj.snapshotCost > 0) {
-    const sc = snapObj.snapshotCost;
+    const METHOD = { 'cost-minus-6pct': 'ประมาณจากทุนปัจจุบัน −6%', 'year-start': 'บันทึกตอนต้นปีจริง' };
+    const yoy = yoyCompute(V1, C1);
     html += tbl(row('key', '<code>folio_yoy_snapshot_' + year + '</code>') +
-                row('snapshotCost', bt(sc)) +
-                row('ต่างจากทุนจริง', bt(C1 - sc), Math.abs(C1 - sc) > 1 ? 'var(--amber)' : '') +
-                row('YoY ที่แถบแสดงอยู่', pc((V1 - sc) / sc * 100)));
+                row('ทุนต้นปี (C0)', bt(snapObj.snapshotCost)) +
+                row('มูลค่าต้นปี (V0)', typeof snapObj.baseValue === 'number' ? bt(snapObj.baseValue) : '<span style="color:var(--amber)">ยังไม่มี รอ sync Sheet</span>') +
+                row('ที่มาของ baseline', esc(METHOD[snapObj.seedMethod] || snapObj.seedMethod || 'รูปแบบเก่า')) +
+                (snapObj.seededAt ? row('ตั้งเมื่อ', esc(snapObj.seededAt)) : '') +
+                (yoy ? row('เงินใหม่ที่ใส่ปีนี้ (F)', bt(yoy.flows)) +
+                       row('ฐานที่ใช้หาร (V0 + F)', bt(yoy.base)) +
+                       row('YoY ที่แถบแสดงอยู่', pc(yoy.pct), 'var(--accent)')
+                     : row('YoY', 'คำนวณไม่ได้')));
   } else {
     html += '<div style="color:var(--text3)">ไม่มีค่าเก็บไว้' + (lsErr ? ' (' + esc(lsErr) + ')' : '') + '</div>';
   }
@@ -4878,11 +4934,11 @@ async function yoyInspectBaseline() {
     }
   }
 
-  html += head('3. ถ้าใช้ทุนปัจจุบัน −6% เป็น baseline');
-  const guess = C1 * 0.94;
-  html += tbl(row('baseline', bt(guess)) +
-              row('YoY แบบหารตรง ๆ', pc((V1 - guess) / guess * 100)) +
-              row('YoY แบบหักเงินใหม่', C1 > 0 ? pc((V1 - C1) / C1 * 100) : '—'));
+  html += head('3. ตัวเลขอ้างอิง');
+  const guess = C1 * YOY_SEED_RATIO;
+  html += tbl(row('ทุนปัจจุบัน −6%', bt(guess)) +
+              row('กำไรรวมทั้งพอร์ต', C1 > 0 ? pc((V1 - C1) / C1 * 100) : '—') +
+              row('ถ้าหารด้วย baseline ตรง ๆ', pc((V1 - guess) / guess * 100), 'var(--text3)'));
 
   html += '<div style="color:var(--text3);margin-top:10px;">อ่านอย่างเดียว ยังไม่มีการเปลี่ยนค่าใด ๆ</div>';
   out.innerHTML = html;
@@ -4899,12 +4955,13 @@ function initPhase9() {
   const totalMonthly = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
   if (totalCost === 0) return;
 
-  // Init snapshot on first run of the year (baseline = current totalCost)
-  yoyInitSnapshot(totalCost);
-  const snap = yoyGetSnapshot();
-  const snapshotCost = snap ? snap.snapshotCost : totalCost;
-
-  const currentYoy = snapshotCost > 0 ? ((totalValue - snapshotCost) / snapshotCost) * 100 : 0;
+  // ตั้ง baseline ครั้งแรกของปี แล้วย้ายเรคคอร์ดปี 2026 มาใช้รูปแบบใหม่
+  yoyInitSnapshot(totalCost, totalValue);
+  yoyMigrateSnapshot(totalCost, totalValue);
+  const yoy = yoyCompute(totalValue, totalCost);
+  if (!yoy) return;
+  const snapshotCost = yoy.base;   // ฐานที่ใช้หาร = มูลค่าต้นปี + เงินที่ใส่เพิ่ม
+  const currentYoy = yoy.pct;
   const _objReturn = state.sheetInputs && state.sheetInputs['Objective Return'];
   const TARGET = _objReturn ? Number(_objReturn) * 100 : 10;
   var _tl = document.getElementById('yoyTargetLabel'); if (_tl) _tl.textContent = TARGET.toFixed(0) + '%';
@@ -4913,9 +4970,12 @@ function initPhase9() {
   const now      = new Date();
   const monthsLeft = Math.max(1, 12 - now.getMonth());
   const dcaNeeded  = gapBaht > 0 ? Math.ceil(gapBaht / monthsLeft) : 0;
+  // pace: DCA ต่อจนสิ้นปีโดยยังไม่คิดผลตอบแทนของเงินก้อนใหม่
+  // เงินที่ใส่เพิ่มขึ้นทั้งฝั่งมูลค่าและฝั่งฐาน กำไรเท่าเดิม % จึงเจือจางลง
+  const projFlows  = yoy.flows + totalMonthly * monthsLeft;
   const projValue  = totalValue + totalMonthly * monthsLeft;
-  const projCost   = snapshotCost + totalMonthly * monthsLeft;
-  const projYoy    = projCost > 0 ? ((projValue - projCost) / projCost) * 100 : 0;
+  const projBase   = yoy.v0 + Math.max(0, projFlows);
+  const projYoy    = projBase > 0 ? ((projValue - yoy.v0 - projFlows) / projBase) * 100 : 0;
 
   const fmt = v => `${v>=0?'+':''}${v.toFixed(1)}%`;
   const fmtB = v => `฿${Math.abs(v).toLocaleString('th-TH',{maximumFractionDigits:0})}`;
@@ -4969,14 +5029,15 @@ function initPhase9() {
   const labels = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const monthsPast = 12 - monthsLeft;
   const paceLine = labels.map((_,i) => {
-    const mFromNow = i - monthsPast;
-    const v = mFromNow >= 0 ? totalValue + totalMonthly * mFromNow : totalValue;
-    const c = mFromNow >= 0 ? snapshotCost + totalMonthly * mFromNow : snapshotCost;
-    return c > 0 ? parseFloat(((v-c)/c*100).toFixed(2)) : 0;
+    const mFromNow = Math.max(0, i - monthsPast);
+    const f = yoy.flows + totalMonthly * mFromNow;
+    const v = totalValue + totalMonthly * mFromNow;
+    const b = yoy.v0 + Math.max(0, f);
+    return b > 0 ? parseFloat(((v - yoy.v0 - f) / b * 100).toFixed(2)) : 0;
   });
   const targetLine = labels.map(() => TARGET);
 
-  window._p9Data = { holdings: state.holdings, totalCost, snapshotCost, totalValue, totalMonthly, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft, projectedYoy: projYoy };
+  window._p9Data = { holdings: state.holdings, totalCost, snapshotCost, baseValue: yoy.v0, yearStartCost: yoy.c0, flows: yoy.flows, totalValue, totalMonthly, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft, projectedYoy: projYoy };
 
   // Save daily snapshot (1 write/day — foundation for trajectory data)
   // ต้องอยู่ก่อนส่วนกราฟ เพราะการ์ดกราฟ p9Chart ถูกถอดออกจาก UI แล้ว
