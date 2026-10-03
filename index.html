@@ -1171,6 +1171,12 @@ if (window._folioReady) {
       </div>
     </div>
 
+    <!-- บัตรเครดิต + ธุรกิจส่วนตัว -->
+    <div class="card" style="margin-bottom:var(--gap);display:none;" id="billCardsCard">
+      <div class="card-title">💳 บัตรเครดิต & 🏪 ธุรกิจส่วนตัว</div>
+      <div id="billCards"></div>
+    </div>
+
     <!-- รายการ -->
     <div class="card" style="margin-bottom:var(--gap);">
       <div class="card-title">
@@ -1204,6 +1210,10 @@ if (window._folioReady) {
       <div class="form-group">
         <label class="form-label">ชื่อบัญชีของคุณ (ช่วย AI แยกว่าเงินเข้าหรือออก)</label>
         <input class="form-input" id="billOwnerNames" placeholder="เช่น ณัฐพัฒน์, NATTAPAT" onchange="billSaveOwner(this.value)">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label class="form-label">บัตรเครดิตของคุณ (คั่นด้วย , — ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
+        <input class="form-input" id="billCardNames" placeholder="เช่น KTC 1234, UOB 5678, SCB M 9012" onchange="billSaveCards(this.value)">
       </div>
       <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
         🔒 รูปสลิปถูกส่งไปให้ Gemini อ่าน (ไม่ได้ประมวลผลในเครื่อง) และ<strong>ไม่ถูกเก็บ</strong> — Firestore เก็บเฉพาะข้อมูลที่อ่านได้ (วันที่ ยอด หมวด ร้าน เลขอ้างอิง)<br>
@@ -1349,6 +1359,7 @@ service cloud.firestore {
     <h3 id="billConfirmTitle">ตรวจสอบก่อนบันทึก</h3>
     <div id="billConfirmNote" style="font-size:11px;color:var(--text3);margin:-8px 0 12px;"></div>
     <div id="billDrafts"></div>
+    <datalist id="billCardList"></datalist>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="billCloseConfirm()">ยกเลิก</button>
       <button class="btn-primary" id="billSaveBtn" onclick="billSaveDrafts()">บันทึก</button>
@@ -6647,20 +6658,30 @@ const BILL_CATS = {
     { key: 'family',        label: 'ครอบครัว/ให้',        icon: '🎁', color: '#BE185D' },
     { key: 'insurance',     label: 'ประกัน/ภาษี',         icon: '🛡️', color: '#475569' },
     { key: 'transfer',      label: 'โอนเงินทั่วไป',       icon: '🔁', color: '#94A3B8' },
+    { key: 'business',      label: 'ธุรกิจส่วนตัว',        icon: '🏪', color: '#9333EA' },
     { key: 'invest',        label: 'ลงทุน/ออม',           icon: '📈', color: '#15803D' },
+    { key: 'cc_payment',    label: 'จ่ายบิลบัตรเครดิต',   icon: '💳', color: '#64748B' },
     { key: 'other',         label: 'อื่น ๆ',              icon: '📦', color: '#AAB0BB' }
   ],
   income: [
     { key: 'salary',   label: 'เงินเดือน',        icon: '💼', color: '#16A34A' },
     { key: 'bonus',    label: 'โบนัส',            icon: '🎉', color: '#15803D' },
+    { key: 'business_in', label: 'ธุรกิจส่วนตัว',   icon: '🏪', color: '#9333EA' },
     { key: 'side',     label: 'รายได้เสริม',      icon: '🧑‍💻', color: '#0891B2' },
     { key: 'dividend', label: 'ปันผล/ดอกเบี้ย',   icon: '🪙', color: '#B45309' },
     { key: 'refund',   label: 'คืนเงิน',          icon: '↩️', color: '#7C3AED' },
     { key: 'other_in', label: 'อื่น ๆ',           icon: '📥', color: '#AAB0BB' }
   ]
 };
-// 'invest' = เงินที่โอนไปลงทุน/ออมเอง ไม่ใช่ค่าใช้จ่าย — ไม่นับในรายจ่าย/อัตราออม
-const BILL_NON_SPEND = ['invest'];
+// ไม่นับเป็นรายจ่าย/ไม่กระทบอัตราออม:
+// 'invest' = เงินที่โอนไปลงทุน/ออมเอง
+// 'cc_payment' = โอนจ่ายบิลบัตรเครดิต — ของที่รูดบัตรถูกนับเป็นรายจ่ายไปแล้วตอนรูด ถ้านับตอนจ่ายบิลอีกจะซ้ำ
+const BILL_NON_SPEND = ['invest', 'cc_payment'];
+const BILL_PAY = { unknown: 'ไม่ระบุ', cash: '💵 เงินสด', transfer: '🏦 โอน/QR', card: '💳 บัตรเครดิต', ewallet: '📱 e-Wallet' };
+// รายชื่อบัตรของผู้ใช้ (ช่วย AI จับคู่ชื่อบัตร + ใช้เป็นตัวเลือกในฟอร์ม)
+function billCards() {
+  return (localStorage.getItem('folio_bill_cards') || '').split(',').map(x => x.trim()).filter(Boolean);
+}
 const BILL_SOURCES = { camera: '📷 ถ่ายรูป', upload: '🖼️ อัปโหลด', share: '📲 แชร์', text: '⌨️ พิมพ์', voice: '🎙️ พูด', manual: '✍️ กรอกเอง' };
 
 const billState = {
@@ -6694,13 +6715,25 @@ function billAddMonths(ym, n) {
 
 // ─── ยอดรวมต่อเดือน (จุดเดียว ทุกหน้าใช้ร่วมกัน) ───
 function billMonthTotals(ym) {
-  const r = { income: 0, consumption: 0, invest: 0, count: 0, byCat: {} };
+  const r = { income: 0, consumption: 0, invest: 0, ccPaid: 0, count: 0, byCat: {}, bizIncome: 0, bizExpense: 0, cards: {} };
   (state.transactions || []).forEach(t => {
     if (!t.date || t.date.slice(0, 7) !== ym) return;
     const v = billAmtThb(t);
     r.count++;
-    if (t.type === 'income') { r.income += v; return; }
+    if (t.type === 'income') {
+      r.income += v;
+      if (t.category === 'business_in') r.bizIncome += v;
+      return;
+    }
+    const cardName = (t.card || '').trim() || 'ไม่ระบุบัตร';
+    if (t.category === 'cc_payment') {
+      r.ccPaid += v;
+      (r.cards[cardName] = r.cards[cardName] || { spent: 0, paid: 0 }).paid += v;
+      return;
+    }
     if (BILL_NON_SPEND.includes(t.category)) { r.invest += v; return; }
+    if (t.payMethod === 'card') (r.cards[cardName] = r.cards[cardName] || { spent: 0, paid: 0 }).spent += v;
+    if (t.category === 'business') r.bizExpense += v;
     r.consumption += v;
     r.byCat[t.category] = (r.byCat[t.category] || 0) + v;
   });
@@ -6755,12 +6788,17 @@ function billCashflowContext() {
   if (top.length) lines.push('- หมวดใช้จ่ายสูงสุด (เฉลี่ยเดือนที่จบแล้ว): ' + top.join(', '));
   const avg = billAvgSurplus();
   const dca = billDcaMonthly();
+  const now = billMonthTotals(cur);
+  const cardLines = Object.keys(now.cards).map(k => k + ' รูด ' + billFmt0(now.cards[k].spent) + ' / จ่ายบิล ' + billFmt0(now.cards[k].paid));
+  if (cardLines.length) lines.push('- บัตรเครดิตเดือนนี้: ' + cardLines.join(', '));
+  if (now.bizIncome || now.bizExpense) lines.push('- ธุรกิจส่วนตัวเดือนนี้: รายได้ ' + billFmt0(now.bizIncome) + ' | ค่าใช้จ่าย ' + billFmt0(now.bizExpense) + ' | กำไร ' + billFmt0(now.bizIncome - now.bizExpense));
   if (avg) lines.push('- เงินเหลือเฉลี่ย ' + avg.months + ' เดือน: ' + billFmt0(avg.surplus) + '/เดือน เทียบแผน DCA ' + billFmt0(dca) + '/เดือน');
   return lines.join('\n');
 }
 
 // ═══ Render ═══
 function billOnData() {
+  if (!window._billLoaded && window.FB) billLoadSettings();
   window._billLoaded = true;
   if (typeof initPhase12 === 'function') initPhase12();
   const page = document.getElementById('page-bills');
@@ -6780,6 +6818,8 @@ function billRender() {
   document.getElementById('billMonthLabel').textContent = billMonthLabel(ym);
   const ownerEl = document.getElementById('billOwnerNames');
   if (ownerEl && document.activeElement !== ownerEl) ownerEl.value = localStorage.getItem('folio_bill_owner') || '';
+  const cardsEl = document.getElementById('billCardNames');
+  if (cardsEl && document.activeElement !== cardsEl) cardsEl.value = billCards().join(', ');
   const t = billMonthTotals(ym);
   const sr = t.savingsRate;
   document.getElementById('billMetrics').innerHTML = `
@@ -6789,6 +6829,7 @@ function billRender() {
     <div class="metric"><div class="metric-label">อัตราออม</div><div class="metric-value" style="color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</div><div class="metric-sub">${sr === null ? 'ยังไม่มีรายรับเดือนนี้' : 'เงินเหลือ ÷ รายรับ'}</div></div>`;
   billRenderCashflow(t);
   billRenderCategories(t);
+  billRenderCards(t);
   billRenderTrend();
   billRenderList();
 }
@@ -6831,6 +6872,33 @@ function billUseAsDcaBudget(amount) {
   const card = document.getElementById('p17bCard');
   if (card) setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   showToast('ตั้งงบ ' + billFmt0(amount) + ' จากเงินเหลือจริงแล้ว — กด 🤖 แนะนำเลย');
+}
+
+// บัตรเครดิตแยกใบ + ธุรกิจส่วนตัว (นับตามเดือนปฏิทิน ไม่ใช่รอบบิลของบัตร)
+function billRenderCards(t) {
+  const el = document.getElementById('billCards');
+  const card = document.getElementById('billCardsCard');
+  if (!el) return;
+  const names = Object.keys(t.cards).sort((a, b) => t.cards[b].spent - t.cards[a].spent);
+  const hasBiz = t.bizIncome > 0 || t.bizExpense > 0;
+  card.style.display = names.length || hasBiz ? '' : 'none';
+  let html = '';
+  if (names.length) {
+    const th = 'font-size:10px;color:var(--text3);font-weight:600;padding:5px 6px;text-align:right;border-bottom:0.5px solid var(--border);';
+    const td = 'font-size:12px;padding:6px;text-align:right;border-bottom:0.5px solid var(--bg2);white-space:nowrap;';
+    html += '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + th + 'text-align:left;">บัตร</th><th style="' + th + '">รูดเดือนนี้</th><th style="' + th + '">จ่ายบิลแล้ว</th></tr>';
+    names.forEach(n => {
+      html += '<tr><td style="' + td + 'text-align:left;font-weight:500;">💳 ' + esc(n) + '</td><td style="' + td + '">' + billFmt0(t.cards[n].spent) + '</td><td style="' + td + 'color:var(--text2);">' + billFmt0(t.cards[n].paid) + '</td></tr>';
+    });
+    html += '</table><div style="font-size:10.5px;color:var(--text3);margin-top:6px;line-height:1.6;">ยอดรูดนับเป็นรายจ่ายตอนรูด · ยอดจ่ายบิลบัตรไม่นับซ้ำ · นับตามเดือนปฏิทิน ไม่ใช่รอบบิลของบัตร</div>';
+  }
+  if (hasBiz) {
+    const profit = t.bizIncome - t.bizExpense;
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:' + (names.length ? '12px' : '0') + ';background:var(--purple-bg);border-radius:9px;padding:9px 12px;">' +
+      '<span>🏪 ธุรกิจส่วนตัว: รายได้ ' + billFmt0(t.bizIncome) + ' − ค่าใช้จ่าย ' + billFmt0(t.bizExpense) + '</span>' +
+      '<strong style="color:' + (profit >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + (profit >= 0 ? 'กำไร ' : 'ขาดทุน ') + billFmt0(Math.abs(profit)) + '</strong></div>';
+  }
+  el.innerHTML = html;
 }
 
 function billCssVar(n, fb) {
@@ -6914,7 +6982,7 @@ function billRenderList() {
     if (billState.filter !== 'all' && t.type !== billState.filter) return false;
     if (!q) return true;
     const c = billCat(t.category, t.type);
-    return [t.merchant, t.note, c.label, t.ref].some(x => String(x || '').toLowerCase().includes(q));
+    return [t.merchant, t.note, c.label, t.ref, t.card].some(x => String(x || '').toLowerCase().includes(q));
   }).sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')) || ((b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
   if (!rows.length) {
     el.innerHTML = '<div class="empty">' + (q ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีรายการเดือนนี้ — เริ่มจาก 📷 ถ่ายสลิป หรือ ✍️ กรอกเอง') + '</div>';
@@ -6931,7 +6999,8 @@ function billRenderList() {
     const c = billCat(t.category, t.type);
     const inc = t.type === 'income';
     const foreign = t.currency && t.currency !== 'THB';
-    const sub = [esc(c.label), t.time ? esc(t.time) : '', esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
+    const pay = t.payMethod === 'card' || t.category === 'cc_payment' ? '💳 ' + esc(t.card || 'บัตร') : (t.payMethod && t.payMethod !== 'unknown' ? esc(BILL_PAY[t.payMethod] || '') : '');
+    const sub = [esc(c.label), t.time ? esc(t.time) : '', pay, esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
     html += `<div class="bill-row" onclick="billEdit('${esc(t.id)}')">
       <div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>
       <div class="bill-main"><div class="bill-merchant">${esc(t.merchant || c.label)}${t.note ? ' <span style="color:var(--text3);font-weight:400;">· ' + esc(t.note) + '</span>' : ''}</div><div class="bill-sub">${sub}</div></div>
@@ -6967,9 +7036,24 @@ function billNewDraft(p) {
     currency: cur, fx: cur === 'THB' ? 1 : (Number(p.fx) || 0),
     date: billNormDate(p.date), time: /^\d{1,2}:\d{2}$/.test(p.time || '') ? p.time.padStart(5, '0') : '',
     merchant: String(p.merchant || '').slice(0, 80), ref: String(p.ref || '').slice(0, 80),
-    note: String(p.note || '').slice(0, 120), source: p.source || 'manual', aiRead: !!p.aiRead
+    note: String(p.note || '').slice(0, 120), source: p.source || 'manual', aiRead: !!p.aiRead,
+    payMethod: BILL_PAY[p.payMethod] ? p.payMethod : (cat === 'cc_payment' ? 'transfer' : 'unknown'),
+    card: billMatchCard(p.card)
   };
 }
+// จับคู่ชื่อบัตรที่ AI อ่านได้กับรายชื่อบัตรที่ตั้งไว้ (เช่น "KTC VISA ****1234" → "KTC 1234")
+function billMatchCard(raw) {
+  raw = String(raw || '').trim().slice(0, 40);
+  if (!raw) return '';
+  const norm = x => x.toUpperCase().replace(/[^0-9A-Zก-๙]/g, '');
+  const digits = (raw.match(/\d{4}(?!.*\d)/) || [''])[0];
+  const list = billCards();
+  const hit = list.find(c => norm(c) === norm(raw))
+    || (digits && list.find(c => c.includes(digits)))
+    || list.find(c => norm(raw).includes(norm(c).replace(/\d+/g, '')) && norm(c).replace(/\d+/g, ''));
+  return hit || raw;
+}
+
 // แปลงวันที่ที่ AI อ่านมา: ต้องเป็น YYYY-MM-DD ค.ศ. — ถ้าหลุดเป็น พ.ศ. (ปี > ปีหน้า) ลบ 543 ให้
 function billNormDate(s) {
   const m = String(s || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
@@ -7032,10 +7116,13 @@ function billRenderDrafts() {
   btn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึก ' + n + ' รายการ';
   btn.disabled = !n;
   if (!ds.length) { document.getElementById('billDrafts').innerHTML = '<div class="empty">AI ไม่พบรายการเงินในข้อมูลนี้</div>'; btn.disabled = true; return; }
+  document.getElementById('billCardList').innerHTML = billCards().map(c => `<option value="${esc(c)}">`).join('');
   document.getElementById('billDrafts').innerHTML = ds.map((d, i) => {
     const catOpts = BILL_CATS[d.type].map(c => `<option value="${c.key}" ${c.key === d.category ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('');
     const curs = ['THB', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'HKD', 'GBP', 'KRW'];
     if (!curs.includes(d.currency)) curs.push(d.currency);
+    const showCard = d.payMethod === 'card' || d.category === 'cc_payment';
+    const payOpts = Object.keys(BILL_PAY).map(k => `<option value="${k}" ${k === d.payMethod ? 'selected' : ''}>${BILL_PAY[k]}</option>`).join('');
     const curOpts = curs.map(c => `<option ${c === d.currency ? 'selected' : ''}>${c}</option>`).join('');
     let warn = '';
     if (d.dup === 'ref') warn = `<div class="bill-warn" style="background:var(--red-bg);color:var(--red);">⛔ เลขอ้างอิงนี้บันทึกไปแล้ว — น่าจะเป็นสลิปซ้ำ</div>`;
@@ -7054,7 +7141,9 @@ function billRenderDrafts() {
         <div class="form-group"><label class="form-label">ยอด</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.amount)}" oninput="billDraftSet(${i},'amount',this.value)" style="font-weight:600;font-size:15px;"></div>
         <div class="form-group"><label class="form-label">สกุลเงิน</label><select class="form-select" onchange="billDraftCurrency(${i},this.value)">${curOpts}</select></div>
         ${d.currency !== 'THB' ? `<div class="form-group full"><label class="form-label">อัตรา 1 ${esc(d.currency)} = ? บาท</label><input class="form-input" type="number" step="0.0001" min="0" value="${esc(d.fx || '')}" oninput="billDraftSet(${i},'fx',this.value)"></div>` : ''}
-        <div class="form-group full"><label class="form-label">หมวด</label><select class="form-select" onchange="billDraftSet(${i},'category',this.value)">${catOpts}</select></div>
+        <div class="form-group full"><label class="form-label">หมวด</label><select class="form-select" onchange="billDraftSet(${i},'category',this.value,true)">${catOpts}</select></div>
+        <div class="form-group ${showCard ? '' : 'full'}"><label class="form-label">${d.type === 'income' ? 'รับเงินทาง' : 'จ่ายด้วย'}</label><select class="form-select" onchange="billDraftSet(${i},'payMethod',this.value,true)">${payOpts}</select></div>
+        ${showCard ? `<div class="form-group"><label class="form-label">บัตรใบไหน</label><input class="form-input" list="billCardList" value="${esc(d.card)}" placeholder="เช่น KTC 1234" oninput="billDraftSet(${i},'card',this.value)"></div>` : ''}
         <div class="form-group full"><label class="form-label">${d.type === 'income' ? 'จาก' : 'ร้าน / ผู้รับเงิน'}</label><input class="form-input" value="${esc(d.merchant)}" oninput="billDraftSet(${i},'merchant',this.value)"></div>
         <div class="form-group"><label class="form-label">วันที่</label><input class="form-input" type="date" value="${esc(d.date)}" onchange="billDraftSet(${i},'date',this.value,true)"></div>
         <div class="form-group"><label class="form-label">เวลา</label><input class="form-input" type="time" value="${esc(d.time)}" onchange="billDraftSet(${i},'time',this.value)"></div>
@@ -7072,6 +7161,7 @@ function billDraftSet(i, field, value, rerender) {
   if (!d) return;
   d[field] = value;
   if (field === 'type') d.category = d.type === 'income' ? 'other_in' : 'other';
+  if (field === 'category' && value === 'cc_payment' && d.payMethod === 'unknown') d.payMethod = 'transfer';
   if (field === 'amount' || field === 'fx') {
     billMarkDuplicates();
   }
@@ -7108,7 +7198,9 @@ async function billSaveDrafts() {
         amount: Math.round(Number(d.amount) * 100) / 100, currency: d.currency, fxToThb: fx,
         amountThb: Math.round(Number(d.amount) * fx * 100) / 100,
         merchant: d.merchant.trim(), note: d.note.trim(), ref: d.ref.trim(), refKey,
-        source: d.source, aiRead: !!d.aiRead
+        source: d.source, aiRead: !!d.aiRead,
+        payMethod: d.payMethod || 'unknown',
+        card: (d.payMethod === 'card' || d.category === 'cc_payment') ? (d.card || '').trim() : ''
       };
       if (billState.editingId) {
         if (d.dup === 'ref') { skipped++; continue; }
@@ -7176,9 +7268,11 @@ function billSchema() {
             category: { type: 'STRING', enum: allCats },
             merchant: { type: 'STRING' },
             ref: { type: 'STRING' },
-            note: { type: 'STRING' }
+            note: { type: 'STRING' },
+            payMethod: { type: 'STRING', enum: Object.keys(BILL_PAY) },
+            card: { type: 'STRING', description: 'ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้าย หรือ ""' }
           },
-          required: ['date', 'amount', 'currency', 'type', 'category', 'merchant', 'ref']
+          required: ['date', 'amount', 'currency', 'type', 'category', 'merchant', 'ref', 'payMethod', 'card']
         }
       }
     },
@@ -7197,7 +7291,9 @@ function billRules() {
     '- amount: ตัวเลขบวก ไม่มีคอมมา เป็นยอดสุทธิที่จ่าย/ได้รับจริง (หลังส่วนลด รวม VAT/ค่าบริการ) ไม่ใช่ราคาสินค้าย่อย ไม่ใช่ยอดเงินคงเหลือในบัญชี',
     '- currency: ISO 4217 (฿ หรือ บาท = THB)',
     '- type: expense ถ้าเงินออกจากเจ้าของ, income ถ้าเงินเข้าเจ้าของ' + (owner ? ' — ชื่อเจ้าของบัญชีคือ "' + owner + '" (ถ้าเจ้าของเป็นผู้โอน = expense, เป็นผู้รับ = income)' : '') + '; ไม่แน่ใจให้ใช้ expense',
-    '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest',
+    '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest; โอน/ชำระยอดบัตรเครดิต = cc_payment; ต้นทุน/ค่าใช้จ่ายของกิจการตัวเอง = business',
+    '- payMethod: card ถ้าจ่ายด้วยบัตรเครดิต (เห็น VISA/Mastercard/JCB/เลขบัตร ****), transfer ถ้าเป็นสลิปโอน/สแกน QR พร้อมเพย์, ewallet ถ้าจ่ายผ่าน TrueMoney/ShopeePay/LINE Pay ฯลฯ, cash ถ้าเป็นเงินสด, ไม่ทราบใช้ unknown',
+    '- card: เมื่อ payMethod=card หรือ category=cc_payment ให้ใส่ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้ายถ้ามี' + (billCards().length ? ' — ถ้าตรงกับบัตรของผู้ใช้ ให้ใช้ชื่อนี้ตรงตัว: ' + billCards().join(', ') : '') + '; ไม่ใช่บัตรใช้ ""',
     '- category (income): ' + incDesc,
     '- merchant: ชื่อร้าน/ผู้รับเงิน (expense) หรือผู้โอน/แหล่งเงิน (income) สั้น ๆ',
     '- ref: เลขที่รายการ/เลขอ้างอิง/Transaction ID/เลขที่ใบเสร็จ ที่ระบุเอกสารนี้ได้ ถ้าไม่มีใช้ ""',
@@ -7347,17 +7443,39 @@ function billSubmitText() {
 
 function billSaveOwner(v) {
   localStorage.setItem('folio_bill_owner', String(v || '').trim());
+  billSyncSettings();
   showToast('บันทึกชื่อบัญชีแล้ว');
+}
+function billSaveCards(v) {
+  const list = String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+  localStorage.setItem('folio_bill_cards', list.join(', '));
+  billSyncSettings();
+  billRender();
+  showToast('บันทึกรายชื่อบัตร ' + list.length + ' ใบแล้ว');
+}
+// เก็บชื่อบัญชี/บัตรใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
+function billSyncSettings() {
+  if (window.FB) window.FB.setDoc('settings', 'bill', { owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards() }).catch(() => {});
+}
+async function billLoadSettings() {
+  try {
+    const doc = (await window.FB.getAll('settings')).find(d => d.id === 'bill');
+    if (!doc) return;
+    if (typeof doc.owner === 'string') localStorage.setItem('folio_bill_owner', doc.owner);
+    if (Array.isArray(doc.cards)) localStorage.setItem('folio_bill_cards', doc.cards.join(', '));
+    const page = document.getElementById('page-bills');
+    if (page && page.classList.contains('active')) billRender();
+  } catch (e) {}
 }
 
 // ═══ สำรองข้อมูล ═══
 function billRowsForExport(list) {
   return list.slice().sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).map(t => [
     t.date, t.time || '', t.type === 'income' ? 'รายรับ' : 'รายจ่าย', billCat(t.category, t.type).label,
-    t.merchant || '', t.amount, t.currency || 'THB', billAmtThb(t), BILL_SOURCES[t.source] || t.source || '', t.ref || '', t.note || ''
+    t.merchant || '', t.amount, t.currency || 'THB', billAmtThb(t), BILL_PAY[t.payMethod] || '', t.card || '', BILL_SOURCES[t.source] || t.source || '', t.ref || '', t.note || ''
   ]);
 }
-const BILL_EXPORT_HEADERS = ['วันที่', 'เวลา', 'ประเภท', 'หมวด', 'ร้าน/ผู้รับ', 'ยอด', 'สกุลเงิน', 'ยอด(THB)', 'ช่องทาง', 'เลขอ้างอิง', 'โน้ต'];
+const BILL_EXPORT_HEADERS = ['วันที่', 'เวลา', 'ประเภท', 'หมวด', 'ร้าน/ผู้รับ', 'ยอด', 'สกุลเงิน', 'ยอด(THB)', 'จ่ายด้วย', 'บัตร', 'ช่องทางบันทึก', 'เลขอ้างอิง', 'โน้ต'];
 
 // ใช้ Apps Script webhook เดิม (action=clear_append) — ส่งทีละเดือน แยกแท็บ Bills_YYYY-MM ให้ URL ไม่ยาวเกิน
 async function billBackupSheet() {
