@@ -495,11 +495,48 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
   .card { padding: 18px; }
   .hero-val { font-size: 38px; }
 }
+/* ─── Bill Manager ─── */
+.bill-month-nav { display: flex; align-items: center; gap: 6px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 99px; padding: 3px; }
+.bill-month-nav button { background: none; border: none; color: var(--text2); font-size: 16px; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-family: var(--font); }
+.bill-month-nav button:hover { background: var(--bg); }
+.bill-month-nav span { font-size: 12.5px; font-weight: 500; color: var(--text); min-width: 110px; text-align: center; }
+.bill-add-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: var(--gap); }
+.bill-add-btn { display: flex; align-items: center; justify-content: center; gap: 4px; text-align: center; background: var(--surface); border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px 6px; font-family: var(--font); font-size: 12.5px; font-weight: 500; color: var(--text); cursor: pointer; box-shadow: var(--shadow); }
+.bill-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+.bill-busy { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--accent); background: var(--accent-light); border-radius: 10px; padding: 10px 14px; margin-bottom: var(--gap); }
+.bill-busy .spinner { border-color: rgba(217,80,112,0.25); border-top-color: var(--accent); }
+.bill-chip { font-family: var(--font); font-size: 11px; padding: 3px 10px; border-radius: 99px; border: 0.5px solid var(--border2); background: var(--bg); color: var(--text2); cursor: pointer; font-weight: 400; }
+.bill-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bill-day { font-size: 10.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.4px; margin: 12px 0 4px; display: flex; justify-content: space-between; }
+.bill-day:first-child { margin-top: 0; }
+.bill-row { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 0.5px solid var(--bg2); cursor: pointer; border-radius: 8px; }
+.bill-row:hover { background: var(--bg); }
+.bill-ico { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+.bill-main { flex: 1; min-width: 0; }
+.bill-merchant { font-size: 12.5px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bill-sub { font-size: 10.5px; color: var(--text3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bill-amt { font-size: 13px; font-weight: 600; white-space: nowrap; text-align: right; }
+.bill-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 12px; padding: 4px; }
+.bill-draft { border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: var(--bg); }
+.bill-draft.off { opacity: 0.5; }
+.bill-draft-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bill-draft-grid .full { grid-column: 1 / -1; }
+.bill-draft .form-input, .bill-draft .form-select { background: var(--surface); width: 100%; font-size: 12.5px; padding: 7px 10px; }
+.bill-warn { font-size: 11px; border-radius: 7px; padding: 5px 9px; margin-bottom: 8px; }
+.bill-type-toggle { display: flex; border: 0.5px solid var(--border2); border-radius: 8px; overflow: hidden; }
+.bill-type-toggle button { flex: 1; font-family: var(--font); font-size: 12px; padding: 7px; border: none; background: var(--surface); color: var(--text2); cursor: pointer; }
+.bill-type-toggle button.on-expense { background: var(--red-bg); color: var(--red); font-weight: 600; }
+.bill-type-toggle button.on-income { background: var(--green-bg); color: var(--green); font-weight: 600; }
+.bill-cat-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; }
+.bill-cat-row .bar-track { flex: 1; height: 6px; }
+@media (max-width: 779px) {
+  .bill-add-row { grid-template-columns: 1fr 1fr; }
+}
 </style>
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, setDoc, getDocs, deleteDoc, updateDoc, onSnapshot, serverTimestamp, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, onSnapshot, serverTimestamp, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCwiOy3kd8hPDXH4PN9J4GZ1T2jC9MMsr4",
@@ -537,6 +574,14 @@ window.FB = {
   },
   async setDoc(col, docId, data) {
     await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+  },
+  // สร้างเอกสารด้วย id ที่กำหนดเอง (ไม่ merge) — ใช้กับรายการที่ต้องกันซ้ำด้วยเลขอ้างอิง
+  async put(col, docId, data) {
+    await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, createdAt: serverTimestamp() });
+  },
+  async exists(col, docId) {
+    const snap = await getDoc(doc(db, `users/${UID}/${col}`, docId));
+    return snap.exists();
   },
   async getRecent(col, field, n) {
     const q = query(collection(db, `users/${UID}/${col}`), orderBy(field, 'desc'), limit(n));
@@ -611,6 +656,10 @@ function attachFirebaseListeners() {
   FB.listen('budget_savings', docs => {
     state.budgetSavings = docs; renderBudget();
   });
+  FB.listen('transactions', docs => {
+    state.transactions = docs;
+    if (typeof window.billOnData === 'function') window.billOnData();
+  });
 }
 
 // <script type="module"> มี scope ของตัวเอง ฟังก์ชันด้านบนจึงไม่ได้อยู่บน global
@@ -638,6 +687,7 @@ if (window._folioReady) {
       <button class="nav-btn" data-page="trading" onclick="showPage('trading')">ซื้อขาย</button>
       <button class="nav-btn" data-page="benchmark" onclick="showPage('benchmark')">📈 Benchmark</button>
       <button class="nav-btn" data-page="budget" onclick="showPage('budget')">งบประมาณ</button>
+      <button class="nav-btn" data-page="bills" onclick="showPage('bills')">🧾 บิล</button>
       <button class="nav-btn" data-page="settings" onclick="showPage('settings')">⚙️ ตั้งค่า</button>
     </nav>
     <div class="topbar-right">
@@ -1074,6 +1124,104 @@ if (window._folioReady) {
     </div>
   </main>
 
+  <!-- ─────────── BILL MANAGER PAGE ─────────── -->
+  <main class="page" id="page-bills">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div class="page-greeting">Bill Manager · รายรับ-รายจ่ายจริง</div>
+        <div class="page-title">🧾 บันทึกบิล</div>
+      </div>
+      <div class="bill-month-nav">
+        <button onclick="billShiftMonth(-1)" aria-label="เดือนก่อน">‹</button>
+        <span id="billMonthLabel">—</span>
+        <button onclick="billShiftMonth(1)" aria-label="เดือนถัดไป">›</button>
+      </div>
+    </div>
+
+    <!-- ช่องทางบันทึก -->
+    <div class="bill-add-row">
+      <label class="bill-add-btn">📷 ถ่ายสลิป
+        <input type="file" accept="image/*" capture="environment" hidden onchange="billOnFiles(this, 'camera')">
+      </label>
+      <label class="bill-add-btn">🖼️ อัปโหลดรูป
+        <input type="file" accept="image/*" multiple hidden onchange="billOnFiles(this, 'upload')">
+      </label>
+      <button class="bill-add-btn" onclick="billOpenText()">🎙️ พิมพ์/พูด</button>
+      <button class="bill-add-btn" onclick="billOpenManual()">✍️ กรอกเอง</button>
+    </div>
+    <div id="billBusy" class="bill-busy" style="display:none;"><div class="spinner" style="display:block;"></div><span id="billBusyText">กำลังอ่านบิล...</span></div>
+
+    <div class="metric-row" id="billMetrics"></div>
+
+    <!-- เงินเหลือจริง ↔ DCA -->
+    <div class="card" style="margin-bottom:var(--gap);" id="billCashflowCard">
+      <div class="card-title">💰 เงินเหลือจริง ↔ งบ DCA</div>
+      <div id="billCashflow"></div>
+    </div>
+
+    <div class="budget-grid" style="margin-bottom:var(--gap);">
+      <div class="card">
+        <div class="card-title">แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;">รายจ่ายเดือนนี้</span></div>
+        <div style="position:relative;height:180px;" id="billCatChartWrap"><canvas id="billCatChart"></canvas></div>
+        <div id="billCatList" style="margin-top:12px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">แนวโน้ม 6 เดือน</div>
+        <div style="position:relative;height:240px;"><canvas id="billTrendChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- บัตรเครดิต + ธุรกิจส่วนตัว -->
+    <div class="card" style="margin-bottom:var(--gap);display:none;" id="billCardsCard">
+      <div class="card-title">💳 บัตรเครดิต & 🏪 ธุรกิจส่วนตัว</div>
+      <div id="billCards"></div>
+    </div>
+
+    <!-- รายการ -->
+    <div class="card" style="margin-bottom:var(--gap);">
+      <div class="card-title">
+        รายการเดือนนี้
+        <span style="display:flex;gap:4px;" id="billFilterChips">
+          <button class="bill-chip active" data-f="all" onclick="billSetFilter('all')">ทั้งหมด</button>
+          <button class="bill-chip" data-f="expense" onclick="billSetFilter('expense')">จ่าย</button>
+          <button class="bill-chip" data-f="income" onclick="billSetFilter('income')">รับ</button>
+        </span>
+      </div>
+      <input class="form-input" id="billSearch" placeholder="ค้นหาร้าน / หมวด / โน้ต" oninput="billRenderList()" style="width:100%;margin-bottom:10px;">
+      <div id="billList"></div>
+    </div>
+
+    <!-- AI วิเคราะห์ -->
+    <div class="card" style="margin-bottom:var(--gap);">
+      <div class="card-title">🤖 AI วิเคราะห์การใช้จ่าย + การลงทุน
+        <button class="refresh-btn" id="billAiBtn" onclick="billRunAi()" style="font-size:11px;padding:6px 14px;"><div class="spinner" id="billAiSpinner"></div>วิเคราะห์</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);">Gemini ดูรายรับ-รายจ่ายจริง 3 เดือนล่าสุด คู่กับแผน DCA และพอร์ต แล้วแนะนำว่าลงทุนเพิ่ม/ลดได้เท่าไร</div>
+      <div id="billAiResult" style="display:none;font-size:12px;line-height:1.8;margin-top:10px;"></div>
+    </div>
+
+    <!-- สำรองข้อมูล + ตั้งค่า -->
+    <div class="card">
+      <div class="card-title">💾 สำรองข้อมูล & ตั้งค่า</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งเดือนนี้ไป Google Sheet</button>
+        <button class="btn-ghost" style="font-size:12px;" onclick="billExportCsv()">⬇️ ดาวน์โหลด CSV ทั้งหมด</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ชื่อบัญชีของคุณ (ช่วย AI แยกว่าเงินเข้าหรือออก)</label>
+        <input class="form-input" id="billOwnerNames" placeholder="เช่น ณัฐพัฒน์, NATTAPAT" onchange="billSaveOwner(this.value)">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label class="form-label">บัตรเครดิตของคุณ (คั่นด้วย , — ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
+        <input class="form-input" id="billCardNames" placeholder="เช่น KTC 1234, UOB 5678, SCB M 9012" onchange="billSaveCards(this.value)">
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
+        🔒 รูปสลิปถูกส่งไปให้ Gemini อ่าน (ไม่ได้ประมวลผลในเครื่อง) และ<strong>ไม่ถูกเก็บ</strong> — Firestore เก็บเฉพาะข้อมูลที่อ่านได้ (วันที่ ยอด หมวด ร้าน เลขอ้างอิง)<br>
+        📲 แชร์ screenshot เข้า Folio ได้จากเมนู Share บน Android (ต้องติดตั้ง Folio เป็นแอปก่อน)
+      </div>
+    </div>
+  </main>
+
   <!-- ─────────── SETTINGS PAGE ─────────── -->
   <main class="page" id="page-settings">
     <div class="page-header">
@@ -1204,6 +1352,36 @@ service cloud.firestore {
   </main>
 
 </div><!-- end .app -->
+
+<!-- ─── Bill: ยืนยันก่อนบันทึก ─── -->
+<div class="modal-overlay" id="bill-confirm-modal">
+  <div class="modal" style="width:520px;">
+    <h3 id="billConfirmTitle">ตรวจสอบก่อนบันทึก</h3>
+    <div id="billConfirmNote" style="font-size:11px;color:var(--text3);margin:-8px 0 12px;"></div>
+    <div id="billDrafts"></div>
+    <datalist id="billCardList"></datalist>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="billCloseConfirm()">ยกเลิก</button>
+      <button class="btn-primary" id="billSaveBtn" onclick="billSaveDrafts()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Bill: พิมพ์หรือพูด ─── -->
+<div class="modal-overlay" id="bill-text-modal">
+  <div class="modal">
+    <h3>🎙️ พิมพ์หรือพูดรายการ</h3>
+    <div class="modal-form">
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;">เช่น "กาแฟ 65 บาท เมื่อวาน", "เงินเดือนเข้า 45,000", "ค่าไฟ 1,240 กับค่าเน็ต 599" — AI แยกเป็นรายการให้ แล้วให้ตรวจก่อนบันทึก</div>
+      <textarea class="form-input" id="billTextInput" rows="4" style="resize:vertical;line-height:1.6;" placeholder="พิมพ์ หรือกดไมค์แล้วพูด"></textarea>
+      <button class="btn-ghost" id="billMicBtn" onclick="billToggleMic()" style="flex:none;">🎤 กดเพื่อพูด</button>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeModal('bill-text-modal')">ยกเลิก</button>
+        <button class="btn-primary" onclick="billSubmitText()">ให้ AI อ่าน</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ─── Expense Modal ─── -->
 <div class="modal-overlay" id="expense-modal">
@@ -1567,6 +1745,7 @@ const state = {
   budgetIncome: parseFloat(localStorage.getItem('folio_budgetIncome') || '0') || 0,
   budgetExpenses: [],
   budgetSavings: [],
+  transactions: [],     // Bill Manager — users/nattapat/transactions
   sheetInputs: {},
 };
 
@@ -1974,6 +2153,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-btn').forEach(b => {
     if (b.dataset.page === id) b.classList.add('active');
   });
+  if (id === 'bills' && typeof billRender === 'function') billRender(); // Chart.js ต้องวาดตอน canvas มองเห็นแล้ว
 }
 
 // ─── Autocomplete helpers ───
@@ -3733,6 +3913,15 @@ async function p17bRun() {
     trajectoryLines.forEach(function(l){ portLines.push(l); });
   }
 
+  // กระแสเงินสดจริงจาก Bill Manager — ให้ AI รู้ว่างบนี้ยั่งยืนเทียบกับเงินเหลือจริงไหม
+  if (typeof billCashflowContext === 'function') {
+    var billCtx = billCashflowContext();
+    if (billCtx) {
+      portLines.push('');
+      portLines.push('กระแสเงินสดจริงจาก Bill Manager (ใช้ประเมินว่างบลงทุนนี้ยั่งยืนไหม):');
+      portLines.push(billCtx);
+    }
+  }
   var portCtx = portLines.join('\n');
 
   var analysisLines = [];
@@ -5500,15 +5689,19 @@ function initPhase12() {
   const dcaTotal = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
   document.getElementById('p12Dca').textContent = '฿' + dcaTotal.toLocaleString();
 
-  // Expenses this month
-  const monthExpenses = state.budgetExpenses.reduce((s,e) => s + Number(e.amount||0), 0);
+  // Expenses this month — มีรายการจาก 🧾 บิล เดือนนี้ → ใช้รายจ่ายจริง, ไม่มี → ใช้รายการงบประมาณแบบเดิม
+  const billM = typeof billMonthTotals === 'function' ? billMonthTotals(isoFromDate(now).slice(0, 7)) : null;
+  const useBill = !!(billM && (billM.income > 0 || billM.consumption > 0));
+  const monthExpenses = useBill ? billM.consumption : state.budgetExpenses.reduce((s,e) => s + Number(e.amount||0), 0);
   document.getElementById('p12Expense').textContent = '฿' + Math.round(monthExpenses).toLocaleString();
 
-  // Save rate = DCA / (DCA + expenses)
+  // Save rate: มีรายรับจริงจากบิล → (รายรับ − รายจ่าย) / รายรับ; ไม่มี → DCA / (DCA + expenses) แบบเดิม
   const total = dcaTotal + monthExpenses;
-  const saveRate = total > 0 ? ((dcaTotal / total) * 100).toFixed(0) : '--';
+  const saveRate = useBill && billM.income > 0 ? billM.savingsRate.toFixed(0)
+    : total > 0 ? ((dcaTotal / total) * 100).toFixed(0) : '--';
   const srEl = document.getElementById('p12SaveRate');
-  srEl.textContent = total > 0 ? saveRate + '%' : '--';
+  srEl.textContent = saveRate !== '--' ? saveRate + '%' : '--';
+  srEl.title = useBill && billM.income > 0 ? 'จากรายรับ-รายจ่ายจริงใน 🧾 บิล' : 'DCA ÷ (DCA + รายจ่าย)';
   srEl.style.color = saveRate >= 20 ? 'var(--green)' : saveRate >= 10 ? 'var(--amber)' : 'var(--red)';
 
   // Top/Bottom performers from holdings
@@ -5566,6 +5759,10 @@ async function p12RunReview() {
   promptLines2.push('- DCA รวม: ฿' + dcaTotal.toLocaleString() + '/เดือน');
   promptLines2.push('- รายจ่าย: ฿' + Math.round(monthExpenses).toLocaleString());
   promptLines2.push('- อัตราออม: ' + saveRate + '%');
+  if (typeof billCashflowContext === 'function') {
+    const billCtx = billCashflowContext();
+    if (billCtx) { promptLines2.push('- กระแสเงินสดจริงจาก Bill Manager:'); promptLines2.push(billCtx); }
+  }
   promptLines2.push('- ดีสุดวันนี้: ' + (top ? (top.name||top.ticker) + ' ' + (top.change||0).toFixed(1) + '%' : '--'));
   promptLines2.push('- แย่สุดวันนี้: ' + (bot ? (bot.name||bot.ticker) + ' ' + (bot.change||0).toFixed(1) + '%' : '--'));
   if (yoy) { promptLines2.push('- YoY ปัจจุบัน: ' + yoy.currentYoy.toFixed(1) + '% (เป้า ' + yoyTargetPct().toFixed(0) + '%, gap ' + yoy.gapPct.toFixed(1) + '%)'); }
@@ -6440,6 +6637,940 @@ function mpSaveFromImage() {
     showToast('ไม่มีรายการที่บันทึกได้ -- เลือก holding ให้ครบก่อน');
   }
 }
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// Bill Manager — บันทึกรายรับ/รายจ่ายจริง (users/nattapat/transactions)
+// เก็บเฉพาะข้อมูลที่อ่านได้ ไม่เก็บรูป (Firestore จำกัดเอกสารละ 1MB)
+// ═══════════════════════════════════════════════════════════════════
+
+// key ภาษาอังกฤษเก็บลง Firestore (ไม่เปลี่ยน) — label/icon ใช้แสดงผลเท่านั้น
+const BILL_CATS = {
+  expense: [
+    { key: 'food',          label: 'อาหาร/เครื่องดื่ม',  icon: '🍜', color: '#F59E0B' },
+    { key: 'transport',     label: 'เดินทาง',            icon: '🚗', color: '#2563EB' },
+    { key: 'shopping',      label: 'ช้อปปิ้ง',            icon: '🛍️', color: '#D95070' },
+    { key: 'bills',         label: 'บิล/สาธารณูปโภค',     icon: '💡', color: '#0891B2' },
+    { key: 'housing',       label: 'ที่พัก',              icon: '🏠', color: '#7C3AED' },
+    { key: 'health',        label: 'สุขภาพ',              icon: '💊', color: '#16A34A' },
+    { key: 'entertainment', label: 'บันเทิง',             icon: '🎬', color: '#C2410C' },
+    { key: 'education',     label: 'การศึกษา',            icon: '📚', color: '#0F766E' },
+    { key: 'family',        label: 'ครอบครัว/ให้',        icon: '🎁', color: '#BE185D' },
+    { key: 'insurance',     label: 'ประกัน/ภาษี',         icon: '🛡️', color: '#475569' },
+    { key: 'transfer',      label: 'โอนเงินทั่วไป',       icon: '🔁', color: '#94A3B8' },
+    { key: 'business',      label: 'ธุรกิจส่วนตัว',        icon: '🏪', color: '#9333EA' },
+    { key: 'invest',        label: 'ลงทุน/ออม',           icon: '📈', color: '#15803D' },
+    { key: 'cc_payment',    label: 'จ่ายบิลบัตรเครดิต',   icon: '💳', color: '#64748B' },
+    { key: 'other',         label: 'อื่น ๆ',              icon: '📦', color: '#AAB0BB' }
+  ],
+  income: [
+    { key: 'salary',   label: 'เงินเดือน',        icon: '💼', color: '#16A34A' },
+    { key: 'bonus',    label: 'โบนัส',            icon: '🎉', color: '#15803D' },
+    { key: 'business_in', label: 'ธุรกิจส่วนตัว',   icon: '🏪', color: '#9333EA' },
+    { key: 'side',     label: 'รายได้เสริม',      icon: '🧑‍💻', color: '#0891B2' },
+    { key: 'dividend', label: 'ปันผล/ดอกเบี้ย',   icon: '🪙', color: '#B45309' },
+    { key: 'refund',   label: 'คืนเงิน',          icon: '↩️', color: '#7C3AED' },
+    { key: 'other_in', label: 'อื่น ๆ',           icon: '📥', color: '#AAB0BB' }
+  ]
+};
+// ไม่นับเป็นรายจ่าย/ไม่กระทบอัตราออม:
+// 'invest' = เงินที่โอนไปลงทุน/ออมเอง
+// 'cc_payment' = โอนจ่ายบิลบัตรเครดิต — ของที่รูดบัตรถูกนับเป็นรายจ่ายไปแล้วตอนรูด ถ้านับตอนจ่ายบิลอีกจะซ้ำ
+const BILL_NON_SPEND = ['invest', 'cc_payment'];
+const BILL_PAY = { unknown: 'ไม่ระบุ', cash: '💵 เงินสด', transfer: '🏦 โอน/QR', card: '💳 บัตรเครดิต', ewallet: '📱 e-Wallet' };
+// รายชื่อบัตรของผู้ใช้ (ช่วย AI จับคู่ชื่อบัตร + ใช้เป็นตัวเลือกในฟอร์ม)
+function billCards() {
+  return (localStorage.getItem('folio_bill_cards') || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+const BILL_SOURCES = { camera: '📷 ถ่ายรูป', upload: '🖼️ อัปโหลด', share: '📲 แชร์', text: '⌨️ พิมพ์', voice: '🎙️ พูด', manual: '✍️ กรอกเอง' };
+
+const billState = {
+  month: todayISO().slice(0, 7),
+  filter: 'all',
+  drafts: [],
+  editingId: null,
+  catChart: null,
+  trendChart: null,
+  usedMic: false
+};
+
+function billCat(key, type) {
+  const list = type ? BILL_CATS[type] : BILL_CATS.expense.concat(BILL_CATS.income);
+  return list.find(c => c.key === key) || (type === 'income' ? BILL_CATS.income[BILL_CATS.income.length - 1] : BILL_CATS.expense[BILL_CATS.expense.length - 1]);
+}
+function billFmt(v) { return '฿' + Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+function billFmt0(v) { return '฿' + Math.round(v || 0).toLocaleString(); }
+function billAmtThb(t) { return typeof t.amountThb === 'number' ? t.amountThb : (Number(t.amount) || 0) * (Number(t.fxToThb) || 1); }
+// ตัดอักขระพิเศษออกจากเลขอ้างอิงสลิปให้เทียบกันได้ (และใช้เป็น document id ได้)
+function billRefKey(ref) { return String(ref || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 120); }
+function billMonthLabel(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+}
+function billAddMonths(ym, n) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+// ─── ยอดรวมต่อเดือน (จุดเดียว ทุกหน้าใช้ร่วมกัน) ───
+function billMonthTotals(ym) {
+  const r = { income: 0, consumption: 0, invest: 0, ccPaid: 0, count: 0, byCat: {}, bizIncome: 0, bizExpense: 0, cards: {} };
+  (state.transactions || []).forEach(t => {
+    if (!t.date || t.date.slice(0, 7) !== ym) return;
+    const v = billAmtThb(t);
+    r.count++;
+    if (t.type === 'income') {
+      r.income += v;
+      if (t.category === 'business_in') r.bizIncome += v;
+      return;
+    }
+    const cardName = (t.card || '').trim() || 'ไม่ระบุบัตร';
+    if (t.category === 'cc_payment') {
+      r.ccPaid += v;
+      (r.cards[cardName] = r.cards[cardName] || { spent: 0, paid: 0 }).paid += v;
+      return;
+    }
+    if (BILL_NON_SPEND.includes(t.category)) { r.invest += v; return; }
+    if (t.payMethod === 'card') (r.cards[cardName] = r.cards[cardName] || { spent: 0, paid: 0 }).spent += v;
+    if (t.category === 'business') r.bizExpense += v;
+    r.consumption += v;
+    r.byCat[t.category] = (r.byCat[t.category] || 0) + v;
+  });
+  r.surplus = r.income - r.consumption;           // เงินเหลือจริง (ก่อนหักเงินลงทุน)
+  r.savingsRate = r.income > 0 ? r.surplus / r.income * 100 : null;
+  return r;
+}
+
+// แผน DCA ต่อเดือน — ปรับตามความถี่ (รายสัปดาห์ = ×52/12, ทุก 2 สัปดาห์ = ×26/12)
+function billDcaMonthly() {
+  return (state.dcaSchedules || []).reduce((s, d) => {
+    const a = Number(d.amount) || 0;
+    const mult = (d.freq === 'รายสัปดาห์' || d.freq === 'weekly') ? 52 / 12
+      : (d.freq === 'ทุก 2 สัปดาห์' || d.freq === 'biweekly') ? 26 / 12 : 1;
+    return s + a * mult;
+  }, 0);
+}
+
+// เฉลี่ยเงินเหลือจากเดือนที่จบแล้วและมีข้อมูล (สูงสุด 3 เดือนก่อนเดือนปัจจุบัน)
+function billAvgSurplus() {
+  const cur = todayISO().slice(0, 7);
+  const months = [];
+  for (let i = 1; i <= 3; i++) {
+    const ym = billAddMonths(cur, -i);
+    const t = billMonthTotals(ym);
+    if (t.income > 0) months.push({ ym, ...t });
+  }
+  if (!months.length) return null;
+  const avg = k => months.reduce((s, m) => s + m[k], 0) / months.length;
+  return { months: months.length, surplus: avg('surplus'), income: avg('income'), consumption: avg('consumption'), invest: avg('invest') };
+}
+
+// ─── ข้อความสรุปกระแสเงินสดสำหรับ prompt ของ Gemini (ใช้ใน AI Fund Advisor / รีวิวเดือน) ───
+function billCashflowContext() {
+  if (!state.transactions || !state.transactions.length) return '';
+  const cur = todayISO().slice(0, 7);
+  const lines = [];
+  const catSum = {};
+  let catMonths = 0;
+  for (let i = 3; i >= 0; i--) {
+    const ym = billAddMonths(cur, -i);
+    const t = billMonthTotals(ym);
+    if (!t.count) continue;
+    lines.push('- ' + ym + (i === 0 ? ' (เดือนนี้ ยังไม่จบ)' : '') + ': รายรับ ' + billFmt0(t.income) + ' | ใช้จ่าย ' + billFmt0(t.consumption) +
+      ' | โอนไปลงทุน/ออม ' + billFmt0(t.invest) + ' | เงินเหลือ ' + billFmt0(t.surplus) +
+      ' | อัตราออม ' + (t.savingsRate === null ? 'n/a' : t.savingsRate.toFixed(0) + '%'));
+    if (i > 0) { catMonths++; Object.keys(t.byCat).forEach(k => { catSum[k] = (catSum[k] || 0) + t.byCat[k]; }); }
+  }
+  if (!lines.length) return '';
+  const top = Object.keys(catSum).sort((a, b) => catSum[b] - catSum[a]).slice(0, 4)
+    .map(k => billCat(k, 'expense').label + ' ' + billFmt0(catSum[k] / catMonths) + '/เดือน');
+  if (top.length) lines.push('- หมวดใช้จ่ายสูงสุด (เฉลี่ยเดือนที่จบแล้ว): ' + top.join(', '));
+  const avg = billAvgSurplus();
+  const dca = billDcaMonthly();
+  const now = billMonthTotals(cur);
+  const cardLines = Object.keys(now.cards).map(k => k + ' รูด ' + billFmt0(now.cards[k].spent) + ' / จ่ายบิล ' + billFmt0(now.cards[k].paid));
+  if (cardLines.length) lines.push('- บัตรเครดิตเดือนนี้: ' + cardLines.join(', '));
+  if (now.bizIncome || now.bizExpense) lines.push('- ธุรกิจส่วนตัวเดือนนี้: รายได้ ' + billFmt0(now.bizIncome) + ' | ค่าใช้จ่าย ' + billFmt0(now.bizExpense) + ' | กำไร ' + billFmt0(now.bizIncome - now.bizExpense));
+  if (avg) lines.push('- เงินเหลือเฉลี่ย ' + avg.months + ' เดือน: ' + billFmt0(avg.surplus) + '/เดือน เทียบแผน DCA ' + billFmt0(dca) + '/เดือน');
+  return lines.join('\n');
+}
+
+// ═══ Render ═══
+function billOnData() {
+  if (!window._billLoaded && window.FB) billLoadSettings();
+  window._billLoaded = true;
+  if (typeof initPhase12 === 'function') initPhase12();
+  const page = document.getElementById('page-bills');
+  if (page && page.classList.contains('active')) billRender();
+}
+window.billOnData = billOnData;
+
+function billShiftMonth(n) { billState.month = billAddMonths(billState.month, n); billRender(); }
+function billSetFilter(f) {
+  billState.filter = f;
+  document.querySelectorAll('#billFilterChips .bill-chip').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+  billRenderList();
+}
+
+function billRender() {
+  const ym = billState.month;
+  document.getElementById('billMonthLabel').textContent = billMonthLabel(ym);
+  const ownerEl = document.getElementById('billOwnerNames');
+  if (ownerEl && document.activeElement !== ownerEl) ownerEl.value = localStorage.getItem('folio_bill_owner') || '';
+  const cardsEl = document.getElementById('billCardNames');
+  if (cardsEl && document.activeElement !== cardsEl) cardsEl.value = billCards().join(', ');
+  const t = billMonthTotals(ym);
+  const sr = t.savingsRate;
+  document.getElementById('billMetrics').innerHTML = `
+    <div class="metric"><div class="metric-label">รายรับ</div><div class="metric-value pos">${billFmt0(t.income)}</div><div class="metric-sub">${billMonthLabel(ym)}</div></div>
+    <div class="metric"><div class="metric-label">รายจ่าย</div><div class="metric-value neg">${billFmt0(t.consumption)}</div><div class="metric-sub">ไม่รวมเงินลงทุน/ออม</div></div>
+    <div class="metric"><div class="metric-label">เงินเหลือ</div><div class="metric-value ${t.surplus >= 0 ? 'pos' : 'neg'}">${billFmt0(t.surplus)}</div><div class="metric-sub">รายรับ − รายจ่าย</div></div>
+    <div class="metric"><div class="metric-label">อัตราออม</div><div class="metric-value" style="color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</div><div class="metric-sub">${sr === null ? 'ยังไม่มีรายรับเดือนนี้' : 'เงินเหลือ ÷ รายรับ'}</div></div>`;
+  billRenderCashflow(t);
+  billRenderCategories(t);
+  billRenderCards(t);
+  billRenderTrend();
+  billRenderList();
+}
+
+function billRenderCashflow(t) {
+  const el = document.getElementById('billCashflow');
+  const dca = billDcaMonthly();
+  const avg = billAvgSurplus();
+  const isCurrent = billState.month === todayISO().slice(0, 7);
+  // ฐานที่ใช้แนะนำงบ: เฉลี่ยเดือนที่จบแล้ว → ถ้ายังไม่มี ใช้เดือนที่เลือก
+  const base = avg ? avg.surplus : t.surplus;
+  const baseLabel = avg ? 'เฉลี่ย ' + avg.months + ' เดือนที่จบแล้ว' : (isCurrent ? 'เดือนนี้ (ยังไม่จบเดือน)' : billMonthLabel(billState.month));
+  if (!t.count && !avg) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3);">บันทึกรายรับและรายจ่ายสักเดือน แล้ว Folio จะคำนวณเงินเหลือจริงเทียบกับแผน DCA ให้</div>';
+    return;
+  }
+  const gap = base - dca;
+  const suggest = Math.max(0, Math.floor(base / 500) * 500);
+  const row = (k, v, c) => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--bg2);"><span style="color:var(--text2);">${k}</span><strong style="color:${c || 'var(--text)'};">${v}</strong></div>`;
+  let html = '';
+  html += row('เงินเหลือจริง (' + esc(baseLabel) + ')', billFmt0(base), base >= 0 ? 'var(--green)' : 'var(--red)');
+  html += row('แผน DCA ต่อเดือน (ปรับตามความถี่)', billFmt0(dca));
+  html += row('โอนไปลงทุน/ออมจริง (จากสลิป' + (avg ? ' เฉลี่ย' : '') + ')', billFmt0(avg ? avg.invest : t.invest));
+  const ok = gap >= 0;
+  html += `<div style="font-size:12px;border-radius:9px;padding:9px 12px;margin-top:10px;background:${ok ? 'var(--green-bg)' : 'var(--amber-bg)'};color:${ok ? 'var(--green)' : 'var(--amber)'};">` +
+    (dca <= 0 ? 'ยังไม่มีแผน DCA — เงินเหลือจริงลงทุนได้ประมาณ ' + billFmt0(suggest) + '/เดือน'
+      : ok ? '✅ แผน DCA อยู่ในงบ — ยังเหลือให้ลงทุนเพิ่ม/เก็บฉุกเฉินได้อีก ' + billFmt0(gap) + '/เดือน'
+      : '⚠️ แผน DCA สูงกว่าเงินเหลือจริง ' + billFmt0(-gap) + '/เดือน — อาจต้องลด DCA หรือลดรายจ่าย') + '</div>';
+  if (suggest > 0) {
+    html += `<button class="btn-ghost" style="width:100%;margin-top:10px;font-size:12px;" onclick="billUseAsDcaBudget(${suggest})">💡 ใช้ ${billFmt0(suggest)} เป็นงบใน AI Fund Advisor</button>`;
+  }
+  el.innerHTML = html;
+}
+
+function billUseAsDcaBudget(amount) {
+  showPage('overview');
+  const body = document.getElementById('aiSectionBody');
+  if (body && !body.classList.contains('open') && typeof toggleAiSection === 'function') toggleAiSection();
+  if (typeof p17bSetBudget === 'function') p17bSetBudget(amount);
+  const card = document.getElementById('p17bCard');
+  if (card) setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  showToast('ตั้งงบ ' + billFmt0(amount) + ' จากเงินเหลือจริงแล้ว — กด 🤖 แนะนำเลย');
+}
+
+// บัตรเครดิตแยกใบ + ธุรกิจส่วนตัว (นับตามเดือนปฏิทิน ไม่ใช่รอบบิลของบัตร)
+function billRenderCards(t) {
+  const el = document.getElementById('billCards');
+  const card = document.getElementById('billCardsCard');
+  if (!el) return;
+  const names = Object.keys(t.cards).sort((a, b) => t.cards[b].spent - t.cards[a].spent);
+  const hasBiz = t.bizIncome > 0 || t.bizExpense > 0;
+  card.style.display = names.length || hasBiz ? '' : 'none';
+  let html = '';
+  if (names.length) {
+    const th = 'font-size:10px;color:var(--text3);font-weight:600;padding:5px 6px;text-align:right;border-bottom:0.5px solid var(--border);';
+    const td = 'font-size:12px;padding:6px;text-align:right;border-bottom:0.5px solid var(--bg2);white-space:nowrap;';
+    html += '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + th + 'text-align:left;">บัตร</th><th style="' + th + '">รูดเดือนนี้</th><th style="' + th + '">จ่ายบิลแล้ว</th></tr>';
+    names.forEach(n => {
+      html += '<tr><td style="' + td + 'text-align:left;font-weight:500;">💳 ' + esc(n) + '</td><td style="' + td + '">' + billFmt0(t.cards[n].spent) + '</td><td style="' + td + 'color:var(--text2);">' + billFmt0(t.cards[n].paid) + '</td></tr>';
+    });
+    html += '</table><div style="font-size:10.5px;color:var(--text3);margin-top:6px;line-height:1.6;">ยอดรูดนับเป็นรายจ่ายตอนรูด · ยอดจ่ายบิลบัตรไม่นับซ้ำ · นับตามเดือนปฏิทิน ไม่ใช่รอบบิลของบัตร</div>';
+  }
+  if (hasBiz) {
+    const profit = t.bizIncome - t.bizExpense;
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:' + (names.length ? '12px' : '0') + ';background:var(--purple-bg);border-radius:9px;padding:9px 12px;">' +
+      '<span>🏪 ธุรกิจส่วนตัว: รายได้ ' + billFmt0(t.bizIncome) + ' − ค่าใช้จ่าย ' + billFmt0(t.bizExpense) + '</span>' +
+      '<strong style="color:' + (profit >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + (profit >= 0 ? 'กำไร ' : 'ขาดทุน ') + billFmt0(Math.abs(profit)) + '</strong></div>';
+  }
+  el.innerHTML = html;
+}
+
+function billCssVar(n, fb) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  return v || fb;
+}
+
+function billRenderCategories(t) {
+  const keys = Object.keys(t.byCat).sort((a, b) => t.byCat[b] - t.byCat[a]);
+  const listEl = document.getElementById('billCatList');
+  const wrap = document.getElementById('billCatChartWrap');
+  if (billState.catChart) { billState.catChart.destroy(); billState.catChart = null; }
+  if (!keys.length) {
+    wrap.style.display = 'none';
+    listEl.innerHTML = '<div class="empty">ยังไม่มีรายจ่ายเดือนนี้</div>';
+    return;
+  }
+  wrap.style.display = '';
+  const total = t.consumption;
+  listEl.innerHTML = keys.map(k => {
+    const c = billCat(k, 'expense');
+    const pct = total > 0 ? t.byCat[k] / total * 100 : 0;
+    return `<div class="bill-cat-row"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div></div>
+      <span style="width:92px;text-align:right;font-weight:500;">${billFmt0(t.byCat[k])}</span>
+      <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;
+  }).join('');
+  if (typeof Chart === 'undefined' || !document.getElementById('page-bills').classList.contains('active')) return;
+  billState.catChart = new Chart(document.getElementById('billCatChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: keys.map(k => billCat(k, 'expense').label),
+      datasets: [{ data: keys.map(k => Math.round(t.byCat[k])), backgroundColor: keys.map(k => billCat(k, 'expense').color), borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => c.label + ': ' + billFmt0(c.parsed) } }
+      }
+    }
+  });
+}
+
+function billRenderTrend() {
+  if (billState.trendChart) { billState.trendChart.destroy(); billState.trendChart = null; }
+  if (typeof Chart === 'undefined' || !document.getElementById('page-bills').classList.contains('active')) return;
+  const months = [];
+  for (let i = 5; i >= 0; i--) months.push(billAddMonths(billState.month, -i));
+  const data = months.map(billMonthTotals);
+  const textColor = billCssVar('--text3', '#9E9AAA');
+  billState.trendChart = new Chart(document.getElementById('billTrendChart').getContext('2d'), {
+    data: {
+      labels: months.map(ym => { const [y, m] = ym.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('th-TH', { month: 'short' }); }),
+      datasets: [
+        { type: 'bar', label: 'รายรับ', data: data.map(d => Math.round(d.income)), backgroundColor: '#16A34A', borderRadius: 4, order: 2 },
+        { type: 'bar', label: 'รายจ่าย', data: data.map(d => Math.round(d.consumption)), backgroundColor: '#D95070', borderRadius: 4, order: 2 },
+        { type: 'line', label: 'เงินเหลือ', data: data.map(d => Math.round(d.surplus)), borderColor: '#2563EB', backgroundColor: '#2563EB', tension: 0.3, pointRadius: 3, borderWidth: 2, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 12, padding: 10, color: textColor } },
+        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + billFmt0(c.parsed.y) } }
+      },
+      scales: {
+        y: { ticks: { font: { size: 10 }, color: textColor, callback: v => Math.abs(v) >= 1000 ? (v / 1000) + 'k' : v }, grid: { color: 'rgba(128,128,128,0.12)' } },
+        x: { ticks: { font: { size: 10 }, color: textColor }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function billRenderList() {
+  const el = document.getElementById('billList');
+  if (!el) return;
+  const q = (document.getElementById('billSearch').value || '').trim().toLowerCase();
+  const rows = (state.transactions || []).filter(t => {
+    if (!t.date || t.date.slice(0, 7) !== billState.month) return false;
+    if (billState.filter !== 'all' && t.type !== billState.filter) return false;
+    if (!q) return true;
+    const c = billCat(t.category, t.type);
+    return [t.merchant, t.note, c.label, t.ref, t.card].some(x => String(x || '').toLowerCase().includes(q));
+  }).sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')) || ((b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty">' + (q ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีรายการเดือนนี้ — เริ่มจาก 📷 ถ่ายสลิป หรือ ✍️ กรอกเอง') + '</div>';
+    return;
+  }
+  let html = '', lastDate = '';
+  rows.forEach(t => {
+    if (t.date !== lastDate) {
+      lastDate = t.date;
+      const dayNet = rows.filter(r => r.date === t.date).reduce((s, r) => s + (r.type === 'income' ? 1 : -1) * billAmtThb(r), 0);
+      const d = new Date(t.date + 'T00:00:00');
+      html += `<div class="bill-day"><span>${d.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}</span><span>${dayNet >= 0 ? '+' : '−'}${billFmt0(Math.abs(dayNet))}</span></div>`;
+    }
+    const c = billCat(t.category, t.type);
+    const inc = t.type === 'income';
+    const foreign = t.currency && t.currency !== 'THB';
+    const pay = t.payMethod === 'card' || t.category === 'cc_payment' ? '💳 ' + esc(t.card || 'บัตร') : (t.payMethod && t.payMethod !== 'unknown' ? esc(BILL_PAY[t.payMethod] || '') : '');
+    const sub = [esc(c.label), t.time ? esc(t.time) : '', pay, esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
+    html += `<div class="bill-row" onclick="billEdit('${esc(t.id)}')">
+      <div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>
+      <div class="bill-main"><div class="bill-merchant">${esc(t.merchant || c.label)}${t.note ? ' <span style="color:var(--text3);font-weight:400;">· ' + esc(t.note) + '</span>' : ''}</div><div class="bill-sub">${sub}</div></div>
+      <div><div class="bill-amt" style="color:${inc ? 'var(--green)' : BILL_NON_SPEND.includes(t.category) ? 'var(--text2)' : 'var(--text)'};">${inc ? '+' : '−'}${billFmt(billAmtThb(t))}</div>
+      ${foreign ? `<div style="font-size:10px;color:var(--text3);text-align:right;">${esc(t.currency)} ${Number(t.amount).toLocaleString()}</div>` : ''}</div>
+      <button class="bill-del" title="ลบ" onclick="event.stopPropagation();billDelete('${esc(t.id)}')">✕</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+async function billDelete(id) {
+  const t = (state.transactions || []).find(x => x.id === id);
+  if (!t) return;
+  if (!confirm('ลบรายการ ' + (t.merchant || billCat(t.category, t.type).label) + ' ' + billFmt(billAmtThb(t)) + ' ?')) return;
+  try {
+    if (window.FB) await window.FB.del('transactions', id);
+    else { state.transactions = state.transactions.filter(x => x.id !== id); billRender(); }
+    showToast('ลบรายการแล้ว');
+  } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); }
+}
+
+// ═══ Drafts (หน้ายืนยันก่อนบันทึก) ═══
+let _billUid = 0;
+function billNewDraft(p) {
+  p = p || {};
+  const type = p.type === 'income' ? 'income' : 'expense';
+  const cat = BILL_CATS[type].some(c => c.key === p.category) ? p.category : (type === 'income' ? 'other_in' : 'other');
+  const cur = /^[A-Z]{3}$/.test(String(p.currency || '').toUpperCase()) ? String(p.currency).toUpperCase() : 'THB';
+  return {
+    uid: ++_billUid, include: true, type, category: cat,
+    amount: p.amount > 0 ? Math.round(Number(p.amount) * 100) / 100 : '',
+    currency: cur, fx: cur === 'THB' ? 1 : (Number(p.fx) || 0),
+    date: billNormDate(p.date), time: /^\d{1,2}:\d{2}$/.test(p.time || '') ? p.time.padStart(5, '0') : '',
+    merchant: String(p.merchant || '').slice(0, 80), ref: String(p.ref || '').slice(0, 80),
+    note: String(p.note || '').slice(0, 120), source: p.source || 'manual', aiRead: !!p.aiRead,
+    payMethod: BILL_PAY[p.payMethod] ? p.payMethod : (cat === 'cc_payment' ? 'transfer' : 'unknown'),
+    card: billMatchCard(p.card)
+  };
+}
+// จับคู่ชื่อบัตรที่ AI อ่านได้กับรายชื่อบัตรที่ตั้งไว้ (เช่น "KTC VISA ****1234" → "KTC 1234")
+function billMatchCard(raw) {
+  raw = String(raw || '').trim().slice(0, 40);
+  if (!raw) return '';
+  const norm = x => x.toUpperCase().replace(/[^0-9A-Zก-๙]/g, '');
+  const digits = (raw.match(/\d{4}(?!.*\d)/) || [''])[0];
+  const list = billCards();
+  const hit = list.find(c => norm(c) === norm(raw))
+    || (digits && list.find(c => c.includes(digits)))
+    || list.find(c => norm(raw).includes(norm(c).replace(/\d+/g, '')) && norm(c).replace(/\d+/g, ''));
+  return hit || raw;
+}
+
+// แปลงวันที่ที่ AI อ่านมา: ต้องเป็น YYYY-MM-DD ค.ศ. — ถ้าหลุดเป็น พ.ศ. (ปี > ปีหน้า) ลบ 543 ให้
+function billNormDate(s) {
+  const m = String(s || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return todayISO();
+  let y = +m[1];
+  const thisYear = new Date().getFullYear();
+  if (y > thisYear + 1) y -= 543;
+  const d = new Date(y, +m[2] - 1, +m[3]);
+  if (isNaN(d) || d.getMonth() !== +m[2] - 1) return todayISO();
+  return isoFromDate(d);
+}
+
+const _billFx = { THB: 1 };
+async function billFxToThb(cur) {
+  cur = (cur || 'THB').toUpperCase();
+  if (_billFx[cur]) return _billFx[cur];
+  try {
+    const r = await fetch('https://api.exchangerate-api.com/v4/latest/' + encodeURIComponent(cur));
+    const d = await r.json();
+    if (d.rates && d.rates.THB) { _billFx[cur] = d.rates.THB; return d.rates.THB; }
+  } catch (e) {}
+  return cur === 'USD' ? (state.usdThb || 0) : 0;
+}
+
+// ทำเครื่องหมายรายการซ้ำ: เลขอ้างอิงเดียวกัน = ซ้ำแน่นอน (ไม่ติ๊กให้), วัน+ยอด+ประเภทตรงกัน = อาจซ้ำ (เตือนเฉย ๆ)
+function billMarkDuplicates() {
+  const seen = {};
+  billState.drafts.forEach(d => {
+    d.dup = null;
+    const rk = billRefKey(d.ref);
+    const others = (state.transactions || []).filter(t => t.id !== billState.editingId);
+    if (rk) {
+      if (others.some(t => t.refKey === rk) || seen[rk]) d.dup = 'ref';
+      seen[rk] = true;
+    }
+    if (!d.dup && Number(d.amount) > 0) {
+      const thb = Number(d.amount) * (Number(d.fx) || 1);
+      const hit = others.find(t => t.date === d.date && t.type === d.type && Math.abs(billAmtThb(t) - thb) < 0.01);
+      if (hit) d.dup = 'maybe:' + (hit.merchant || billCat(hit.category, hit.type).label);
+    }
+  });
+}
+
+function billOpenConfirm(drafts, note) {
+  billState.drafts = drafts;
+  billMarkDuplicates();
+  billState.drafts.forEach(d => { if (d.dup === 'ref' && !billState.editingId) d.include = false; });
+  document.getElementById('billConfirmNote').textContent = note || '';
+  billRenderDrafts();
+  openModal('bill-confirm-modal');
+}
+function billCloseConfirm() { closeModal('bill-confirm-modal'); billState.drafts = []; billState.editingId = null; }
+
+function billRenderDrafts() {
+  const ds = billState.drafts;
+  const editing = !!billState.editingId;
+  document.getElementById('billConfirmTitle').textContent = editing ? 'แก้ไขรายการ' : (ds.length > 1 ? 'ตรวจสอบ ' + ds.length + ' รายการก่อนบันทึก' : 'ตรวจสอบก่อนบันทึก');
+  const n = ds.filter(d => d.include).length;
+  const btn = document.getElementById('billSaveBtn');
+  btn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึก ' + n + ' รายการ';
+  btn.disabled = !n;
+  if (!ds.length) { document.getElementById('billDrafts').innerHTML = '<div class="empty">AI ไม่พบรายการเงินในข้อมูลนี้</div>'; btn.disabled = true; return; }
+  document.getElementById('billCardList').innerHTML = billCards().map(c => `<option value="${esc(c)}">`).join('');
+  document.getElementById('billDrafts').innerHTML = ds.map((d, i) => {
+    const catOpts = BILL_CATS[d.type].map(c => `<option value="${c.key}" ${c.key === d.category ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('');
+    const curs = ['THB', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'HKD', 'GBP', 'KRW'];
+    if (!curs.includes(d.currency)) curs.push(d.currency);
+    const showCard = d.payMethod === 'card' || d.category === 'cc_payment';
+    const payOpts = Object.keys(BILL_PAY).map(k => `<option value="${k}" ${k === d.payMethod ? 'selected' : ''}>${BILL_PAY[k]}</option>`).join('');
+    const curOpts = curs.map(c => `<option ${c === d.currency ? 'selected' : ''}>${c}</option>`).join('');
+    let warn = '';
+    if (d.dup === 'ref') warn = `<div class="bill-warn" style="background:var(--red-bg);color:var(--red);">⛔ เลขอ้างอิงนี้บันทึกไปแล้ว — น่าจะเป็นสลิปซ้ำ</div>`;
+    else if (d.dup) warn = `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">⚠️ วันเดียวกันมียอดเท่ากันแล้ว (${esc(d.dup.slice(6))}) — ตรวจว่าไม่ซ้ำ</div>`;
+    if (d.aiRead && !(Number(d.amount) > 0)) warn += `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">AI อ่านยอดไม่ได้ — กรอกยอดเอง</div>`;
+    return `<div class="bill-draft ${d.include ? '' : 'off'}">
+      ${warn}
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        ${editing ? '' : `<input type="checkbox" ${d.include ? 'checked' : ''} onchange="billDraftSet(${i},'include',this.checked,true)" style="width:16px;height:16px;accent-color:var(--accent);">`}
+        <div class="bill-type-toggle" style="flex:1;">
+          <button class="${d.type === 'expense' ? 'on-expense' : ''}" onclick="billDraftSet(${i},'type','expense',true)">− รายจ่าย</button>
+          <button class="${d.type === 'income' ? 'on-income' : ''}" onclick="billDraftSet(${i},'type','income',true)">+ รายรับ</button>
+        </div>
+      </div>
+      <div class="bill-draft-grid">
+        <div class="form-group"><label class="form-label">ยอด</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.amount)}" oninput="billDraftSet(${i},'amount',this.value)" style="font-weight:600;font-size:15px;"></div>
+        <div class="form-group"><label class="form-label">สกุลเงิน</label><select class="form-select" onchange="billDraftCurrency(${i},this.value)">${curOpts}</select></div>
+        ${d.currency !== 'THB' ? `<div class="form-group full"><label class="form-label">อัตรา 1 ${esc(d.currency)} = ? บาท</label><input class="form-input" type="number" step="0.0001" min="0" value="${esc(d.fx || '')}" oninput="billDraftSet(${i},'fx',this.value)"></div>` : ''}
+        <div class="form-group full"><label class="form-label">หมวด</label><select class="form-select" onchange="billDraftSet(${i},'category',this.value,true)">${catOpts}</select></div>
+        <div class="form-group ${showCard ? '' : 'full'}"><label class="form-label">${d.type === 'income' ? 'รับเงินทาง' : 'จ่ายด้วย'}</label><select class="form-select" onchange="billDraftSet(${i},'payMethod',this.value,true)">${payOpts}</select></div>
+        ${showCard ? `<div class="form-group"><label class="form-label">บัตรใบไหน</label><input class="form-input" list="billCardList" value="${esc(d.card)}" placeholder="เช่น KTC 1234" oninput="billDraftSet(${i},'card',this.value)"></div>` : ''}
+        <div class="form-group full"><label class="form-label">${d.type === 'income' ? 'จาก' : 'ร้าน / ผู้รับเงิน'}</label><input class="form-input" value="${esc(d.merchant)}" oninput="billDraftSet(${i},'merchant',this.value)"></div>
+        <div class="form-group"><label class="form-label">วันที่</label><input class="form-input" type="date" value="${esc(d.date)}" onchange="billDraftSet(${i},'date',this.value,true)"></div>
+        <div class="form-group"><label class="form-label">เวลา</label><input class="form-input" type="time" value="${esc(d.time)}" onchange="billDraftSet(${i},'time',this.value)"></div>
+        <div class="form-group full"><label class="form-label">เลขอ้างอิงสลิป (กันบันทึกซ้ำ)</label><input class="form-input" value="${esc(d.ref)}" placeholder="ถ้ามี" onchange="billDraftSet(${i},'ref',this.value,true)"></div>
+        <div class="form-group full"><label class="form-label">โน้ต</label><input class="form-input" value="${esc(d.note)}" oninput="billDraftSet(${i},'note',this.value)"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;">${esc(BILL_SOURCES[d.source] || '')}${d.aiRead ? ' · อ่านโดย Gemini — ตรวจยอดและหมวดก่อนบันทึก' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+// rerender = true เฉพาะช่องที่เปลี่ยนหน้าตาฟอร์ม (ไม่ rerender ตอนพิมพ์ ไม่งั้น focus หลุด)
+function billDraftSet(i, field, value, rerender) {
+  const d = billState.drafts[i];
+  if (!d) return;
+  d[field] = value;
+  if (field === 'type') d.category = d.type === 'income' ? 'other_in' : 'other';
+  if (field === 'category' && value === 'cc_payment' && d.payMethod === 'unknown') d.payMethod = 'transfer';
+  if (field === 'amount' || field === 'fx') {
+    billMarkDuplicates();
+  }
+  if (rerender) { billMarkDuplicates(); billRenderDrafts(); }
+  else if (field === 'include') billRenderDrafts();
+}
+async function billDraftCurrency(i, cur) {
+  const d = billState.drafts[i];
+  if (!d) return;
+  d.currency = cur;
+  d.fx = cur === 'THB' ? 1 : await billFxToThb(cur);
+  billMarkDuplicates();
+  billRenderDrafts();
+}
+
+async function billSaveDrafts() {
+  const btn = document.getElementById('billSaveBtn');
+  const items = billState.drafts.filter(d => d.include);
+  for (const d of items) {
+    if (!(Number(d.amount) > 0)) { showToast('กรอกยอดให้ครบทุกรายการ'); return; }
+    if (d.currency !== 'THB' && !(Number(d.fx) > 0)) { showToast('ใส่อัตราแลกเปลี่ยนของ ' + d.currency); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) { showToast('วันที่ไม่ถูกต้อง'); return; }
+  }
+  billMarkDuplicates();
+  if (items.some(d => d.dup === 'ref') && !confirm('มีรายการที่เลขอ้างอิงซ้ำกับที่บันทึกไว้แล้ว — รายการนั้นจะถูกข้าม ดำเนินการต่อ?')) return;
+  btn.disabled = true;
+  let saved = 0, skipped = 0;
+  try {
+    for (const d of items) {
+      const fx = d.currency === 'THB' ? 1 : Number(d.fx);
+      const refKey = billRefKey(d.ref);
+      const data = {
+        date: d.date, time: d.time || '', type: d.type, category: d.category,
+        amount: Math.round(Number(d.amount) * 100) / 100, currency: d.currency, fxToThb: fx,
+        amountThb: Math.round(Number(d.amount) * fx * 100) / 100,
+        merchant: d.merchant.trim(), note: d.note.trim(), ref: d.ref.trim(), refKey,
+        source: d.source, aiRead: !!d.aiRead,
+        payMethod: d.payMethod || 'unknown',
+        card: (d.payMethod === 'card' || d.category === 'cc_payment') ? (d.card || '').trim() : ''
+      };
+      if (billState.editingId) {
+        if (d.dup === 'ref') { skipped++; continue; }
+        if (window.FB) await window.FB.update('transactions', billState.editingId, data);
+        else Object.assign(state.transactions.find(t => t.id === billState.editingId) || {}, data);
+        saved++;
+        continue;
+      }
+      if (d.dup === 'ref') { skipped++; continue; }
+      if (!window.FB) { state.transactions.push({ id: 'local_' + d.uid, ...data }); saved++; continue; }
+      if (refKey) {
+        // id ผูกกับเลขอ้างอิง — แชร์สลิปเดิมซ้ำ (แม้จากอีกเครื่อง) จะไม่ได้เอกสารใหม่
+        const docId = 'ref_' + refKey;
+        if (await window.FB.exists('transactions', docId)) { skipped++; continue; }
+        await window.FB.put('transactions', docId, data);
+      } else {
+        await window.FB.add('transactions', data);
+      }
+      saved++;
+    }
+  } catch (e) {
+    showToast('บันทึกไม่สำเร็จ: ' + e.message);
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  const lastDate = items.length ? items[items.length - 1].date : '';
+  billCloseConfirm();
+  if (lastDate) billState.month = lastDate.slice(0, 7);
+  if (!window.FB) billRender();
+  showToast('✅ บันทึก ' + saved + ' รายการ' + (skipped ? ' · ข้ามรายการซ้ำ ' + skipped : ''));
+}
+
+function billOpenManual() {
+  billState.editingId = null;
+  const d = billNewDraft({ source: 'manual' });
+  if (billState.month !== todayISO().slice(0, 7)) d.date = billState.month + '-01';
+  billOpenConfirm([d], '');
+}
+function billEdit(id) {
+  const t = (state.transactions || []).find(x => x.id === id);
+  if (!t) return;
+  billState.editingId = id;
+  const d = billNewDraft({ ...t, fx: t.fxToThb });
+  d.aiRead = false;
+  billOpenConfirm([d], '');
+}
+
+// ═══ Gemini: อ่านรูป / ข้อความ → JSON ═══
+function billSchema() {
+  const allCats = BILL_CATS.expense.concat(BILL_CATS.income).map(c => c.key);
+  return {
+    type: 'OBJECT',
+    properties: {
+      items: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            date: { type: 'STRING', description: 'YYYY-MM-DD ปี ค.ศ.' },
+            time: { type: 'STRING', description: 'HH:MM 24 ชั่วโมง หรือ ""' },
+            amount: { type: 'NUMBER' },
+            currency: { type: 'STRING', description: 'ISO 4217 เช่น THB' },
+            type: { type: 'STRING', enum: ['expense', 'income'] },
+            category: { type: 'STRING', enum: allCats },
+            merchant: { type: 'STRING' },
+            ref: { type: 'STRING' },
+            note: { type: 'STRING' },
+            payMethod: { type: 'STRING', enum: Object.keys(BILL_PAY) },
+            card: { type: 'STRING', description: 'ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้าย หรือ ""' }
+          },
+          required: ['date', 'amount', 'currency', 'type', 'category', 'merchant', 'ref', 'payMethod', 'card']
+        }
+      }
+    },
+    required: ['items']
+  };
+}
+
+function billRules() {
+  const owner = (localStorage.getItem('folio_bill_owner') || '').trim();
+  const catDesc = BILL_CATS.expense.map(c => c.key + '=' + c.label).join(', ');
+  const incDesc = BILL_CATS.income.map(c => c.key + '=' + c.label).join(', ');
+  return [
+    'วันนี้คือ ' + todayISO() + ' (ค.ศ.)',
+    'กฎ:',
+    '- date: YYYY-MM-DD ปี ค.ศ. ถ้าเอกสารใช้ พ.ศ. (เช่น 2568 หรือ "68") ให้ลบ 543 ก่อน; ถ้าไม่มีวันที่ ใช้วันนี้; คำว่า "เมื่อวาน/วันจันทร์ที่แล้ว" ให้คำนวณจากวันนี้',
+    '- amount: ตัวเลขบวก ไม่มีคอมมา เป็นยอดสุทธิที่จ่าย/ได้รับจริง (หลังส่วนลด รวม VAT/ค่าบริการ) ไม่ใช่ราคาสินค้าย่อย ไม่ใช่ยอดเงินคงเหลือในบัญชี',
+    '- currency: ISO 4217 (฿ หรือ บาท = THB)',
+    '- type: expense ถ้าเงินออกจากเจ้าของ, income ถ้าเงินเข้าเจ้าของ' + (owner ? ' — ชื่อเจ้าของบัญชีคือ "' + owner + '" (ถ้าเจ้าของเป็นผู้โอน = expense, เป็นผู้รับ = income)' : '') + '; ไม่แน่ใจให้ใช้ expense',
+    '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest; โอน/ชำระยอดบัตรเครดิต = cc_payment; ต้นทุน/ค่าใช้จ่ายของกิจการตัวเอง = business',
+    '- payMethod: card ถ้าจ่ายด้วยบัตรเครดิต (เห็น VISA/Mastercard/JCB/เลขบัตร ****), transfer ถ้าเป็นสลิปโอน/สแกน QR พร้อมเพย์, ewallet ถ้าจ่ายผ่าน TrueMoney/ShopeePay/LINE Pay ฯลฯ, cash ถ้าเป็นเงินสด, ไม่ทราบใช้ unknown',
+    '- card: เมื่อ payMethod=card หรือ category=cc_payment ให้ใส่ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้ายถ้ามี' + (billCards().length ? ' — ถ้าตรงกับบัตรของผู้ใช้ ให้ใช้ชื่อนี้ตรงตัว: ' + billCards().join(', ') : '') + '; ไม่ใช่บัตรใช้ ""',
+    '- category (income): ' + incDesc,
+    '- merchant: ชื่อร้าน/ผู้รับเงิน (expense) หรือผู้โอน/แหล่งเงิน (income) สั้น ๆ',
+    '- ref: เลขที่รายการ/เลขอ้างอิง/Transaction ID/เลขที่ใบเสร็จ ที่ระบุเอกสารนี้ได้ ถ้าไม่มีใช้ ""',
+    '- note: รายละเอียดสั้น ไม่เกิน 60 ตัวอักษร หรือ ""',
+    '- ใบเสร็จ/สลิป 1 ใบ = 1 รายการ (ไม่แยกสินค้าทีละชิ้น); หน้าประวัติธุรกรรมหรือแจ้งเตือนหลายอัน = หลายรายการ',
+    '- อย่าเดาตัวเลขที่มองไม่เห็น; ถ้าไม่ใช่ข้อมูลการเงิน ให้ items เป็น []'
+  ].join('\n');
+}
+
+async function billAskGemini(parts) {
+  const d = await callGemini({
+    contents: [{ parts }],
+    generationConfig: {
+      temperature: 0, maxOutputTokens: 4096,
+      responseMimeType: 'application/json', responseSchema: billSchema(),
+      thinkingConfig: { thinkingBudget: 0 }
+    }
+  });
+  const txt = (d.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+  const parsed = safeParseJSON(txt);
+  if (!parsed) throw new Error('อ่านคำตอบ AI ไม่ได้');
+  return Array.isArray(parsed) ? parsed : (parsed.items || []);
+}
+
+function billGeminiErr(e) {
+  return e.message === 'no_key' ? 'ใส่ Gemini Key ในหน้า ⚙️ ตั้งค่าก่อน' : e.message === 'all_quota' ? 'Gemini ทุก key หมด quota' : 'อ่านไม่สำเร็จ: ' + e.message;
+}
+function billBusy(on, text) {
+  const el = document.getElementById('billBusy');
+  el.style.display = on ? '' : 'none';
+  if (text) document.getElementById('billBusyText').textContent = text;
+}
+
+// ย่อรูปก่อนส่ง: ลด token/เวลาอัปโหลด — กว้างไม่เกิน 1280px, สูงไม่เกิน 4000px (screenshot ยาวยังอ่านออก)
+function billCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const sc = Math.min(1, 1280 / img.width, 4000 / img.height);
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve({ mime: 'image/jpeg', data: c.toDataURL('image/jpeg', 0.85).split(',')[1] });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      // decode ไม่ได้ (เช่น HEIC) → ส่งไฟล์ดิบถ้าไม่ใหญ่เกิน
+      if (file.size > 15 * 1024 * 1024) { reject(new Error('ไฟล์ใหญ่เกินไป')); return; }
+      const fr = new FileReader();
+      fr.onload = () => resolve({ mime: file.type || 'image/jpeg', data: String(fr.result).split(',')[1] });
+      fr.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
+      fr.readAsDataURL(file);
+    };
+    img.src = url;
+  });
+}
+
+function billOnFiles(input, source) {
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if (files.length) billProcessImages(files, source);
+}
+
+async function billProcessImages(files, source) {
+  billState.editingId = null;
+  const drafts = [];
+  let failed = 0;
+  for (let i = 0; i < files.length; i++) {
+    billBusy(true, 'Gemini กำลังอ่านบิล ' + (files.length > 1 ? (i + 1) + '/' + files.length : '') + '...');
+    try {
+      const img = await billCompressImage(files[i]);
+      const items = await billAskGemini([
+        { text: 'คุณคือผู้ช่วยอ่านสลิปโอนเงิน/ใบเสร็จ/บิล/แจ้งเตือนธนาคารของไทย ดึงทุกรายการเงินเข้า-ออกในรูป ตอบเป็น JSON ตาม schema\n' + billRules() },
+        { inline_data: { mime_type: img.mime, data: img.data } }
+      ]);
+      items.forEach(it => drafts.push(billNewDraft({ ...it, source, aiRead: true })));
+    } catch (e) {
+      failed++;
+      showToast(billGeminiErr(e));
+      if (e.message === 'no_key' || e.message === 'all_quota') break;
+    }
+  }
+  billBusy(false);
+  await billFillFx(drafts);
+  if (!drafts.length && failed) return;
+  billOpenConfirm(drafts, 'อ่านจาก ' + files.length + ' รูป' + (failed ? ' (อ่านไม่สำเร็จ ' + failed + ')' : '') + ' — รูปไม่ถูกเก็บ');
+}
+
+async function billProcessText(text, source) {
+  billState.editingId = null;
+  billBusy(true, 'Gemini กำลังแยกรายการ...');
+  try {
+    const items = await billAskGemini([{ text: 'แยกรายการรายรับ/รายจ่ายจากข้อความที่ผู้ใช้พิมพ์หรือพูด (หรือข้อความ SMS/แจ้งเตือนธนาคาร) ตอบเป็น JSON ตาม schema\n' + billRules() + '\n\nข้อความ:\n"""' + text.slice(0, 4000) + '"""' }]);
+    const drafts = items.map(it => billNewDraft({ ...it, source, aiRead: true }));
+    await billFillFx(drafts);
+    billBusy(false);
+    billOpenConfirm(drafts, '');
+  } catch (e) {
+    billBusy(false);
+    showToast(billGeminiErr(e));
+  }
+}
+
+async function billFillFx(drafts) {
+  for (const d of drafts) if (d.currency !== 'THB' && !(d.fx > 0)) d.fx = await billFxToThb(d.currency);
+}
+
+// ─── พิมพ์ / พูด ───
+let _billRec = null;
+function billOpenText() {
+  billState.usedMic = false;
+  document.getElementById('billTextInput').value = '';
+  openModal('bill-text-modal');
+  setTimeout(() => document.getElementById('billTextInput').focus(), 60);
+}
+function billToggleMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const btn = document.getElementById('billMicBtn');
+  if (!SR) { showToast('เบราว์เซอร์นี้ไม่รองรับการฟังเสียง — ใช้ปุ่มไมค์บนคีย์บอร์ดแทน'); return; }
+  if (_billRec) { _billRec.stop(); return; }
+  _billRec = new SR();
+  _billRec.lang = 'th-TH';
+  _billRec.interimResults = false;
+  _billRec.continuous = false;
+  _billRec.onresult = e => {
+    const said = Array.from(e.results).map(r => r[0].transcript).join(' ');
+    const ta = document.getElementById('billTextInput');
+    ta.value = (ta.value ? ta.value + ' ' : '') + said;
+    billState.usedMic = true;
+  };
+  _billRec.onerror = e => { if (e.error !== 'no-speech' && e.error !== 'aborted') showToast('ไมค์: ' + e.error); };
+  _billRec.onend = () => { _billRec = null; btn.textContent = '🎤 กดเพื่อพูด'; };
+  _billRec.start();
+  btn.textContent = '⏹️ กำลังฟัง... กดเพื่อหยุด';
+}
+function billSubmitText() {
+  const text = document.getElementById('billTextInput').value.trim();
+  if (!text) { showToast('พิมพ์หรือพูดรายการก่อน'); return; }
+  if (_billRec) _billRec.stop();
+  closeModal('bill-text-modal');
+  billProcessText(text, billState.usedMic ? 'voice' : 'text');
+}
+
+function billSaveOwner(v) {
+  localStorage.setItem('folio_bill_owner', String(v || '').trim());
+  billSyncSettings();
+  showToast('บันทึกชื่อบัญชีแล้ว');
+}
+function billSaveCards(v) {
+  const list = String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+  localStorage.setItem('folio_bill_cards', list.join(', '));
+  billSyncSettings();
+  billRender();
+  showToast('บันทึกรายชื่อบัตร ' + list.length + ' ใบแล้ว');
+}
+// เก็บชื่อบัญชี/บัตรใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
+function billSyncSettings() {
+  if (window.FB) window.FB.setDoc('settings', 'bill', { owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards() }).catch(() => {});
+}
+async function billLoadSettings() {
+  try {
+    const doc = (await window.FB.getAll('settings')).find(d => d.id === 'bill');
+    if (!doc) return;
+    if (typeof doc.owner === 'string') localStorage.setItem('folio_bill_owner', doc.owner);
+    if (Array.isArray(doc.cards)) localStorage.setItem('folio_bill_cards', doc.cards.join(', '));
+    const page = document.getElementById('page-bills');
+    if (page && page.classList.contains('active')) billRender();
+  } catch (e) {}
+}
+
+// ═══ สำรองข้อมูล ═══
+function billRowsForExport(list) {
+  return list.slice().sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).map(t => [
+    t.date, t.time || '', t.type === 'income' ? 'รายรับ' : 'รายจ่าย', billCat(t.category, t.type).label,
+    t.merchant || '', t.amount, t.currency || 'THB', billAmtThb(t), BILL_PAY[t.payMethod] || '', t.card || '', BILL_SOURCES[t.source] || t.source || '', t.ref || '', t.note || ''
+  ]);
+}
+const BILL_EXPORT_HEADERS = ['วันที่', 'เวลา', 'ประเภท', 'หมวด', 'ร้าน/ผู้รับ', 'ยอด', 'สกุลเงิน', 'ยอด(THB)', 'จ่ายด้วย', 'บัตร', 'ช่องทางบันทึก', 'เลขอ้างอิง', 'โน้ต'];
+
+// ใช้ Apps Script webhook เดิม (action=clear_append) — ส่งทีละเดือน แยกแท็บ Bills_YYYY-MM ให้ URL ไม่ยาวเกิน
+async function billBackupSheet() {
+  const ym = billState.month;
+  const list = (state.transactions || []).filter(t => t.date && t.date.slice(0, 7) === ym);
+  if (!list.length) { showToast('ไม่มีรายการในเดือนนี้'); return; }
+  const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
+  const params = new URLSearchParams({ action: 'clear_append', tab: 'Bills_' + ym, data: JSON.stringify({ headers: BILL_EXPORT_HEADERS, rows: billRowsForExport(list) }) });
+  showToast('กำลังส่งไป Google Sheet...');
+  try {
+    const res = await fetch(base + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
+    let j = null;
+    try { j = await res.json(); } catch (_) {}
+    if (j && j.ok) showToast('✅ สำรอง ' + list.length + ' รายการไปแท็บ Bills_' + ym + ' แล้ว');
+    else if (j && (j.holdings || j.timestamp)) showToast('⚠️ Apps Script ยังไม่รองรับ action clear_append — ใช้ ⬇️ CSV แทน');
+    else showToast('ส่งแล้ว — ตรวจแท็บ Bills_' + ym + ' ใน Sheet');
+  } catch (e) {
+    showToast('ส่งไป Sheet ไม่สำเร็จ (' + e.message + ') — ใช้ ⬇️ CSV แทน');
+  }
+}
+
+function billExportCsv() {
+  const list = state.transactions || [];
+  if (!list.length) { showToast('ยังไม่มีรายการ'); return; }
+  const cell = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = [BILL_EXPORT_HEADERS].concat(billRowsForExport(list)).map(r => r.map(cell).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM ให้ Excel อ่านภาษาไทยถูก
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'folio-bills-' + todayISO() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ═══ AI วิเคราะห์การใช้จ่าย + การลงทุน ═══
+async function billRunAi() {
+  const ctx = billCashflowContext();
+  if (!ctx) { showToast('บันทึกรายการก่อน แล้ว AI ถึงจะวิเคราะห์ได้'); return; }
+  const btn = document.getElementById('billAiBtn');
+  const sp = document.getElementById('billAiSpinner');
+  const out = document.getElementById('billAiResult');
+  btn.disabled = true; sp.style.display = 'block';
+  out.style.display = ''; out.innerHTML = '<span style="color:var(--text3);">AI กำลังวิเคราะห์...</span>';
+  const lines = [
+    'คุณคือที่ปรึกษาการเงินส่วนบุคคล วิเคราะห์จากข้อมูลจริงด้านล่างเท่านั้น ห้ามแต่งตัวเลข',
+    '',
+    'กระแสเงินสดจริง (จากสลิป/บิลที่บันทึก):', ctx,
+    '',
+    'การลงทุน:',
+    '- แผน DCA ต่อเดือน: ' + billFmt0(billDcaMonthly()) + ' (' + (state.dcaSchedules || []).map(d => d.ticker + ' ' + billFmt0(d.amount) + ' ' + (d.freq || '')).join(', ') + ')',
+    '- มูลค่าพอร์ต: ' + billFmt0(typeof portfolioValueThb === 'function' ? portfolioValueThb() : 0)
+  ];
+  if (window._p9Data) lines.push('- ผลตอบแทนปีนี้ ' + window._p9Data.currentYoy.toFixed(1) + '% เทียบเป้า ' + (typeof yoyTargetPct === 'function' ? yoyTargetPct().toFixed(0) : '10') + '%');
+  lines.push('', 'ตอบภาษาไทย กระชับ ใช้หัวข้อ:',
+    '## สุขภาพการเงิน (อัตราออม, เงินเหลือ, ความสม่ำเสมอ)',
+    '## จุดรั่วไหล (หมวดที่สูงเกินควร พร้อมตัวเลข และวิธีลดที่ทำได้จริง)',
+    '## งบลงทุนที่ยั่งยืน (DCA ต่อเดือนที่แนะนำเป็นตัวเลข เทียบแผนปัจจุบัน และเงินสำรองฉุกเฉินที่ควรมี ≈ 6 เท่าของรายจ่ายต่อเดือน)',
+    'ถ้าข้อมูลมีไม่ถึงเดือนเต็ม ให้บอกว่าข้อสรุปยังไม่แน่น');
+  try {
+    const d = await callGemini({ contents: [{ parts: [{ text: lines.join('\n') }] }], generationConfig: { maxOutputTokens: 2000, temperature: 0.4 } });
+    const text = (d.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+    out.innerHTML = mdLiteToHtml(text) + '<div style="font-size:10px;color:var(--text3);border-top:0.5px dashed var(--border);margin-top:10px;padding-top:8px;">AI เป็นความเห็นประกอบ ไม่ใช่คำแนะนำการลงทุน</div>';
+  } catch (e) {
+    out.innerHTML = '<span style="color:var(--red);">' + esc(billGeminiErr(e)) + '</span>';
+  }
+  btn.disabled = false; sp.style.display = 'none';
+}
+
+// ═══ Share Target (Android): sw.js เก็บไฟล์ที่แชร์ไว้ใน cache 'folio-share' แล้ว redirect มา ?share-target=1 ═══
+async function billHandleShareLaunch() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('share-target')) return;
+  history.replaceState(null, '', location.pathname);
+  showPage('bills');
+  if (params.get('share-target') === 'error') { showToast('รับไฟล์ที่แชร์ไม่สำเร็จ ลองอีกครั้ง'); return; }
+  const files = [];
+  let text = '';
+  try {
+    const c = await caches.open('folio-share');
+    for (const req of await c.keys()) {
+      const res = await c.match(req);
+      if (res) {
+        if (req.url.endsWith('/text')) text = await res.text();
+        else { const b = await res.blob(); files.push(new File([b], 'shared', { type: b.type || 'image/jpeg' })); }
+      }
+      await c.delete(req);
+    }
+  } catch (e) {}
+  // รอ Firestore โหลดรายการเดิมก่อน เพื่อให้ตรวจสลิปซ้ำได้
+  for (let i = 0; i < 40 && !window._billLoaded; i++) await new Promise(r => setTimeout(r, 150));
+  if (files.length) billProcessImages(files, 'share');
+  else if (text.trim()) billProcessText(text, 'share');
+  else showToast('ไม่พบรูปหรือข้อความที่แชร์มา');
+}
+billHandleShareLaunch();
 </script>
 </body>
 </html>
