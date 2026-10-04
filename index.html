@@ -505,6 +505,9 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-add-btn:hover { border-color: var(--accent); color: var(--accent); }
 .bill-busy { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--accent); background: var(--accent-light); border-radius: 10px; padding: 10px 14px; margin-bottom: var(--gap); }
 .bill-busy .spinner { border-color: rgba(217,80,112,0.25); border-top-color: var(--accent); }
+.bill-view-toggle { display: flex; background: var(--surface); border: 0.5px solid var(--border); border-radius: 99px; padding: 3px; }
+.bill-view-toggle button { font-family: var(--font); font-size: 12px; border: none; background: none; color: var(--text2); padding: 5px 12px; border-radius: 99px; cursor: pointer; }
+.bill-view-toggle button.active { background: var(--accent); color: #fff; font-weight: 600; }
 .bill-chip { font-family: var(--font); font-size: 11px; padding: 3px 10px; border-radius: 99px; border: 0.5px solid var(--border2); background: var(--bg); color: var(--text2); cursor: pointer; font-weight: 400; }
 .bill-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .bill-day { font-size: 10.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.4px; margin: 12px 0 4px; display: flex; justify-content: space-between; }
@@ -1131,10 +1134,16 @@ if (window._folioReady) {
         <div class="page-greeting">Bill Manager · รายรับ-รายจ่ายจริง</div>
         <div class="page-title">🧾 บันทึกบิล</div>
       </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <div class="bill-view-toggle" id="billViewToggle">
+        <button class="active" data-v="month" onclick="billSetView('month')">เดือน</button>
+        <button data-v="year" onclick="billSetView('year')">ปี</button>
+      </div>
       <div class="bill-month-nav">
-        <button onclick="billShiftMonth(-1)" aria-label="เดือนก่อน">‹</button>
+        <button onclick="billShiftMonth(-1)" aria-label="ก่อนหน้า">‹</button>
         <span id="billMonthLabel">—</span>
-        <button onclick="billShiftMonth(1)" aria-label="เดือนถัดไป">›</button>
+        <button onclick="billShiftMonth(1)" aria-label="ถัดไป">›</button>
+      </div>
       </div>
     </div>
 
@@ -1161,12 +1170,12 @@ if (window._folioReady) {
 
     <div class="budget-grid" style="margin-bottom:var(--gap);">
       <div class="card">
-        <div class="card-title">แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;">รายจ่ายเดือนนี้</span></div>
+        <div class="card-title">แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billCatPeriod">รายจ่ายเดือนนี้</span></div>
         <div style="position:relative;height:180px;" id="billCatChartWrap"><canvas id="billCatChart"></canvas></div>
         <div id="billCatList" style="margin-top:12px;"></div>
       </div>
       <div class="card">
-        <div class="card-title">แนวโน้ม 6 เดือน</div>
+        <div class="card-title" id="billTrendTitle">แนวโน้ม 6 เดือน</div>
         <div style="position:relative;height:240px;"><canvas id="billTrendChart"></canvas></div>
       </div>
     </div>
@@ -1180,7 +1189,7 @@ if (window._folioReady) {
     <!-- รายการ -->
     <div class="card" style="margin-bottom:var(--gap);">
       <div class="card-title">
-        รายการเดือนนี้
+        <span id="billListTitle">รายการเดือนนี้</span>
         <span style="display:flex;gap:4px;" id="billFilterChips">
           <button class="bill-chip active" data-f="all" onclick="billSetFilter('all')">ทั้งหมด</button>
           <button class="bill-chip" data-f="expense" onclick="billSetFilter('expense')">จ่าย</button>
@@ -1204,7 +1213,7 @@ if (window._folioReady) {
     <div class="card">
       <div class="card-title">💾 สำรองข้อมูล & ตั้งค่า</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งเดือนนี้ไป Google Sheet</button>
+        <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งช่วงที่ดูอยู่ไป Google Sheet</button>
         <button class="btn-ghost" style="font-size:12px;" onclick="billExportCsv()">⬇️ ดาวน์โหลด CSV ทั้งหมด</button>
       </div>
       <div class="form-group">
@@ -6686,6 +6695,7 @@ const BILL_SOURCES = { camera: '📷 ถ่ายรูป', upload: '🖼️ �
 
 const billState = {
   month: todayISO().slice(0, 7),
+  view: 'month',
   filter: 'all',
   drafts: [],
   editingId: null,
@@ -6713,11 +6723,26 @@ function billAddMonths(ym, n) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
-// ─── ยอดรวมต่อเดือน (จุดเดียว ทุกหน้าใช้ร่วมกัน) ───
+// ─── มุมมองเดือน/ปี: period = 'YYYY-MM' (เดือน) หรือ 'YYYY' (ปีปฏิทิน) ───
+function billPeriod() { return billState.view === 'year' ? billState.month.slice(0, 4) : billState.month; }
+function billPeriodLabel(p) {
+  return p.length === 4 ? 'ปี ' + new Date(+p, 0, 1).toLocaleDateString('th-TH', { year: 'numeric' }).replace(/\D/g, '') : billMonthLabel(p);
+}
+function billInPeriod(t, p) { return !!t.date && t.date.slice(0, p.length) === p; }
+// จำนวนเดือนที่ใช้หาค่าเฉลี่ยของปี: ปีที่จบแล้ว = 12, ปีนี้ = เดือนที่ผ่านมาจนถึงเดือนนี้
+function billYearMonths(y) {
+  const now = new Date();
+  return +y < now.getFullYear() ? 12 : +y === now.getFullYear() ? now.getMonth() + 1 : 0;
+}
+
+// ─── ยอดรวมต่อเดือน/ปี (จุดเดียว ทุกหน้าใช้ร่วมกัน) — ym รับได้ทั้ง 'YYYY-MM' และ 'YYYY' ───
 function billMonthTotals(ym) {
+  return billTotals(t => billInPeriod(t, ym));
+}
+function billTotals(match) {
   const r = { income: 0, consumption: 0, invest: 0, ccPaid: 0, count: 0, byCat: {}, bizIncome: 0, bizExpense: 0, cards: {} };
   (state.transactions || []).forEach(t => {
-    if (!t.date || t.date.slice(0, 7) !== ym) return;
+    if (!t.date || !match(t)) return;
     const v = billAmtThb(t);
     r.count++;
     if (t.type === 'income') {
@@ -6806,7 +6831,13 @@ function billOnData() {
 }
 window.billOnData = billOnData;
 
-function billShiftMonth(n) { billState.month = billAddMonths(billState.month, n); billRender(); }
+function billShiftMonth(n) { billState.month = billAddMonths(billState.month, billState.view === 'year' ? n * 12 : n); billRender(); }
+function billSetView(v) {
+  billState.view = v;
+  document.querySelectorAll('#billViewToggle button').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  try { localStorage.setItem('folio_bill_view', v); } catch (e) {}
+  billRender();
+}
 function billSetFilter(f) {
   billState.filter = f;
   document.querySelectorAll('#billFilterChips .bill-chip').forEach(b => b.classList.toggle('active', b.dataset.f === f));
@@ -6814,20 +6845,36 @@ function billSetFilter(f) {
 }
 
 function billRender() {
-  const ym = billState.month;
-  document.getElementById('billMonthLabel').textContent = billMonthLabel(ym);
+  const ym = billPeriod();
+  const isYear = ym.length === 4;
+  const unit = isYear ? 'ทั้งปี' : 'เดือนนี้';
+  document.getElementById('billMonthLabel').textContent = billPeriodLabel(ym);
+  document.querySelectorAll('#billViewToggle button').forEach(b => b.classList.toggle('active', b.dataset.v === billState.view));
+  document.getElementById('billCatPeriod').textContent = 'รายจ่าย' + unit;
+  document.getElementById('billTrendTitle').textContent = isYear ? 'รายเดือนตลอด' + billPeriodLabel(ym) : 'แนวโน้ม 6 เดือน';
+  document.getElementById('billListTitle').textContent = 'รายการ' + unit;
   const ownerEl = document.getElementById('billOwnerNames');
   if (ownerEl && document.activeElement !== ownerEl) ownerEl.value = localStorage.getItem('folio_bill_owner') || '';
   const cardsEl = document.getElementById('billCardNames');
   if (cardsEl && document.activeElement !== cardsEl) cardsEl.value = billCards().join(', ');
   const t = billMonthTotals(ym);
   const sr = t.savingsRate;
+  // มุมมองปี: บรรทัดย่อยเป็นค่าเฉลี่ยต่อเดือน + เทียบรายจ่ายปีก่อนในช่วงเดียวกัน
+  const nM = isYear ? billYearMonths(ym) : 0;
+  const avgSub = v => nM ? 'เฉลี่ย ' + billFmt0(v / nM) + '/เดือน' : '';
+  let expSub = 'ไม่รวมเงินลงทุน/ออม';
+  if (isYear) {
+    expSub = avgSub(t.consumption);
+    const yoy = billYearOverYear(ym, t);
+    if (yoy) expSub += ` · <span style="color:${yoy.pct > 0 ? 'var(--red)' : 'var(--green)'};">${yoy.pct > 0 ? '▲' : '▼'} ${Math.abs(yoy.pct).toFixed(0)}% vs ปีก่อน</span>`;
+  }
   document.getElementById('billMetrics').innerHTML = `
-    <div class="metric"><div class="metric-label">รายรับ</div><div class="metric-value pos">${billFmt0(t.income)}</div><div class="metric-sub">${billMonthLabel(ym)}</div></div>
-    <div class="metric"><div class="metric-label">รายจ่าย</div><div class="metric-value neg">${billFmt0(t.consumption)}</div><div class="metric-sub">ไม่รวมเงินลงทุน/ออม</div></div>
-    <div class="metric"><div class="metric-label">เงินเหลือ</div><div class="metric-value ${t.surplus >= 0 ? 'pos' : 'neg'}">${billFmt0(t.surplus)}</div><div class="metric-sub">รายรับ − รายจ่าย</div></div>
-    <div class="metric"><div class="metric-label">อัตราออม</div><div class="metric-value" style="color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</div><div class="metric-sub">${sr === null ? 'ยังไม่มีรายรับเดือนนี้' : 'เงินเหลือ ÷ รายรับ'}</div></div>`;
-  billRenderCashflow(t);
+    <div class="metric"><div class="metric-label">รายรับ</div><div class="metric-value pos">${billFmt0(t.income)}</div><div class="metric-sub">${isYear ? avgSub(t.income) : billPeriodLabel(ym)}</div></div>
+    <div class="metric"><div class="metric-label">รายจ่าย</div><div class="metric-value neg">${billFmt0(t.consumption)}</div><div class="metric-sub" title="ไม่รวมเงินลงทุน/ออม และยอดจ่ายบิลบัตร">${expSub}</div></div>
+    <div class="metric"><div class="metric-label">เงินเหลือ</div><div class="metric-value ${t.surplus >= 0 ? 'pos' : 'neg'}">${billFmt0(t.surplus)}</div><div class="metric-sub">${isYear ? avgSub(t.surplus) : 'รายรับ − รายจ่าย'}</div></div>
+    <div class="metric"><div class="metric-label">อัตราออม</div><div class="metric-value" style="color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</div><div class="metric-sub">${sr === null ? 'ยังไม่มีรายรับ' + unit : 'เงินเหลือ ÷ รายรับ'}</div></div>`;
+  // การ์ดเงินเหลือ↔DCA เป็นมุมมอง "ตอนนี้" เสมอ — มุมมองปีใช้ยอดเดือนปัจจุบันแทนยอดทั้งปี
+  billRenderCashflow(isYear ? billMonthTotals(todayISO().slice(0, 7)) : t);
   billRenderCategories(t);
   billRenderCards(t);
   billRenderTrend();
@@ -6838,7 +6885,7 @@ function billRenderCashflow(t) {
   const el = document.getElementById('billCashflow');
   const dca = billDcaMonthly();
   const avg = billAvgSurplus();
-  const isCurrent = billState.month === todayISO().slice(0, 7);
+  const isCurrent = billState.view === 'year' || billState.month === todayISO().slice(0, 7);
   // ฐานที่ใช้แนะนำงบ: เฉลี่ยเดือนที่จบแล้ว → ถ้ายังไม่มี ใช้เดือนที่เลือก
   const base = avg ? avg.surplus : t.surplus;
   const baseLabel = avg ? 'เฉลี่ย ' + avg.months + ' เดือนที่จบแล้ว' : (isCurrent ? 'เดือนนี้ (ยังไม่จบเดือน)' : billMonthLabel(billState.month));
@@ -6886,7 +6933,7 @@ function billRenderCards(t) {
   if (names.length) {
     const th = 'font-size:10px;color:var(--text3);font-weight:600;padding:5px 6px;text-align:right;border-bottom:0.5px solid var(--border);';
     const td = 'font-size:12px;padding:6px;text-align:right;border-bottom:0.5px solid var(--bg2);white-space:nowrap;';
-    html += '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + th + 'text-align:left;">บัตร</th><th style="' + th + '">รูดเดือนนี้</th><th style="' + th + '">จ่ายบิลแล้ว</th></tr>';
+    html += '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + th + 'text-align:left;">บัตร</th><th style="' + th + '">' + (billState.view === 'year' ? 'รูดทั้งปี' : 'รูดเดือนนี้') + '</th><th style="' + th + '">จ่ายบิลแล้ว</th></tr>';
     names.forEach(n => {
       html += '<tr><td style="' + td + 'text-align:left;font-weight:500;">💳 ' + esc(n) + '</td><td style="' + td + '">' + billFmt0(t.cards[n].spent) + '</td><td style="' + td + 'color:var(--text2);">' + billFmt0(t.cards[n].paid) + '</td></tr>';
     });
@@ -6901,6 +6948,16 @@ function billRenderCards(t) {
   el.innerHTML = html;
 }
 
+// รายจ่ายปีนี้เทียบปีก่อน "ช่วงเดียวกัน" — ปีปัจจุบันตัดที่วันนี้ (ม.ค.–วันนี้) ให้เทียบแฟร์
+function billYearOverYear(y, cur) {
+  const prev = String(+y - 1);
+  const isThisYear = +y === new Date().getFullYear();
+  const cutoff = isThisYear ? todayISO().slice(5) : '12-31';
+  const p = billTotals(t => t.date.slice(0, 4) === prev && t.date.slice(5) <= cutoff);
+  if (!(p.consumption > 0)) return null;
+  return { prev: p.consumption, pct: (cur.consumption - p.consumption) / p.consumption * 100 };
+}
+
 function billCssVar(n, fb) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   return v || fb;
@@ -6913,17 +6970,18 @@ function billRenderCategories(t) {
   if (billState.catChart) { billState.catChart.destroy(); billState.catChart = null; }
   if (!keys.length) {
     wrap.style.display = 'none';
-    listEl.innerHTML = '<div class="empty">ยังไม่มีรายจ่ายเดือนนี้</div>';
+    listEl.innerHTML = '<div class="empty">ยังไม่มีรายจ่าย' + (billState.view === 'year' ? 'ทั้งปี' : 'เดือนนี้') + '</div>';
     return;
   }
   wrap.style.display = '';
   const total = t.consumption;
+  const nM = billState.view === 'year' ? billYearMonths(billPeriod()) : 0;
   listEl.innerHTML = keys.map(k => {
     const c = billCat(k, 'expense');
     const pct = total > 0 ? t.byCat[k] / total * 100 : 0;
     return `<div class="bill-cat-row"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div></div>
-      <span style="width:92px;text-align:right;font-weight:500;">${billFmt0(t.byCat[k])}</span>
+      <span style="width:92px;text-align:right;font-weight:500;" title="${nM ? 'เฉลี่ย ' + billFmt0(t.byCat[k] / nM) + '/เดือน' : ''}">${billFmt0(t.byCat[k])}${nM ? '<div style="font-size:9.5px;color:var(--text3);font-weight:400;">' + billFmt0(t.byCat[k] / nM) + '/ด.</div>' : ''}</span>
       <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;
   }).join('');
   if (typeof Chart === 'undefined' || !document.getElementById('page-bills').classList.contains('active')) return;
@@ -6947,7 +7005,8 @@ function billRenderTrend() {
   if (billState.trendChart) { billState.trendChart.destroy(); billState.trendChart = null; }
   if (typeof Chart === 'undefined' || !document.getElementById('page-bills').classList.contains('active')) return;
   const months = [];
-  for (let i = 5; i >= 0; i--) months.push(billAddMonths(billState.month, -i));
+  if (billState.view === 'year') { const y = billPeriod(); for (let m = 1; m <= 12; m++) months.push(y + '-' + String(m).padStart(2, '0')); }
+  else for (let i = 5; i >= 0; i--) months.push(billAddMonths(billState.month, -i));
   const data = months.map(billMonthTotals);
   const textColor = billCssVar('--text3', '#9E9AAA');
   billState.trendChart = new Chart(document.getElementById('billTrendChart').getContext('2d'), {
@@ -6977,15 +7036,17 @@ function billRenderList() {
   const el = document.getElementById('billList');
   if (!el) return;
   const q = (document.getElementById('billSearch').value || '').trim().toLowerCase();
+  // มุมมองปีไม่ได้ค้นหา → ตารางสรุปรายเดือน (แตะเพื่อเข้าไปดูเดือนนั้น) แทนรายการยาวทั้งปี
+  if (billState.view === 'year' && !q) { billRenderYearTable(el); return; }
   const rows = (state.transactions || []).filter(t => {
-    if (!t.date || t.date.slice(0, 7) !== billState.month) return false;
+    if (!billInPeriod(t, billPeriod())) return false;
     if (billState.filter !== 'all' && t.type !== billState.filter) return false;
     if (!q) return true;
     const c = billCat(t.category, t.type);
     return [t.merchant, t.note, c.label, t.ref, t.card].some(x => String(x || '').toLowerCase().includes(q));
   }).sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')) || ((b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
   if (!rows.length) {
-    el.innerHTML = '<div class="empty">' + (q ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีรายการเดือนนี้ — เริ่มจาก 📷 ถ่ายสลิป หรือ ✍️ กรอกเอง') + '</div>';
+    el.innerHTML = '<div class="empty">' + (q ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีรายการ' + (billState.view === 'year' ? 'ในปีนี้' : 'เดือนนี้') + ' — เริ่มจาก 📷 ถ่ายสลิป หรือ ✍️ กรอกเอง') + '</div>';
     return;
   }
   let html = '', lastDate = '';
@@ -7010,6 +7071,34 @@ function billRenderList() {
     </div>`;
   });
   el.innerHTML = html;
+}
+
+function billRenderYearTable(el) {
+  const y = billPeriod();
+  const th = 'font-size:10px;color:var(--text3);font-weight:600;padding:6px;text-align:right;border-bottom:0.5px solid var(--border);white-space:nowrap;';
+  const td = 'font-size:12px;padding:8px 6px;text-align:right;border-bottom:0.5px solid var(--bg2);white-space:nowrap;';
+  let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:330px;"><tr><th style="' + th + 'text-align:left;">เดือน</th><th style="' + th + '">รายรับ</th><th style="' + th + '">รายจ่าย</th><th style="' + th + '">เหลือ</th><th style="' + th + '">ออม</th></tr>';
+  let any = false;
+  for (let m = 1; m <= 12; m++) {
+    const ym = y + '-' + String(m).padStart(2, '0');
+    const t = billMonthTotals(ym);
+    if (!t.count) continue;
+    any = true;
+    const sr = t.savingsRate;
+    html += `<tr style="cursor:pointer;" onclick="billOpenMonth('${ym}')">
+      <td style="${td}text-align:left;font-weight:500;">${new Date(+y, m - 1, 1).toLocaleDateString('th-TH', { month: 'short' })} <span style="color:var(--text3);font-size:10px;">${t.count} รายการ ›</span></td>
+      <td style="${td}color:var(--green);">${billFmt0(t.income)}</td>
+      <td style="${td}">${billFmt0(t.consumption)}</td>
+      <td style="${td}color:${t.surplus >= 0 ? 'var(--green)' : 'var(--red)'};">${billFmt0(t.surplus)}</td>
+      <td style="${td}color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</td></tr>`;
+  }
+  html += '</table></div><div style="font-size:10.5px;color:var(--text3);margin-top:6px;">แตะเดือนเพื่อดูรายการ · ค้นหาด้านบนเพื่อดูรายการทั้งปี</div>';
+  el.innerHTML = any ? html : '<div class="empty">ยังไม่มีรายการในปีนี้ — เริ่มจาก 📷 ถ่ายสลิป หรือ ✍️ กรอกเอง</div>';
+}
+function billOpenMonth(ym) {
+  billState.month = ym;
+  billSetView('month');
+  document.getElementById('billListTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function billDelete(id) {
@@ -7479,9 +7568,9 @@ const BILL_EXPORT_HEADERS = ['วันที่', 'เวลา', 'ประเ
 
 // ใช้ Apps Script webhook เดิม (action=clear_append) — ส่งทีละเดือน แยกแท็บ Bills_YYYY-MM ให้ URL ไม่ยาวเกิน
 async function billBackupSheet() {
-  const ym = billState.month;
-  const list = (state.transactions || []).filter(t => t.date && t.date.slice(0, 7) === ym);
-  if (!list.length) { showToast('ไม่มีรายการในเดือนนี้'); return; }
+  const ym = billPeriod(); // มุมมองปี → ส่งทั้งปีไปแท็บ Bills_YYYY
+  const list = (state.transactions || []).filter(t => billInPeriod(t, ym));
+  if (!list.length) { showToast('ไม่มีรายการในช่วงนี้'); return; }
   const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
   const params = new URLSearchParams({ action: 'clear_append', tab: 'Bills_' + ym, data: JSON.stringify({ headers: BILL_EXPORT_HEADERS, rows: billRowsForExport(list) }) });
   showToast('กำลังส่งไป Google Sheet...');
@@ -7570,6 +7659,7 @@ async function billHandleShareLaunch() {
   else if (text.trim()) billProcessText(text, 'share');
   else showToast('ไม่พบรูปหรือข้อความที่แชร์มา');
 }
+try { if (localStorage.getItem('folio_bill_view') === 'year') billState.view = 'year'; } catch (e) {}
 billHandleShareLaunch();
 </script>
 </body>
