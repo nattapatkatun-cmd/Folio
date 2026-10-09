@@ -508,6 +508,8 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-view-toggle { display: flex; background: var(--surface); border: 0.5px solid var(--border); border-radius: 99px; padding: 3px; }
 .bill-view-toggle button { font-family: var(--font); font-size: 12px; border: none; background: none; color: var(--text2); padding: 5px 12px; border-radius: 99px; cursor: pointer; }
 .bill-view-toggle button.active { background: var(--accent); color: #fff; font-weight: 600; }
+.bill-card-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; background: var(--bg); border: 0.5px solid var(--border2); border-radius: 99px; padding: 4px 6px 4px 10px; color: var(--text); }
+.bill-card-chip button { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 11px; padding: 0 3px; }
 .bill-chip { font-family: var(--font); font-size: 11px; padding: 3px 10px; border-radius: 99px; border: 0.5px solid var(--border2); background: var(--bg); color: var(--text2); cursor: pointer; font-weight: 400; }
 .bill-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .bill-day { font-size: 10.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.4px; margin: 12px 0 4px; display: flex; justify-content: space-between; }
@@ -1221,8 +1223,12 @@ if (window._folioReady) {
         <input class="form-input" id="billOwnerNames" placeholder="เช่น ณัฐพัฒน์, NATTAPAT" onchange="billSaveOwner(this.value)">
       </div>
       <div class="form-group" style="margin-top:10px;">
-        <label class="form-label">บัตรเครดิตของคุณ (คั่นด้วย , — ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
-        <input class="form-input" id="billCardNames" placeholder="เช่น KTC 1234, UOB 5678, SCB M 9012" onchange="billSaveCards(this.value)">
+        <label class="form-label">บัตรเครดิตของคุณ (ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
+        <div id="billCardChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input class="form-input" id="billCardNew" placeholder="เช่น KTC 1234" style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter')billAddCardFromInput()">
+          <button class="btn-primary" style="flex:none;padding:8px 14px;font-size:12px;" onclick="billAddCardFromInput()">+ เพิ่มบัตร</button>
+        </div>
       </div>
       <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
         🔒 รูปสลิปถูกส่งไปให้ Gemini อ่าน (ไม่ได้ประมวลผลในเครื่อง) และ<strong>ไม่ถูกเก็บ</strong> — Firestore เก็บเฉพาะข้อมูลที่อ่านได้ (วันที่ ยอด หมวด ร้าน เลขอ้างอิง)<br>
@@ -1368,7 +1374,6 @@ service cloud.firestore {
     <h3 id="billConfirmTitle">ตรวจสอบก่อนบันทึก</h3>
     <div id="billConfirmNote" style="font-size:11px;color:var(--text3);margin:-8px 0 12px;"></div>
     <div id="billDrafts"></div>
-    <datalist id="billCardList"></datalist>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="billCloseConfirm()">ยกเลิก</button>
       <button class="btn-primary" id="billSaveBtn" onclick="billSaveDrafts()">บันทึก</button>
@@ -6855,8 +6860,7 @@ function billRender() {
   document.getElementById('billListTitle').textContent = 'รายการ' + unit;
   const ownerEl = document.getElementById('billOwnerNames');
   if (ownerEl && document.activeElement !== ownerEl) ownerEl.value = localStorage.getItem('folio_bill_owner') || '';
-  const cardsEl = document.getElementById('billCardNames');
-  if (cardsEl && document.activeElement !== cardsEl) cardsEl.value = billCards().join(', ');
+  billRenderCardChips();
   const t = billMonthTotals(ym);
   const sr = t.savingsRate;
   // มุมมองปี: บรรทัดย่อยเป็นค่าเฉลี่ยต่อเดือน + เทียบรายจ่ายปีก่อนในช่วงเดียวกัน
@@ -7205,7 +7209,6 @@ function billRenderDrafts() {
   btn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึก ' + n + ' รายการ';
   btn.disabled = !n;
   if (!ds.length) { document.getElementById('billDrafts').innerHTML = '<div class="empty">AI ไม่พบรายการเงินในข้อมูลนี้</div>'; btn.disabled = true; return; }
-  document.getElementById('billCardList').innerHTML = billCards().map(c => `<option value="${esc(c)}">`).join('');
   document.getElementById('billDrafts').innerHTML = ds.map((d, i) => {
     const catOpts = BILL_CATS[d.type].map(c => `<option value="${c.key}" ${c.key === d.category ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('');
     const curs = ['THB', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'HKD', 'GBP', 'KRW'];
@@ -7232,7 +7235,7 @@ function billRenderDrafts() {
         ${d.currency !== 'THB' ? `<div class="form-group full"><label class="form-label">อัตรา 1 ${esc(d.currency)} = ? บาท</label><input class="form-input" type="number" step="0.0001" min="0" value="${esc(d.fx || '')}" oninput="billDraftSet(${i},'fx',this.value)"></div>` : ''}
         <div class="form-group full"><label class="form-label">หมวด</label><select class="form-select" onchange="billDraftSet(${i},'category',this.value,true)">${catOpts}</select></div>
         <div class="form-group ${showCard ? '' : 'full'}"><label class="form-label">${d.type === 'income' ? 'รับเงินทาง' : 'จ่ายด้วย'}</label><select class="form-select" onchange="billDraftSet(${i},'payMethod',this.value,true)">${payOpts}</select></div>
-        ${showCard ? `<div class="form-group"><label class="form-label">บัตรใบไหน</label><input class="form-input" list="billCardList" value="${esc(d.card)}" placeholder="เช่น KTC 1234" oninput="billDraftSet(${i},'card',this.value)"></div>` : ''}
+        ${showCard ? billCardField(d, i) : ''}
         <div class="form-group full"><label class="form-label">${d.type === 'income' ? 'จาก' : 'ร้าน / ผู้รับเงิน'}</label><input class="form-input" value="${esc(d.merchant)}" oninput="billDraftSet(${i},'merchant',this.value)"></div>
         <div class="form-group"><label class="form-label">วันที่</label><input class="form-input" type="date" value="${esc(d.date)}" onchange="billDraftSet(${i},'date',this.value,true)"></div>
         <div class="form-group"><label class="form-label">เวลา</label><input class="form-input" type="time" value="${esc(d.time)}" onchange="billDraftSet(${i},'time',this.value)"></div>
@@ -7242,6 +7245,45 @@ function billRenderDrafts() {
       <div style="font-size:10px;color:var(--text3);margin-top:6px;">${esc(BILL_SOURCES[d.source] || '')}${d.aiRead ? ' · อ่านโดย Gemini — ตรวจยอดและหมวดก่อนบันทึก' : ''}</div>
     </div>`;
   }).join('');
+}
+
+// ช่อง "บัตรใบไหน": dropdown จากรายชื่อบัตร + เพิ่มบัตรใหม่ได้ในที่เดียว
+function billCardField(d, i) {
+  const list = billCards();
+  if (d.addingCard) {
+    return `<div class="form-group"><label class="form-label">ชื่อบัตรใหม่</label>
+      <div style="display:flex;gap:4px;"><input class="form-input" id="billNewCard${i}" placeholder="เช่น KTC 1234" style="min-width:0;" onkeydown="if(event.key==='Enter')billDraftAddCard(${i})">
+      <button class="btn-primary" style="flex:none;padding:6px 10px;font-size:12px;" onclick="billDraftAddCard(${i})">บันทึก</button></div>
+      <button class="bill-del" style="text-align:left;font-size:11px;" onclick="billDraftSet(${i},'addingCard',false,true)">← เลือกจากรายชื่อ</button></div>`;
+  }
+  const unknown = d.card && !list.includes(d.card);
+  const opts = ['<option value="">— เลือกบัตร —</option>']
+    .concat(list.map(c => `<option value="${esc(c)}" ${c === d.card ? 'selected' : ''}>💳 ${esc(c)}</option>`))
+    .concat(unknown ? [`<option value="${esc(d.card)}" selected>🆕 ${esc(d.card)} (ยังไม่อยู่ในรายชื่อ)</option>`] : [])
+    .concat(['<option value="__new">➕ เพิ่มบัตรใหม่...</option>']).join('');
+  return `<div class="form-group"><label class="form-label">บัตรใบไหน</label>
+    <select class="form-select" onchange="billDraftPickCard(${i},this.value)">${opts}</select>
+    ${unknown ? `<button class="bill-del" style="text-align:left;font-size:11px;color:var(--accent);" onclick="billDraftSaveUnknownCard(${i})">💾 บันทึก "${esc(d.card)}" ลง dropdown</button>` : ''}</div>`;
+}
+function billDraftPickCard(i, v) {
+  const d = billState.drafts[i];
+  if (!d) return;
+  if (v === '__new') { d.addingCard = true; billRenderDrafts(); setTimeout(() => { const el = document.getElementById('billNewCard' + i); if (el) el.focus(); }, 30); return; }
+  d.card = v;
+}
+function billDraftAddCard(i) {
+  const d = billState.drafts[i];
+  const el = document.getElementById('billNewCard' + i);
+  if (!d || !el || !el.value.trim()) { showToast('พิมพ์ชื่อบัตรก่อน'); return; }
+  d.card = billAddCard(el.value);
+  d.addingCard = false;
+  billRenderDrafts();
+}
+function billDraftSaveUnknownCard(i) {
+  const d = billState.drafts[i];
+  if (!d || !d.card) return;
+  d.card = billAddCard(d.card);
+  billRenderDrafts();
 }
 
 // rerender = true เฉพาะช่องที่เปลี่ยนหน้าตาฟอร์ม (ไม่ rerender ตอนพิมพ์ ไม่งั้น focus หลุด)
@@ -7535,12 +7577,44 @@ function billSaveOwner(v) {
   billSyncSettings();
   showToast('บันทึกชื่อบัญชีแล้ว');
 }
-function billSaveCards(v) {
-  const list = String(v || '').split(',').map(x => x.trim()).filter(Boolean);
-  localStorage.setItem('folio_bill_cards', list.join(', '));
+// ─── รายชื่อบัตร (dropdown) — เก็บใน localStorage + Firestore settings/bill ───
+function billSetCards(list) {
+  // ชื่อบัตรห้ามมี , เพราะ localStorage เก็บแบบคั่นด้วย ,
+  localStorage.setItem('folio_bill_cards', list.map(c => c.replace(/,/g, ' ').trim()).filter(Boolean).join(', '));
   billSyncSettings();
-  billRender();
-  showToast('บันทึกรายชื่อบัตร ' + list.length + ' ใบแล้ว');
+  billRenderCardChips();
+  if (document.getElementById('bill-confirm-modal').classList.contains('open')) billRenderDrafts();
+}
+// เพิ่มบัตรใหม่ (ไม่สนตัวพิมพ์เล็ก/ใหญ่ถ้าซ้ำ) — คืนชื่อที่ใช้จริงใน dropdown
+function billAddCard(name) {
+  name = String(name || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!name) return '';
+  const list = billCards();
+  const same = list.find(c => c.toUpperCase() === name.toUpperCase());
+  if (same) return same;
+  billSetCards(list.concat(name));
+  showToast('เพิ่มบัตร ' + name + ' แล้ว');
+  return name;
+}
+function billAddCardFromInput() {
+  const el = document.getElementById('billCardNew');
+  if (!el.value.trim()) { showToast('พิมพ์ชื่อบัตรก่อน'); return; }
+  billAddCard(el.value);
+  el.value = '';
+}
+function billRemoveCard(i) {
+  const list = billCards();
+  if (!list[i] || !confirm('ลบบัตร ' + list[i] + ' ออกจากรายชื่อ? (รายการที่บันทึกไปแล้วยังอยู่ครบ)')) return;
+  list.splice(i, 1);
+  billSetCards(list);
+}
+function billRenderCardChips() {
+  const el = document.getElementById('billCardChips');
+  if (!el) return;
+  const list = billCards();
+  el.innerHTML = list.length
+    ? list.map((c, i) => `<span class="bill-card-chip">💳 ${esc(c)}<button title="ลบ" onclick="billRemoveCard(${i})">✕</button></span>`).join('')
+    : '<span style="font-size:11px;color:var(--text3);">ยังไม่มีบัตร — เพิ่มด้านล่าง หรือเพิ่มจากหน้าบันทึกรายการก็ได้</span>';
 }
 // เก็บชื่อบัญชี/บัตรใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
 function billSyncSettings() {
