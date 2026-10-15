@@ -510,6 +510,10 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-view-toggle button.active { background: var(--accent); color: #fff; font-weight: 600; }
 .bill-card-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; background: var(--bg); border: 0.5px solid var(--border2); border-radius: 99px; padding: 4px 6px 4px 10px; color: var(--text); }
 .bill-card-chip button { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 11px; padding: 0 3px; }
+.bill-filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.bill-filter-row .form-select { width: 100%; font-size: 12.5px; padding: 7px 10px; min-width: 0; }
+.bill-tap { cursor: pointer; border-radius: 8px; }
+.bill-tap:hover { background: var(--bg); }
 .bill-chip { font-family: var(--font); font-size: 11px; padding: 3px 10px; border-radius: 99px; border: 0.5px solid var(--border2); background: var(--bg); color: var(--text2); cursor: pointer; font-weight: 400; }
 .bill-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .bill-day { font-size: 10.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.4px; margin: 12px 0 4px; display: flex; justify-content: space-between; }
@@ -1217,6 +1221,11 @@ if (window._folioReady) {
         </div>
       </div>
       <div id="billRangeSummary" style="font-size:11.5px;color:var(--text2);background:var(--bg);border-radius:8px;padding:7px 10px;margin-bottom:10px;"></div>
+      <div class="bill-filter-row">
+        <select class="form-select" id="billCatFilter" onchange="billSetCatFilter(this.value)"></select>
+        <select class="form-select" id="billPayFilter" onchange="billSetPayFilter(this.value)"></select>
+      </div>
+      <div id="billActiveFilters" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;"></div>
       <input class="form-input" id="billSearch" placeholder="ค้นหาร้าน / หมวด / โน้ต / บัตร" oninput="billRenderList()" style="width:100%;margin-bottom:10px;">
       <div id="billList"></div>
     </div>
@@ -6723,6 +6732,8 @@ const billState = {
   listMode: 'month',    // รายการ: day | week | month
   listDate: todayISO(), // วันอ้างอิงของมุมมองวัน/สัปดาห์
   filter: 'all',
+  catFilter: '',        // key หมวด หรือ '' = ทุกหมวด
+  payFilter: '',        // 'card' | 'transfer' | ... | 'card:<ชื่อบัตร>' หรือ '' = ทุกช่องทาง
   drafts: [],
   editingId: null,
   catChart: null,
@@ -6869,6 +6880,61 @@ function billSetView(v) {
   try { localStorage.setItem('folio_bill_view', v); } catch (e) {}
   billRender();
 }
+// ─── ตัวกรองหมวด / ช่องทางจ่าย ───
+function billMatchFilters(t) {
+  if (billState.catFilter && t.category !== billState.catFilter) return false;
+  const pf = billState.payFilter;
+  if (pf) {
+    if (pf.startsWith('card:')) {
+      // บัตรรายใบ: ทั้งที่รูด และที่โอนจ่ายบิลของบัตรใบนั้น
+      if ((t.card || '') !== pf.slice(5) || !(t.payMethod === 'card' || t.category === 'cc_payment')) return false;
+    } else if ((BILL_PAY[t.payMethod] ? t.payMethod : 'unknown') !== pf) return false;
+  }
+  return true;
+}
+function billSetCatFilter(v) { billState.catFilter = v; billRenderList(); }
+function billSetPayFilter(v) { billState.payFilter = v; billRenderList(); }
+function billClearFilters() {
+  billState.catFilter = ''; billState.payFilter = '';
+  billSetFilter('all');
+}
+// แตะจาก dashboard → กรองรายการให้ตรงกับยอดที่แตะ แล้วเลื่อนลงไปดู
+function billDrill(kind, value) {
+  billState.catFilter = kind === 'cat' ? value : '';
+  billState.payFilter = kind === 'pay' ? value : '';
+  billState.filter = 'all';
+  document.querySelectorAll('#billFilterChips .bill-chip').forEach(b => b.classList.toggle('active', b.dataset.f === 'all'));
+  document.getElementById('billSearch').value = '';
+  if (billState.view === 'month') billState.listMode = 'month'; // ให้ช่วงของรายการตรงกับยอดบน dashboard
+  billRenderList();
+  document.getElementById('billListTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function billFilterLabel(kind, v) {
+  if (kind === 'cat') { const c = billCat(v); return c.icon + ' ' + c.label; }
+  if (v.startsWith('card:')) return '💳 ' + v.slice(5);
+  return v === 'unknown' ? '❔ ไม่ระบุช่องทาง' : BILL_PAY[v];
+}
+function billRenderFilterControls() {
+  const catSel = document.getElementById('billCatFilter');
+  const paySel = document.getElementById('billPayFilter');
+  const opt = (v, label, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`;
+  catSel.innerHTML = opt('', 'ทุกหมวด', billState.catFilter) +
+    '<optgroup label="รายจ่าย">' + BILL_CATS.expense.map(c => opt(c.key, c.icon + ' ' + c.label, billState.catFilter)).join('') + '</optgroup>' +
+    '<optgroup label="รายรับ">' + BILL_CATS.income.map(c => opt(c.key, c.icon + ' ' + c.label, billState.catFilter)).join('') + '</optgroup>';
+  // บัตร: รายชื่อที่ตั้งไว้ + ชื่อบัตรที่เคยใช้ในรายการ (เผื่อบัตรที่ลบออกจากรายชื่อแล้ว)
+  const cards = billCards().slice();
+  (state.transactions || []).forEach(t => { if (t.card && !cards.includes(t.card)) cards.push(t.card); });
+  paySel.innerHTML = opt('', 'ทุกช่องทาง', billState.payFilter) +
+    Object.keys(BILL_PAY).map(k => opt(k, k === 'unknown' ? '❔ ไม่ระบุ' : BILL_PAY[k], billState.payFilter)).join('') +
+    (cards.length ? '<optgroup label="บัตรรายใบ">' + cards.map(c => opt('card:' + c, '💳 ' + c, billState.payFilter)).join('') + '</optgroup>' : '');
+  const act = document.getElementById('billActiveFilters');
+  const chips = [];
+  if (billState.catFilter) chips.push(`<span class="bill-card-chip">${esc(billFilterLabel('cat', billState.catFilter))}<button onclick="billSetCatFilter('')">✕</button></span>`);
+  if (billState.payFilter) chips.push(`<span class="bill-card-chip">${esc(billFilterLabel('pay', billState.payFilter))}<button onclick="billSetPayFilter('')">✕</button></span>`);
+  act.style.display = chips.length ? 'flex' : 'none';
+  act.innerHTML = chips.join('') + (chips.length ? '<button class="bill-chip" onclick="billClearFilters()">ล้างตัวกรอง</button>' : '');
+}
+
 function billSetFilter(f) {
   billState.filter = f;
   document.querySelectorAll('#billFilterChips .bill-chip').forEach(b => b.classList.toggle('active', b.dataset.f === f));
@@ -6967,13 +7033,13 @@ function billRenderPay(t) {
   let html = '';
   keys.forEach(k => {
     const pct = total > 0 ? t.byPay[k] / total * 100 : 0;
-    html += `<div class="bill-cat-row"><span style="width:118px;flex-shrink:0;">${esc(BILL_PAY[k] === 'ไม่ระบุ' ? '❔ ไม่ระบุ' : BILL_PAY[k])}</span>
+    html += `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('pay','${k}')"><span style="width:118px;flex-shrink:0;">${esc(BILL_PAY[k] === 'ไม่ระบุ' ? '❔ ไม่ระบุ' : BILL_PAY[k])} <span style="color:var(--text3);">›</span></span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${colors[k]};"></div></div>
       <span style="width:92px;text-align:right;font-weight:500;">${billFmt0(t.byPay[k])}</span>
       <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;
     if (k === 'card') {
       Object.keys(t.cards).filter(n => t.cards[n].spent > 0).sort((a, b) => t.cards[b].spent - t.cards[a].spent).forEach(n => {
-        html += `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);padding:0 44px 6px 26px;"><span>└ ${esc(n)}</span><span>${billFmt0(t.cards[n].spent)}</span></div>`;
+        html += `<div class="bill-tap" onclick="billDrill('pay', ${esc(JSON.stringify('card:' + n))})" style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);padding:2px 44px 6px 26px;"><span>└ ${esc(n)} ›</span><span>${billFmt0(t.cards[n].spent)}</span></div>`;
       });
     }
   });
@@ -6995,7 +7061,7 @@ function billRenderCards(t) {
     const td = 'font-size:12px;padding:6px;text-align:right;border-bottom:0.5px solid var(--bg2);white-space:nowrap;';
     html += '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + th + 'text-align:left;">บัตร</th><th style="' + th + '">' + (billState.view === 'year' ? 'รูดทั้งปี' : 'รูดเดือนนี้') + '</th><th style="' + th + '">จ่ายบิลแล้ว</th></tr>';
     names.forEach(n => {
-      html += '<tr><td style="' + td + 'text-align:left;font-weight:500;">💳 ' + esc(n) + '</td><td style="' + td + '">' + billFmt0(t.cards[n].spent) + '</td><td style="' + td + 'color:var(--text2);">' + billFmt0(t.cards[n].paid) + '</td></tr>';
+      html += '<tr class="bill-tap" onclick="billDrill(\'pay\', ' + esc(JSON.stringify('card:' + n)) + ')"><td style="' + td + 'text-align:left;font-weight:500;">💳 ' + esc(n) + ' <span style="color:var(--text3);">›</span></td><td style="' + td + '">' + billFmt0(t.cards[n].spent) + '</td><td style="' + td + 'color:var(--text2);">' + billFmt0(t.cards[n].paid) + '</td></tr>';
     });
     html += '</table><div style="font-size:10.5px;color:var(--text3);margin-top:6px;line-height:1.6;">ยอดรูดนับเป็นรายจ่ายตอนรูด · ยอดจ่ายบิลบัตรไม่นับซ้ำ · นับตามเดือนปฏิทิน ไม่ใช่รอบบิลของบัตร</div>';
   }
@@ -7039,7 +7105,7 @@ function billRenderCategories(t) {
   listEl.innerHTML = keys.map(k => {
     const c = billCat(k, 'expense');
     const pct = total > 0 ? t.byCat[k] / total * 100 : 0;
-    return `<div class="bill-cat-row"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)}</span>
+    return `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('cat','${k}')"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div></div>
       <span style="width:92px;text-align:right;font-weight:500;" title="${nM ? 'เฉลี่ย ' + billFmt0(t.byCat[k] / nM) + '/เดือน' : ''}">${billFmt0(t.byCat[k])}${nM ? '<div style="font-size:9.5px;color:var(--text3);font-weight:400;">' + billFmt0(t.byCat[k] / nM) + '/ด.</div>' : ''}</span>
       <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;
@@ -7053,6 +7119,7 @@ function billRenderCategories(t) {
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '62%',
+      onClick: (e, els) => { if (els.length) billDrill('cat', keys[els[0].index]); },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: c => c.label + ': ' + billFmt0(c.parsed) } }
@@ -7142,28 +7209,34 @@ function billRenderList() {
   document.getElementById('billRangeBar').style.display = isYear ? 'none' : 'flex';
   document.querySelectorAll('#billListModeToggle button').forEach(b => b.classList.toggle('active', b.dataset.m === billState.listMode));
   const sumEl = document.getElementById('billRangeSummary');
-  // มุมมองปีไม่ได้ค้นหา → ตารางสรุปรายเดือน (แตะเพื่อเข้าไปดูเดือนนั้น) แทนรายการยาวทั้งปี
-  if (isYear && !q) { sumEl.style.display = 'none'; billRenderYearTable(el); return; }
-  const range = isYear ? null : billListRange();
-  if (range) {
-    document.getElementById('billRangeLabel').textContent = range.label;
-    const rt = billTotals(t => t.date >= range.from && t.date <= range.to);
+  billRenderFilterControls();
+  const filtered = !!(billState.catFilter || billState.payFilter || billState.filter !== 'all');
+  // มุมมองปีที่ไม่ได้ค้นหา/กรอง → ตารางสรุปรายเดือน (แตะเพื่อเข้าไปดูเดือนนั้น) แทนรายการยาวทั้งปี
+  if (isYear && !q && !filtered) { sumEl.style.display = 'none'; billRenderYearTable(el); return; }
+  const y = billPeriod().slice(0, 4);
+  const range = isYear ? { from: y + '-01-01', to: y + '-12-31', label: billPeriodLabel(y) } : billListRange();
+  const matchQ = t => {
+    if (!q) return true;
+    const c = billCat(t.category, t.type);
+    return [t.merchant, t.note, c.label, t.ref, t.card].some(x => String(x || '').toLowerCase().includes(q));
+  };
+  const match = t => t.date >= range.from && t.date <= range.to &&
+    (billState.filter === 'all' || t.type === billState.filter) && billMatchFilters(t) && matchQ(t);
+  {
+    if (!isYear) document.getElementById('billRangeLabel').textContent = range.label;
+    // ยอดสรุปคิดเฉพาะรายการที่ผ่านตัวกรอง — ตัวเลขเดียวกับที่แตะมาจาก dashboard
+    const rt = billTotals(match);
     sumEl.style.display = '';
     sumEl.innerHTML = rt.count
       ? (rt.income ? `รับ <strong style="color:var(--green);">+${billFmt0(rt.income)}</strong> · ` : '') + `จ่าย <strong style="color:var(--red);">−${billFmt0(rt.consumption)}</strong>` +
         (rt.invest ? ` · ลงทุน/ออม ${billFmt0(rt.invest)}` : '') + (rt.ccPaid ? ` · จ่ายบิลบัตร ${billFmt0(rt.ccPaid)}` : '') +
         ` <span style="color:var(--text3);">· ${rt.count} รายการ</span>`
-      : '<span style="color:var(--text3);">ไม่มีรายการในช่วงนี้</span>';
-  } else sumEl.style.display = 'none';
-  const rows = (state.transactions || []).filter(t => {
-    if (range ? !(t.date >= range.from && t.date <= range.to) : !billInPeriod(t, billPeriod())) return false;
-    if (billState.filter !== 'all' && t.type !== billState.filter) return false;
-    if (!q) return true;
-    const c = billCat(t.category, t.type);
-    return [t.merchant, t.note, c.label, t.ref, t.card].some(x => String(x || '').toLowerCase().includes(q));
-  }).sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')) || ((b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+      : '<span style="color:var(--text3);">ไม่มีรายการ' + (filtered || q ? 'ที่ตรงกับตัวกรอง' : '') + 'ในช่วงนี้</span>';
+    if (filtered || q) sumEl.innerHTML = '<span style="color:var(--text3);">ตามตัวกรอง · ' + esc(range.label) + ':</span> ' + sumEl.innerHTML;
+  }
+  const rows = (state.transactions || []).filter(match).sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')) || ((b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
   if (!rows.length) {
-    el.innerHTML = '<div class="empty">' + (q ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีรายการ' + (range ? 'ในช่วงนี้ — กด ‹ เพื่อดูย้อนหลัง หรือ' : 'ในปีนี้ —') + ' เริ่มจาก 📷 ถ่ายสลิป หรือ ✍️ กรอกเอง') + '</div>';
+    el.innerHTML = '<div class="empty">' + (q || filtered ? 'ไม่พบรายการที่ตรงกับตัวกรอง' + (isYear ? '' : ' — ลองเปลี่ยนเป็นมุมมองเดือน หรือกด ‹ ดูย้อนหลัง') : 'ยังไม่มีรายการในช่วงนี้ — กด ‹ เพื่อดูย้อนหลัง หรือเริ่มจาก 📷 ถ่ายสลิป หรือ ✍️ กรอกเอง') + '</div>';
     return;
   }
   let html = '', lastDate = '';
