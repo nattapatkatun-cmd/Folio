@@ -510,6 +510,10 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-view-toggle button.active { background: var(--accent); color: #fff; font-weight: 600; }
 .bill-card-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; background: var(--bg); border: 0.5px solid var(--border2); border-radius: 99px; padding: 4px 6px 4px 10px; color: var(--text); }
 .bill-card-chip button { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 11px; padding: 0 3px; }
+#billMetrics { grid-template-columns: repeat(5, 1fr); }
+#billMetrics .bill-invest-tile { cursor: pointer; }
+@media (max-width: 779px) { #billMetrics { grid-template-columns: 1fr 1fr; } #billMetrics .bill-invest-tile { grid-column: 1 / -1; } }
+@media (min-width: 780px) and (max-width: 1023px) { #billMetrics { grid-template-columns: repeat(3, 1fr); } }
 .bill-filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
 .bill-filter-row .form-select { width: 100%; font-size: 12.5px; padding: 7px 10px; min-width: 0; }
 .bill-tap { cursor: pointer; border-radius: 8px; }
@@ -6967,8 +6971,9 @@ function billRender() {
   document.getElementById('billMetrics').innerHTML = `
     <div class="metric"><div class="metric-label">รายรับ</div><div class="metric-value pos">${billFmt0(t.income)}</div><div class="metric-sub">${isYear ? avgSub(t.income) : billPeriodLabel(ym)}</div></div>
     <div class="metric"><div class="metric-label">รายจ่าย</div><div class="metric-value neg">${billFmt0(t.consumption)}</div><div class="metric-sub" title="ไม่รวมเงินลงทุน/ออม และยอดจ่ายบิลบัตร">${expSub}</div></div>
-    <div class="metric"><div class="metric-label">เงินเหลือ</div><div class="metric-value ${t.surplus >= 0 ? 'pos' : 'neg'}">${billFmt0(t.surplus)}</div><div class="metric-sub">${isYear ? avgSub(t.surplus) : 'รายรับ − รายจ่าย'}</div></div>
-    <div class="metric"><div class="metric-label">อัตราออม</div><div class="metric-value" style="color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</div><div class="metric-sub">${sr === null ? 'ยังไม่มีรายรับ' + unit : 'เงินเหลือ ÷ รายรับ'}</div></div>`;
+    <div class="metric"><div class="metric-label">เงินเหลือ</div><div class="metric-value ${t.surplus >= 0 ? 'pos' : 'neg'}">${billFmt0(t.surplus)}</div><div class="metric-sub">${t.invest ? 'ลงทุนแล้ว ' + billFmt0(t.invest) + ' · เหลือในบัญชี <span style="color:' + (t.surplus - t.invest >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + billFmt0(t.surplus - t.invest) + '</span>' : (isYear ? avgSub(t.surplus) : 'รายรับ − รายจ่าย')}</div></div>
+    <div class="metric"><div class="metric-label">อัตราออม</div><div class="metric-value" style="color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</div><div class="metric-sub">${sr === null ? 'ยังไม่มีรายรับ' + unit : 'เงินเหลือ ÷ รายรับ'}</div></div>
+    <div class="metric bill-invest-tile" title="แตะเพื่อดูรายการลงทุน/ออม" onclick="billDrill('cat','invest')"><div class="metric-label">📈 ลงทุน/ออม <span style="color:var(--accent);">›</span></div><div class="metric-value" style="color:var(--green);">${billFmt0(t.invest)}</div><div class="metric-sub">${t.income > 0 ? 'อัตราการลงทุน ' + (t.invest / t.income * 100).toFixed(0) + '% ของรายรับ' : (isYear && t.invest ? avgSub(t.invest) : 'โอนเข้าพอร์ต/บัญชีออมจริง')}</div></div>`;
   // การ์ดเงินเหลือ↔DCA เป็นมุมมอง "ตอนนี้" เสมอ — มุมมองปีใช้ยอดเดือนปัจจุบันแทนยอดทั้งปี
   billRenderCashflow(isYear ? billMonthTotals(todayISO().slice(0, 7)) : t);
   billRenderCategories(t);
@@ -7142,7 +7147,8 @@ function billRenderTrend() {
       datasets: [
         { type: 'bar', label: 'รายรับ', data: data.map(d => Math.round(d.income)), backgroundColor: '#16A34A', borderRadius: 4, order: 2 },
         { type: 'bar', label: 'รายจ่าย', data: data.map(d => Math.round(d.consumption)), backgroundColor: '#D95070', borderRadius: 4, order: 2 },
-        { type: 'line', label: 'เงินเหลือ', data: data.map(d => Math.round(d.surplus)), borderColor: '#2563EB', backgroundColor: '#2563EB', tension: 0.3, pointRadius: 3, borderWidth: 2, order: 1 }
+        { type: 'line', label: 'เงินเหลือ', data: data.map(d => Math.round(d.surplus)), borderColor: '#2563EB', backgroundColor: '#2563EB', tension: 0.3, pointRadius: 3, borderWidth: 2, order: 1 },
+        { type: 'line', label: 'ลงทุน/ออม', data: data.map(d => Math.round(d.invest)), borderColor: '#7C3AED', backgroundColor: '#7C3AED', borderDash: [5, 4], tension: 0.3, pointRadius: 3, borderWidth: 2, order: 1 }
       ]
     },
     options: {
@@ -7227,10 +7233,13 @@ function billRenderList() {
     // ยอดสรุปคิดเฉพาะรายการที่ผ่านตัวกรอง — ตัวเลขเดียวกับที่แตะมาจาก dashboard
     const rt = billTotals(match);
     sumEl.style.display = '';
+    const parts = [];
+    if (rt.income) parts.push(`รับ <strong style="color:var(--green);">+${billFmt0(rt.income)}</strong>`);
+    if (rt.consumption || !(rt.income || rt.invest || rt.ccPaid)) parts.push(`จ่าย <strong style="color:var(--red);">−${billFmt0(rt.consumption)}</strong>`);
+    if (rt.invest) parts.push(`ลงทุน/ออม <strong style="color:#7C3AED;">${billFmt0(rt.invest)}</strong>`);
+    if (rt.ccPaid) parts.push(`จ่ายบิลบัตร ${billFmt0(rt.ccPaid)}`);
     sumEl.innerHTML = rt.count
-      ? (rt.income ? `รับ <strong style="color:var(--green);">+${billFmt0(rt.income)}</strong> · ` : '') + `จ่าย <strong style="color:var(--red);">−${billFmt0(rt.consumption)}</strong>` +
-        (rt.invest ? ` · ลงทุน/ออม ${billFmt0(rt.invest)}` : '') + (rt.ccPaid ? ` · จ่ายบิลบัตร ${billFmt0(rt.ccPaid)}` : '') +
-        ` <span style="color:var(--text3);">· ${rt.count} รายการ</span>`
+      ? parts.join(' · ') + ` <span style="color:var(--text3);">· ${rt.count} รายการ</span>`
       : '<span style="color:var(--text3);">ไม่มีรายการ' + (filtered || q ? 'ที่ตรงกับตัวกรอง' : '') + 'ในช่วงนี้</span>';
     if (filtered || q) sumEl.innerHTML = '<span style="color:var(--text3);">ตามตัวกรอง · ' + esc(range.label) + ':</span> ' + sumEl.innerHTML;
   }
