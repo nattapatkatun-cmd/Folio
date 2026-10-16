@@ -657,7 +657,7 @@ function attachFirebaseListeners() {
     renderHoldings(); updatePortfolioSummary(); renderAllocation(); initPhase9(); initPhase10(); initPhase11(); initPhase12();
   });
   FB.listen('dca', docs => {
-    state.dcaSchedules = docs; renderDCA(); initPhase9(); initPhase11();
+    state.dcaSchedules = docs; renderDCA(); initPhase9(); initPhase11(); renderBudget();
   });
   FB.listen('trades', docs => {
     state.trades = docs.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
@@ -1122,8 +1122,8 @@ if (window._folioReady) {
     <div class="budget-grid">
       <div class="card">
         <div class="card-title">
-          รายจ่ายเดือนนี้
-          <button class="action" onclick="openModal('expense-modal')">+ เพิ่มรายจ่าย</button>
+          งบรายจ่าย เทียบ ใช้จริงเดือนนี้
+          <button class="action" onclick="budgetOpenExpense()">+ ตั้งงบ</button>
         </div>
         <div id="expenseList"></div>
       </div>
@@ -1260,6 +1260,11 @@ if (window._folioReady) {
         <div style="display:flex;gap:6px;">
           <input class="form-input" id="billCardNew" placeholder="เช่น KTC 1234" style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter')billAddCardFromInput()">
           <button class="btn-primary" style="flex:none;padding:8px 14px;font-size:12px;" onclick="billAddCardFromInput()">+ เพิ่มบัตร</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;">
+          ค่าธรรมเนียมแปลงสกุลเงิน (ใช้จ่ายต่างประเทศ) เริ่มต้น
+          <input class="form-input" id="billFxFeeDefault" type="number" step="0.1" min="0" max="10" style="width:70px;padding:5px 8px;" onchange="billSaveDefaultFee(this.value)"> %
+          <span style="color:var(--text3);">· แตะชื่อบัตรด้านบนเพื่อตั้งแยกรายใบ</span>
         </div>
       </div>
       <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
@@ -1432,19 +1437,24 @@ service cloud.firestore {
 <!-- ─── Expense Modal ─── -->
 <div class="modal-overlay" id="expense-modal">
   <div class="modal">
-    <h3>เพิ่มรายจ่าย</h3>
+    <h3 id="exp-modal-title">ตั้งงบรายจ่าย</h3>
+    <input type="hidden" id="exp-edit-idx" value="">
     <div class="modal-form">
       <div class="form-group">
-        <label class="form-label">หมวดหมู่</label>
-        <input class="form-input" id="exp-cat" placeholder="เช่น ค่าเช่า, อาหาร">
+        <label class="form-label">หมวด (ตรงกับหมวดใน 🧾 บิล — ใช้เทียบกับที่จ่ายจริง)</label>
+        <select class="form-select" id="exp-billcat"></select>
       </div>
       <div class="form-group">
-        <label class="form-label">จำนวนเงิน (฿)</label>
+        <label class="form-label">ชื่อรายการ (ไม่บังคับ)</label>
+        <input class="form-input" id="exp-cat" placeholder="เช่น ค่าเช่าคอนโด, ค่าไฟ">
+      </div>
+      <div class="form-group">
+        <label class="form-label">งบต่อเดือน (฿)</label>
         <input class="form-input" id="exp-amount" type="number" placeholder="เช่น 5000">
       </div>
       <div class="modal-actions">
         <button class="btn-ghost" onclick="closeModal('expense-modal')">ยกเลิก</button>
-        <button class="btn-primary" onclick="addExpense()">เพิ่มรายจ่าย</button>
+        <button class="btn-primary" onclick="addExpense()">บันทึกงบ</button>
       </div>
     </div>
   </div>
@@ -2914,41 +2924,135 @@ async function executeDCA(i) {
 // --- Budget Render ---
 const EXPENSE_COLORS = ['#D95070','#F59E0B','#1D4ED8','#7E22CE','#16A34A','#AAB0BB','#C2410C','#0F766E'];
 
+// ─── งบประมาณ = "แผน" / 🧾 บิล = "ของจริง" — หน้านี้เทียบสองอย่างให้อัตโนมัติ ───
+// รายการงบเก่าที่พิมพ์ชื่อหมวดเอง (เช่น "ค่าเช่า") จับคู่เข้าหมวดของบิลด้วยคำค้น จนกว่าจะเลือกหมวดเองในหน้าแก้ไข
+const BUDGET_CAT_GUESS = [
+  ['food', /อาหาร|ข้าว|กิน|กาแฟ|เครื่องดื่ม|ขนม|food|cafe|coffee/i],
+  ['transport', /เดินทาง|รถ|น้ำมัน|bts|mrt|grab|bolt|แท็กซี่|ทางด่วน|จอดรถ|transport|taxi/i],
+  ['housing', /เช่า|บ้าน|คอนโด|หอ|ที่พัก|ส่วนกลาง|rent|condo/i],
+  ['bills', /ไฟ|น้ำ|เน็ต|อินเทอร์เน็ต|โทรศัพท์|มือถือ|บิล|internet|wifi|ais|true|dtac/i],
+  ['health', /ยา|หมอ|โรงพยาบาล|สุขภาพ|ฟิตเนส|ยิม|gym|clinic/i],
+  ['entertainment', /หนัง|เกม|netflix|spotify|youtube|บันเทิง|เที่ยว|ปาร์ตี้|game/i],
+  ['education', /เรียน|คอร์ส|หนังสือ|การศึกษา|course/i],
+  ['family', /พ่อ|แม่|ครอบครัว|ให้|ทำบุญ|บริจาค|ลูก/i],
+  ['insurance', /ประกัน|ภาษี|insurance|tax/i],
+  ['business', /ธุรกิจ|กิจการ|business/i],
+  ['shopping', /ช้อป|เสื้อ|ของใช้|shopping|shopee|lazada/i]
+];
+function budgetCatKey(e) {
+  if (e.billCat) return e.billCat;
+  const hit = BUDGET_CAT_GUESS.find(([, re]) => re.test(e.cat || ''));
+  return hit ? hit[0] : 'other';
+}
+// หมวดที่ตั้งงบได้ = หมวดรายจ่ายของบิล ยกเว้นลงทุน (ใช้แผน DCA) และจ่ายบิลบัตร (ไม่ใช่รายจ่าย)
+function budgetCats() {
+  return typeof BILL_CATS === 'undefined' ? [] : BILL_CATS.expense.filter(c => c.key !== 'invest' && c.key !== 'cc_payment');
+}
+
 function renderBudget() {
-  const month = new Date().toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
-  document.getElementById('budgetMonth').textContent = month;
+  const now = new Date();
+  const ym = isoFromDate(now).slice(0, 7);
+  document.getElementById('budgetMonth').textContent = now.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' }) + ' · แผน เทียบ ของจริงจาก 🧾 บิล';
+  const linked = typeof billMonthTotals === 'function';
+  const act = linked ? billMonthTotals(ym) : null;
+  const hasAct = !!(act && act.count);
 
-  const totalExp = state.budgetExpenses.reduce((s, e) => s + Number(e.amount), 0);
-  const dca = state.dcaSchedules.reduce((s, d) => s + Number(d.amount), 0);
-  const remaining = state.budgetIncome - totalExp - dca;
-  const incPct = state.budgetIncome > 0 ? Math.round(totalExp/state.budgetIncome*100) : 0;
-  const dcaPct = state.budgetIncome > 0 ? Math.round(dca/state.budgetIncome*100) : 0;
-  const remPct = state.budgetIncome > 0 ? Math.round(remaining/state.budgetIncome*100) : 0;
+  const planExp = state.budgetExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  // DCA ต่อเดือนปรับตามความถี่ — ตัวเลขเดียวกับแท็บบิลและหน้าลงทุน
+  const planDca = typeof billDcaMonthly === 'function' ? billDcaMonthly() : state.dcaSchedules.reduce((s, d) => s + Number(d.amount || 0), 0);
+  const planInc = state.budgetIncome || 0;
+  const planLeft = planInc - planExp - planDca;
+  const pctOf = (v, base) => base > 0 ? Math.round(v / base * 100) + '%' : '—';
+  const f0 = v => '฿' + Math.round(v || 0).toLocaleString();
+  const vsPlan = (actual, plan, lowerIsGood) => {
+    if (!plan) return '';
+    const p = Math.round(actual / plan * 100);
+    const bad = lowerIsGood ? p > 100 : p < 100;
+    return ` · <span style="color:${bad ? 'var(--red)' : 'var(--green)'};">${p}% ของแผน</span>`;
+  };
 
-  document.getElementById('budgetMetrics').innerHTML = `
+  let html;
+  if (hasAct) {
+    const actLeft = act.income - act.consumption - act.invest; // เหลือในบัญชีจริง
+    html = `
+    <div class="metric" style="cursor:pointer;" onclick="editIncome()">
+      <div class="metric-label">รายได้ <span style="color:var(--accent);font-size:9px;">✏️ แก้แผน</span></div>
+      <div class="metric-value">${f0(act.income)}</div>
+      <div class="metric-sub">แผน ${planInc ? f0(planInc) : '— แตะเพื่อตั้ง'}${vsPlan(act.income, planInc, false)}</div>
+    </div>
+    <div class="metric"><div class="metric-label">รายจ่าย (จริง)</div><div class="metric-value neg">${f0(act.consumption)}</div><div class="metric-sub">งบ ${f0(planExp)}${vsPlan(act.consumption, planExp, true)}</div></div>
+    <div class="metric" style="cursor:pointer;" onclick="budgetGoBills('cat','invest')"><div class="metric-label">ลงทุน (จริง) <span style="color:var(--accent);">›</span></div><div class="metric-value pos">${f0(act.invest)}</div><div class="metric-sub">แผน DCA ${f0(planDca)}${vsPlan(act.invest, planDca, false)}</div></div>
+    <div class="metric"><div class="metric-label">เหลือในบัญชี</div><div class="metric-value ${actLeft >= 0 ? 'pos' : 'neg'}">${f0(actLeft)}</div><div class="metric-sub">แผน ${f0(planLeft)} · รายได้ − จ่าย − ลงทุน</div></div>`;
+  } else {
+    html = `
     <div class="metric" style="cursor:pointer;" onclick="editIncome()">
       <div class="metric-label">รายได้ต่อเดือน <span style="color:var(--accent);font-size:9px;">✏️ แก้ไข</span></div>
-      <div class="metric-value" id="incomeDisplay">${state.budgetIncome ? '฿'+state.budgetIncome.toLocaleString() : 'กรอกรายได้'}</div>
-      <div class="metric-sub">หลังหักภาษี</div>
+      <div class="metric-value" id="incomeDisplay">${planInc ? f0(planInc) : 'กรอกรายได้'}</div>
+      <div class="metric-sub">แผน · หลังหักภาษี</div>
     </div>
-    <div class="metric"><div class="metric-label">รายจ่ายรวม</div><div class="metric-value neg">฿${totalExp.toLocaleString()}</div><div class="metric-sub">${incPct}% ของรายได้</div></div>
-    <div class="metric"><div class="metric-label">ลงทุน (DCA)</div><div class="metric-value pos">฿${dca.toLocaleString()}</div><div class="metric-sub">${dcaPct}% ของรายได้</div></div>
-    <div class="metric"><div class="metric-label">คงเหลือ</div><div class="metric-value ${remaining>=0?'pos':'neg'}">฿${remaining.toLocaleString()}</div><div class="metric-sub">${remPct}% ของรายได้</div></div>`;
+    <div class="metric"><div class="metric-label">งบรายจ่าย</div><div class="metric-value neg">${f0(planExp)}</div><div class="metric-sub">${pctOf(planExp, planInc)} ของรายได้</div></div>
+    <div class="metric"><div class="metric-label">แผนลงทุน (DCA)</div><div class="metric-value pos">${f0(planDca)}</div><div class="metric-sub">${pctOf(planDca, planInc)} ของรายได้</div></div>
+    <div class="metric"><div class="metric-label">คงเหลือตามแผน</div><div class="metric-value ${planLeft >= 0 ? 'pos' : 'neg'}">${f0(planLeft)}</div><div class="metric-sub">${linked ? 'ยังไม่มีรายการจริงเดือนนี้ใน 🧾 บิล' : pctOf(planLeft, planInc) + ' ของรายได้'}</div></div>`;
+  }
+  document.getElementById('budgetMetrics').innerHTML = html;
+  renderBudgetCategories(act);
+  renderBudgetSavings();
+}
 
-  document.getElementById('expenseList').innerHTML = state.budgetExpenses.length
-    ? state.budgetExpenses.map((e, i) => `
-        <div class="budget-row">
-          <div class="budget-cat">
-            <div class="budget-dot" style="background:${e.color || EXPENSE_COLORS[i % EXPENSE_COLORS.length]};"></div>
-            ${esc(e.cat)}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <div class="budget-amount">฿${Number(e.amount).toLocaleString()}</div>
-            <button onclick="deleteExpense(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;">✕</button>
-          </div>
-        </div>`).join('')
-    : `<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px;">ยังไม่มีรายจ่าย<br><button onclick="openModal('expense-modal')" class="btn-primary" style="margin-top:8px;font-size:11px;padding:5px 14px;">+ เพิ่มรายจ่าย</button></div>`;
+// งบแต่ละหมวด เทียบที่ใช้จริงเดือนนี้ — หลายรายการงบในหมวดเดียวกันรวมกันเป็นงบของหมวด
+function renderBudgetCategories(act) {
+  const el = document.getElementById('expenseList');
+  const f0 = v => '฿' + Math.round(v || 0).toLocaleString();
+  const groups = {};
+  state.budgetExpenses.forEach((e, i) => {
+    const k = budgetCatKey(e);
+    (groups[k] = groups[k] || { plan: 0, items: [] }).plan += Number(e.amount || 0);
+    groups[k].items.push({ e, i });
+  });
+  const spent = act ? act.byCat : {};
+  const keys = Object.keys(groups).sort((a, b) => groups[b].plan - groups[a].plan);
+  // หมวดที่ใช้จริงแต่ไม่ได้ตั้งงบ — โชว์แยกให้เห็นรายจ่ายนอกแผน
+  const extra = Object.keys(spent).filter(k => !groups[k] && spent[k] > 0).sort((a, b) => spent[b] - spent[a]);
+  if (!keys.length && !extra.length) {
+    el.innerHTML = `<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px;">ยังไม่ได้ตั้งงบ<br><button onclick="budgetOpenExpense()" class="btn-primary" style="margin-top:8px;font-size:11px;padding:5px 14px;">+ ตั้งงบหมวดแรก</button></div>`;
+    return;
+  }
+  const catOf = k => (typeof billCat === 'function' ? billCat(k, 'expense') : { icon: '📦', label: k, color: '#AAB0BB' });
+  let html = '';
+  keys.forEach(k => {
+    const g = groups[k], c = catOf(k), used = spent[k] || 0;
+    const pct = g.plan > 0 ? used / g.plan * 100 : 0;
+    const over = used > g.plan;
+    const status = !act ? '' : over
+      ? `<span style="color:var(--red);font-weight:600;">เกิน ${f0(used - g.plan)}</span>`
+      : `<span style="color:var(--text3);">เหลือ ${f0(g.plan - used)}</span>`;
+    html += `<div style="padding:9px 0;border-bottom:0.5px solid var(--bg2);">
+      <div class="bill-tap" onclick="budgetGoBills('cat','${k}')" title="แตะเพื่อดูรายการจริง" style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:2px 0;">
+        <span>${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
+        <span><strong>${f0(used)}</strong> <span style="color:var(--text3);">/ ${f0(g.plan)}</span></span>
+      </div>
+      <div class="bar-track" style="margin:6px 0 4px;"><div class="bar-fill" style="width:${Math.min(100, pct).toFixed(1)}%;background:${over ? 'var(--red)' : pct > 85 ? 'var(--amber)' : c.color};"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;">
+        <span style="display:flex;flex-wrap:wrap;gap:4px;">${g.items.map(({ e, i }) =>
+          `<span class="bill-card-chip" style="font-size:10.5px;padding:2px 4px 2px 8px;cursor:pointer;" onclick="budgetOpenExpense(${i})" title="แตะเพื่อแก้">${esc(e.name || e.cat || c.label)} ${f0(e.amount)}${e.billCat ? '' : ' <span style="color:var(--amber);" title="จับคู่หมวดอัตโนมัติ — แตะเพื่อตรวจ">•</span>'}<button onclick="event.stopPropagation();deleteExpense(${i})">✕</button></span>`).join('')}</span>
+        <span style="white-space:nowrap;">${status}</span>
+      </div>
+    </div>`;
+  });
+  if (extra.length) {
+    html += `<div style="font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin:12px 0 4px;">ใช้จ่ายนอกงบ</div>`;
+    extra.forEach(k => {
+      const c = catOf(k);
+      html += `<div class="bill-tap" onclick="budgetGoBills('cat','${k}')" style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;">
+        <span>${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
+        <span><strong>${f0(spent[k])}</strong> <button class="action" style="font-size:10.5px;color:var(--accent);background:none;border:none;cursor:pointer;" onclick="event.stopPropagation();budgetOpenExpense(null,'${k}')">+ ตั้งงบ</button></span></div>`;
+    });
+  }
+  if (state.budgetExpenses.some(e => !e.billCat)) html += '<div style="font-size:10.5px;color:var(--text3);margin-top:8px;"><span style="color:var(--amber);">•</span> = จับคู่หมวดให้อัตโนมัติจากชื่อเดิม แตะเพื่อตรวจ/เปลี่ยนหมวด</div>';
+  el.innerHTML = html;
+}
 
+function renderBudgetSavings() {
   document.getElementById('savingsList').innerHTML = state.budgetSavings.map((s, i) => {
     const pct = Math.min(100, Math.round(s.current / s.target * 100));
     return `<div>
@@ -2965,6 +3069,15 @@ function renderBudget() {
   }).join('');
 }
 
+// จากหน้างบ → ไปแท็บบิล เดือนปัจจุบัน แล้วกรองให้เห็นรายการจริงของหมวดนั้น
+function budgetGoBills(kind, value) {
+  billState.view = 'month';
+  billState.month = todayISO().slice(0, 7);
+  billResetListDate();
+  showPage('bills');
+  billDrill(kind, value);
+}
+
 function editIncome() {
   const val = prompt('กรอกรายได้ต่อเดือน (฿)', state.budgetIncome || '');
   if (val === null) return;
@@ -2978,22 +3091,42 @@ function editIncome() {
   }
 }
 
+// เปิดฟอร์มงบ: idx = แก้รายการเดิม, presetCat = ตั้งงบให้หมวดที่ใช้จ่ายนอกงบ
+function budgetOpenExpense(idx, presetCat) {
+  const e = idx != null ? state.budgetExpenses[idx] : null;
+  const cur = e ? budgetCatKey(e) : (presetCat || 'food');
+  document.getElementById('exp-edit-idx').value = idx != null ? String(idx) : '';
+  document.getElementById('exp-modal-title').textContent = e ? 'แก้ไขงบ' : 'ตั้งงบรายจ่าย';
+  document.getElementById('exp-billcat').innerHTML = budgetCats().map(c => `<option value="${c.key}" ${c.key === cur ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('');
+  document.getElementById('exp-cat').value = e ? (e.name || (e.billCat ? '' : e.cat) || '') : '';
+  document.getElementById('exp-amount').value = e ? e.amount : '';
+  openModal('expense-modal');
+}
+
 async function addExpense() {
-  const cat = document.getElementById('exp-cat').value.trim();
+  const billCatKey = document.getElementById('exp-billcat').value;
+  const name = document.getElementById('exp-cat').value.trim();
   const amount = parseFloat(document.getElementById('exp-amount').value);
-  if (!cat || !amount) { showToast('กรุณากรอกข้อมูลให้ครบ'); return; }
-  const color = EXPENSE_COLORS[state.budgetExpenses.length % EXPENSE_COLORS.length];
-  const data = { cat, amount, color };
-  if (window.FB) await window.FB.add('budget_expenses', data);
-  else { state.budgetExpenses.push(data); renderBudget(); }
-  document.getElementById('exp-cat').value = '';
-  document.getElementById('exp-amount').value = '';
+  if (!billCatKey || !(amount > 0)) { showToast('เลือกหมวดและใส่งบให้ครบ'); return; }
+  const label = typeof billCat === 'function' ? billCat(billCatKey, 'expense').label : billCatKey;
+  const idxStr = document.getElementById('exp-edit-idx').value;
+  const data = { billCat: billCatKey, name, cat: name || label, amount };
+  if (idxStr !== '') {
+    const e = state.budgetExpenses[+idxStr];
+    if (window.FB && e.id) await window.FB.update('budget_expenses', e.id, data);
+    else { Object.assign(e, data); renderBudget(); }
+  } else {
+    data.color = EXPENSE_COLORS[state.budgetExpenses.length % EXPENSE_COLORS.length];
+    if (window.FB) await window.FB.add('budget_expenses', data);
+    else { state.budgetExpenses.push(data); renderBudget(); }
+  }
   closeModal('expense-modal');
-  showToast('เพิ่มรายจ่ายแล้ว: ' + cat);
+  showToast((idxStr !== '' ? 'แก้งบแล้ว: ' : 'ตั้งงบแล้ว: ') + (name || label));
 }
 
 async function deleteExpense(i) {
   const e = state.budgetExpenses[i];
+  if (!e || !confirm('ลบงบ ' + (e.name || e.cat) + ' ฿' + Number(e.amount).toLocaleString() + ' ?')) return;
   if (window.FB && e.id) await window.FB.del('budget_expenses', e.id);
   state.budgetExpenses.splice(i, 1);
   renderBudget();
@@ -6869,6 +7002,7 @@ function billCashflowContext() {
 
 // ═══ Render ═══
 function billOnData() {
+  if (typeof renderBudget === 'function') renderBudget();
   if (!window._billLoaded && window.FB) billLoadSettings();
   window._billLoaded = true;
   if (typeof initPhase12 === 'function') initPhase12();
@@ -6957,6 +7091,8 @@ function billRender() {
   const ownerEl = document.getElementById('billOwnerNames');
   if (ownerEl && document.activeElement !== ownerEl) ownerEl.value = localStorage.getItem('folio_bill_owner') || '';
   billRenderCardChips();
+  const feeEl = document.getElementById('billFxFeeDefault');
+  if (feeEl && document.activeElement !== feeEl) feeEl.value = billDefaultFxFee();
   const t = billMonthTotals(ym);
   const sr = t.savingsRate;
   // มุมมองปี: บรรทัดย่อยเป็นค่าเฉลี่ยต่อเดือน + เทียบรายจ่ายปีก่อนในช่วงเดียวกัน
@@ -7107,12 +7243,15 @@ function billRenderCategories(t) {
   wrap.style.display = '';
   const total = t.consumption;
   const nM = billState.view === 'year' ? billYearMonths(billPeriod()) : 0;
+  // งบต่อเดือนจากแท็บงบประมาณ (ใช้กับมุมมองเดือน)
+  const budget = {};
+  if (!nM && typeof budgetCatKey === 'function') state.budgetExpenses.forEach(e => { const bk = budgetCatKey(e); budget[bk] = (budget[bk] || 0) + Number(e.amount || 0); });
   listEl.innerHTML = keys.map(k => {
     const c = billCat(k, 'expense');
     const pct = total > 0 ? t.byCat[k] / total * 100 : 0;
     return `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('cat','${k}')"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div></div>
-      <span style="width:92px;text-align:right;font-weight:500;" title="${nM ? 'เฉลี่ย ' + billFmt0(t.byCat[k] / nM) + '/เดือน' : ''}">${billFmt0(t.byCat[k])}${nM ? '<div style="font-size:9.5px;color:var(--text3);font-weight:400;">' + billFmt0(t.byCat[k] / nM) + '/ด.</div>' : ''}</span>
+      <span style="width:92px;text-align:right;font-weight:500;" title="${nM ? 'เฉลี่ย ' + billFmt0(t.byCat[k] / nM) + '/เดือน' : ''}">${billFmt0(t.byCat[k])}${nM ? '<div style="font-size:9.5px;color:var(--text3);font-weight:400;">' + billFmt0(t.byCat[k] / nM) + '/ด.</div>' : (budget[k] ? '<div style="font-size:9.5px;font-weight:400;color:' + (t.byCat[k] > budget[k] ? 'var(--red)' : 'var(--text3)') + ';">งบ ' + billFmt0(budget[k]) + '</div>' : '')}</span>
       <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;
   }).join('');
   if (typeof Chart === 'undefined' || !document.getElementById('page-bills').classList.contains('active')) return;
@@ -7238,6 +7377,8 @@ function billRenderList() {
     if (rt.consumption || !(rt.income || rt.invest || rt.ccPaid)) parts.push(`จ่าย <strong style="color:var(--red);">−${billFmt0(rt.consumption)}</strong>`);
     if (rt.invest) parts.push(`ลงทุน/ออม <strong style="color:#7C3AED;">${billFmt0(rt.invest)}</strong>`);
     if (rt.ccPaid) parts.push(`จ่ายบิลบัตร ${billFmt0(rt.ccPaid)}`);
+    const est = (state.transactions || []).filter(t => match(t) && t.currency && t.currency !== 'THB' && !t.thbActual).length;
+    if (est) parts.push(`<span style="color:var(--amber);" title="รายการต่างประเทศที่ยอดบาทยังเป็นค่าประมาณ — แตะรายการเพื่อใส่ยอดจริงจากสเตทเมนต์">⚠️ ${est} รายการยอดบาทประมาณ</span>`);
     sumEl.innerHTML = rt.count
       ? parts.join(' · ') + ` <span style="color:var(--text3);">· ${rt.count} รายการ</span>`
       : '<span style="color:var(--text3);">ไม่มีรายการ' + (filtered || q ? 'ที่ตรงกับตัวกรอง' : '') + 'ในช่วงนี้</span>';
@@ -7265,7 +7406,7 @@ function billRenderList() {
       <div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>
       <div class="bill-main"><div class="bill-merchant">${esc(t.merchant || c.label)}${t.note ? ' <span style="color:var(--text3);font-weight:400;">· ' + esc(t.note) + '</span>' : ''}</div><div class="bill-sub">${sub}</div></div>
       <div><div class="bill-amt" style="color:${inc ? 'var(--green)' : BILL_NON_SPEND.includes(t.category) ? 'var(--text2)' : 'var(--text)'};">${inc ? '+' : '−'}${billFmt(billAmtThb(t))}</div>
-      ${foreign ? `<div style="font-size:10px;color:var(--text3);text-align:right;">${esc(t.currency)} ${Number(t.amount).toLocaleString()}</div>` : ''}</div>
+      ${foreign ? `<div style="font-size:10px;color:${t.thbActual ? 'var(--text3)' : 'var(--amber)'};text-align:right;" title="${t.thbActual ? 'ยอดบาทจริง' : 'ยอดบาทประมาณ (อัตรากลาง + ค่าธรรมเนียม ' + (t.fxFeePct || 0) + '%) — แตะเพื่อใส่ยอดจริงจากสเตทเมนต์'}">${esc(t.currency)} ${Number(t.amount).toLocaleString()}${t.thbActual ? ' ✓' : ' · ประมาณ'}</div>` : ''}</div>
       <button class="bill-del" title="ลบ" onclick="event.stopPropagation();billDelete('${esc(t.id)}')">✕</button>
     </div>`;
   });
@@ -7322,7 +7463,9 @@ function billNewDraft(p) {
   return {
     uid: ++_billUid, include: true, type, category: cat,
     amount: p.amount > 0 ? Math.round(Number(p.amount) * 100) / 100 : '',
-    currency: cur, fx: cur === 'THB' ? 1 : (Number(p.fx) || 0),
+    currency: cur, fx: cur === 'THB' ? 1 : (Number(p.fx) || 0), fxSrc: p.fxSrc || '',
+    fee: typeof p.fxFeePct === 'number' ? p.fxFeePct : null, feeManual: typeof p.fxFeePct === 'number',
+    thbActual: Number(p.thbCharged) > 0 && cur !== 'THB' ? Number(p.thbCharged) : (p.thbActual && typeof p.amountThb === 'number' ? p.amountThb : ''),
     date: billNormDate(p.date), time: /^\d{1,2}:\d{2}$/.test(p.time || '') ? p.time.padStart(5, '0') : '',
     merchant: String(p.merchant || '').slice(0, 80), ref: String(p.ref || '').slice(0, 80),
     note: String(p.note || '').slice(0, 120), source: p.source || 'manual', aiRead: !!p.aiRead,
@@ -7330,6 +7473,8 @@ function billNewDraft(p) {
     card: billMatchCard(p.card)
   };
 }
+// ค่าธรรมเนียมเริ่มต้นของรายการต่างประเทศ (หลังรู้ช่องทาง/บัตรแล้ว)
+function billInitFee(d) { if (d.fee === null) d.fee = d.currency === 'THB' ? 0 : billAutoFee(d); return d; }
 // จับคู่ชื่อบัตรที่ AI อ่านได้กับรายชื่อบัตรที่ตั้งไว้ (เช่น "KTC VISA ****1234" → "KTC 1234")
 function billMatchCard(raw) {
   raw = String(raw || '').trim().slice(0, 40);
@@ -7355,16 +7500,74 @@ function billNormDate(s) {
   return isoFromDate(d);
 }
 
-const _billFx = { THB: 1 };
-async function billFxToThb(cur) {
+// ─── อัตราแลกเปลี่ยน "ตามวันที่ใช้จ่าย" ───
+// 1) Frankfurter (อัตราอ้างอิง ECB ย้อนหลังรายวัน วันหยุดใช้วันทำการก่อนหน้า) → 2) exchangerate-api (อัตราล่าสุด) → 3) USD จากราคาในแอป
+// เป็นอัตรากลาง ไม่ใช่อัตราที่ธนาคาร/Visa/Mastercard ใช้จริง — ยอดบาทจริงให้ใส่จากแอปธนาคารหรือสเตทเมนต์ทับได้
+const _billFx = {};
+async function billFxRate(cur, date) {
   cur = (cur || 'THB').toUpperCase();
-  if (_billFx[cur]) return _billFx[cur];
+  if (cur === 'THB') return { rate: 1, src: '' };
+  const day = date && date < todayISO() ? date : 'latest';
+  const key = cur + '|' + day;
+  if (_billFx[key]) return _billFx[key];
+  try {
+    const r = await fetch('https://api.frankfurter.dev/v1/' + day + '?base=' + encodeURIComponent(cur) + '&symbols=THB');
+    const d = await r.json();
+    if (d.rates && d.rates.THB) return (_billFx[key] = { rate: d.rates.THB, src: 'อัตรา ECB ' + (d.date || day) });
+  } catch (e) {}
   try {
     const r = await fetch('https://api.exchangerate-api.com/v4/latest/' + encodeURIComponent(cur));
     const d = await r.json();
-    if (d.rates && d.rates.THB) { _billFx[cur] = d.rates.THB; return d.rates.THB; }
+    if (d.rates && d.rates.THB) return (_billFx[key] = { rate: d.rates.THB, src: 'อัตราล่าสุด (ไม่ใช่ของวันนั้น)' });
   } catch (e) {}
-  return cur === 'USD' ? (state.usdThb || 0) : 0;
+  if (cur === 'USD' && state.usdThb) return { rate: state.usdThb, src: 'อัตรา USD ในแอป' };
+  return { rate: 0, src: 'ดึงอัตราไม่ได้ — ใส่เอง' };
+}
+async function billFxToThb(cur) { return (await billFxRate(cur)).rate; }
+
+// ค่าธรรมเนียมแปลงสกุลเงินของบัตรเครดิต (ธนาคารไทยส่วนใหญ่ 2–2.5%, Travel/Debit card บางใบ 0%)
+function billDefaultFxFee() {
+  const v = parseFloat(localStorage.getItem('folio_bill_fx_fee'));
+  return isFinite(v) && v >= 0 ? v : 2.5;
+}
+function billCardFees() {
+  try { return JSON.parse(localStorage.getItem('folio_bill_card_fees') || '{}') || {}; } catch (e) { return {}; }
+}
+function billCardFee(card) {
+  const f = billCardFees()[card];
+  return typeof f === 'number' && f >= 0 ? f : billDefaultFxFee();
+}
+// ค่าธรรมเนียมที่ควรใช้กับรายการ: จ่ายด้วยบัตร = ตามบัตร, อย่างอื่น = 0 (เงินสดแลกมาแล้ว/โอน ให้ใส่อัตราที่ได้จริงแทน)
+function billAutoFee(d) { return d.payMethod === 'card' ? billCardFee(d.card) : 0; }
+// ยอดบาทของรายการในฟอร์ม: ยอดบาทจริง (ถ้าใส่) > ยอด × อัตรา × (1 + ค่าธรรมเนียม)
+function billDraftThb(d) {
+  if (d.currency === 'THB') return Number(d.amount) || 0;
+  if (Number(d.thbActual) > 0) return Number(d.thbActual);
+  return (Number(d.amount) || 0) * (Number(d.fx) || 0) * (1 + (Number(d.fee) || 0) / 100);
+}
+function billFxPreview(d) {
+  if (d.currency === 'THB') return '';
+  const amt = Number(d.amount) || 0, fx = Number(d.fx) || 0, fee = Number(d.fee) || 0;
+  const base = amt * fx;
+  if (Number(d.thbActual) > 0) {
+    const diff = base > 0 ? (Number(d.thbActual) / base - 1) * 100 : 0;
+    return `✅ ใช้ยอดบาทจริง <strong>${billFmt(d.thbActual)}</strong>` + (base > 0 ? ` <span style="color:var(--text3);">(ส่วนต่างจากอัตรากลาง ${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%)</span>` : '');
+  }
+  if (!(amt > 0 && fx > 0)) return '<span style="color:var(--amber);">ใส่ยอดและอัตราให้ครบ</span>';
+  return `${esc(d.currency)} ${amt.toLocaleString()} × ${fx.toFixed(4)} = ${billFmt(base)}` +
+    (fee ? ` + ค่าธรรมเนียม ${fee}% ${billFmt(base * fee / 100)}` : '') +
+    ` → <strong>≈ ${billFmt(base * (1 + fee / 100))}</strong> <span style="color:var(--text3);">(ประมาณการ)</span>`;
+}
+// เปลี่ยนสกุลเงิน/วันที่ → ดึงอัตราของวันนั้นใหม่; เปลี่ยนช่องทาง/บัตร → ค่าธรรมเนียมตามบัตร (ถ้ายังไม่ได้แก้เอง)
+async function billDraftRefreshFx(i) {
+  const d = billState.drafts[i];
+  if (!d || d.currency === 'THB') return;
+  const r = await billFxRate(d.currency, d.date);
+  d.fx = r.rate ? Math.round(r.rate * 1e6) / 1e6 : d.fx;
+  d.fxSrc = r.src;
+  if (!d.feeManual) d.fee = billAutoFee(d);
+  billMarkDuplicates();
+  billRenderDrafts();
 }
 
 // ทำเครื่องหมายรายการซ้ำ: เลขอ้างอิงเดียวกัน = ซ้ำแน่นอน (ไม่ติ๊กให้), วัน+ยอด+ประเภทตรงกัน = อาจซ้ำ (เตือนเฉย ๆ)
@@ -7379,7 +7582,7 @@ function billMarkDuplicates() {
       seen[rk] = true;
     }
     if (!d.dup && Number(d.amount) > 0) {
-      const thb = Number(d.amount) * (Number(d.fx) || 1);
+      const thb = billDraftThb(d);
       const hit = others.find(t => t.date === d.date && t.type === d.type && Math.abs(billAmtThb(t) - thb) < 0.01);
       if (hit) d.dup = 'maybe:' + (hit.merchant || billCat(hit.category, hit.type).label);
     }
@@ -7407,7 +7610,7 @@ function billRenderDrafts() {
   if (!ds.length) { document.getElementById('billDrafts').innerHTML = '<div class="empty">AI ไม่พบรายการเงินในข้อมูลนี้</div>'; btn.disabled = true; return; }
   document.getElementById('billDrafts').innerHTML = ds.map((d, i) => {
     const catOpts = BILL_CATS[d.type].map(c => `<option value="${c.key}" ${c.key === d.category ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('');
-    const curs = ['THB', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'HKD', 'GBP', 'KRW'];
+    const curs = ['THB', 'USD', 'EUR', 'JPY', 'KRW', 'CNY', 'TWD', 'HKD', 'SGD', 'MYR', 'VND', 'LAK', 'GBP', 'AUD', 'CHF'];
     if (!curs.includes(d.currency)) curs.push(d.currency);
     const showCard = d.payMethod === 'card' || d.category === 'cc_payment';
     const payOpts = Object.keys(BILL_PAY).map(k => `<option value="${k}" ${k === d.payMethod ? 'selected' : ''}>${BILL_PAY[k]}</option>`).join('');
@@ -7428,7 +7631,10 @@ function billRenderDrafts() {
       <div class="bill-draft-grid">
         <div class="form-group"><label class="form-label">ยอด</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.amount)}" oninput="billDraftSet(${i},'amount',this.value)" style="font-weight:600;font-size:15px;"></div>
         <div class="form-group"><label class="form-label">สกุลเงิน</label><select class="form-select" onchange="billDraftCurrency(${i},this.value)">${curOpts}</select></div>
-        ${d.currency !== 'THB' ? `<div class="form-group full"><label class="form-label">อัตรา 1 ${esc(d.currency)} = ? บาท</label><input class="form-input" type="number" step="0.0001" min="0" value="${esc(d.fx || '')}" oninput="billDraftSet(${i},'fx',this.value)"></div>` : ''}
+        ${d.currency !== 'THB' ? `<div class="form-group"><label class="form-label">อัตรา 1 ${esc(d.currency)} = ? บาท</label><input class="form-input" type="number" step="0.0001" min="0" value="${esc(d.fx || '')}" oninput="billDraftSet(${i},'fx',this.value)"><span style="font-size:10px;color:var(--text3);">${esc(d.fxSrc || '')}</span></div>
+        <div class="form-group"><label class="form-label">ค่าธรรมเนียมแปลงสกุล %</label><input class="form-input" type="number" step="0.1" min="0" value="${esc(d.fee == null ? '' : d.fee)}" oninput="billDraftSet(${i},'fee',this.value)"><span style="font-size:10px;color:var(--text3);">${d.payMethod === 'card' ? 'ตามบัตร ' + esc(d.card || '(ค่าเริ่มต้น)') : 'ไม่ใช่บัตร = 0%'}</span></div>
+        <div class="form-group full"><div id="billFxPrev${i}" style="font-size:11.5px;background:var(--surface);border:0.5px dashed var(--border2);border-radius:8px;padding:7px 10px;line-height:1.6;">${billFxPreview(d)}</div></div>
+        <div class="form-group full"><label class="form-label">ยอดบาทจริง (จากแอปธนาคาร/สเตทเมนต์ — ถ้ามี ใช้แทนยอดประมาณ)</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.thbActual)}" placeholder="เว้นว่างได้ แก้ทีหลังได้" oninput="billDraftSet(${i},'thbActual',this.value)"></div>` : ''}
         <div class="form-group full"><label class="form-label">หมวด</label><select class="form-select" onchange="billDraftSet(${i},'category',this.value,true)">${catOpts}</select></div>
         <div class="form-group ${showCard ? '' : 'full'}"><label class="form-label">${d.type === 'income' ? 'รับเงินทาง' : 'จ่ายด้วย'}</label><select class="form-select" onchange="billDraftSet(${i},'payMethod',this.value,true)">${payOpts}</select></div>
         ${showCard ? billCardField(d, i) : ''}
@@ -7466,6 +7672,7 @@ function billDraftPickCard(i, v) {
   if (!d) return;
   if (v === '__new') { d.addingCard = true; billRenderDrafts(); setTimeout(() => { const el = document.getElementById('billNewCard' + i); if (el) el.focus(); }, 30); return; }
   d.card = v;
+  if (d.currency !== 'THB' && !d.feeManual) { d.fee = billAutoFee(d); billRenderDrafts(); }
 }
 function billDraftAddCard(i) {
   const d = billState.drafts[i];
@@ -7489,9 +7696,15 @@ function billDraftSet(i, field, value, rerender) {
   d[field] = value;
   if (field === 'type') d.category = d.type === 'income' ? 'other_in' : 'other';
   if (field === 'category' && value === 'cc_payment' && d.payMethod === 'unknown') d.payMethod = 'transfer';
-  if (field === 'amount' || field === 'fx') {
+  if (field === 'fee') d.feeManual = true;
+  if (field === 'amount' || field === 'fx' || field === 'fee' || field === 'thbActual') {
     billMarkDuplicates();
+    const prev = document.getElementById('billFxPrev' + i);
+    if (prev) prev.innerHTML = billFxPreview(d);
   }
+  // ช่องทาง/บัตรเปลี่ยน → ค่าธรรมเนียมตามบัตรใหม่; วันที่เปลี่ยน → อัตราของวันใหม่
+  if ((field === 'payMethod' || field === 'card') && d.currency !== 'THB' && !d.feeManual) d.fee = billAutoFee(d);
+  if (field === 'date' && d.currency !== 'THB') { billDraftRefreshFx(i); return; }
   if (rerender) { billMarkDuplicates(); billRenderDrafts(); }
   else if (field === 'include') billRenderDrafts();
 }
@@ -7499,9 +7712,10 @@ async function billDraftCurrency(i, cur) {
   const d = billState.drafts[i];
   if (!d) return;
   d.currency = cur;
-  d.fx = cur === 'THB' ? 1 : await billFxToThb(cur);
-  billMarkDuplicates();
-  billRenderDrafts();
+  d.thbActual = '';
+  if (cur === 'THB') { d.fx = 1; d.fee = 0; d.fxSrc = ''; billMarkDuplicates(); billRenderDrafts(); return; }
+  d.fx = 0;
+  await billDraftRefreshFx(i);
 }
 
 async function billSaveDrafts() {
@@ -7509,7 +7723,7 @@ async function billSaveDrafts() {
   const items = billState.drafts.filter(d => d.include);
   for (const d of items) {
     if (!(Number(d.amount) > 0)) { showToast('กรอกยอดให้ครบทุกรายการ'); return; }
-    if (d.currency !== 'THB' && !(Number(d.fx) > 0)) { showToast('ใส่อัตราแลกเปลี่ยนของ ' + d.currency); return; }
+    if (d.currency !== 'THB' && !(Number(d.fx) > 0) && !(Number(d.thbActual) > 0)) { showToast('ใส่อัตราแลกเปลี่ยนหรือยอดบาทจริงของ ' + d.currency); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) { showToast('วันที่ไม่ถูกต้อง'); return; }
   }
   billMarkDuplicates();
@@ -7522,8 +7736,10 @@ async function billSaveDrafts() {
       const refKey = billRefKey(d.ref);
       const data = {
         date: d.date, time: d.time || '', type: d.type, category: d.category,
-        amount: Math.round(Number(d.amount) * 100) / 100, currency: d.currency, fxToThb: fx,
-        amountThb: Math.round(Number(d.amount) * fx * 100) / 100,
+        amount: Math.round(Number(d.amount) * 100) / 100, currency: d.currency, fxToThb: fx || 0,
+        fxFeePct: d.currency === 'THB' ? 0 : (Number(d.fee) || 0),
+        thbActual: d.currency !== 'THB' && Number(d.thbActual) > 0, // false = ยอดบาทประมาณ รอใส่ยอดจริง
+        amountThb: Math.round(billDraftThb(d) * 100) / 100,
         merchant: d.merchant.trim(), note: d.note.trim(), ref: d.ref.trim(), refKey,
         source: d.source, aiRead: !!d.aiRead,
         payMethod: d.payMethod || 'unknown',
@@ -7571,7 +7787,7 @@ function billEdit(id) {
   const t = (state.transactions || []).find(x => x.id === id);
   if (!t) return;
   billState.editingId = id;
-  const d = billNewDraft({ ...t, fx: t.fxToThb });
+  const d = billInitFee(billNewDraft({ ...t, fx: t.fxToThb }));
   d.aiRead = false;
   billOpenConfirm([d], '');
 }
@@ -7597,7 +7813,8 @@ function billSchema() {
             ref: { type: 'STRING' },
             note: { type: 'STRING' },
             payMethod: { type: 'STRING', enum: Object.keys(BILL_PAY) },
-            card: { type: 'STRING', description: 'ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้าย หรือ ""' }
+            card: { type: 'STRING', description: 'ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้าย หรือ ""' },
+            thbCharged: { type: 'NUMBER', description: 'ยอดเงินบาทที่ถูกเรียกเก็บจริง ถ้าเอกสารแสดงไว้คู่กับยอดสกุลต่างประเทศ ไม่มีใส่ 0' }
           },
           required: ['date', 'amount', 'currency', 'type', 'category', 'merchant', 'ref', 'payMethod', 'card']
         }
@@ -7616,7 +7833,8 @@ function billRules() {
     'กฎ:',
     '- date: YYYY-MM-DD ปี ค.ศ. ถ้าเอกสารใช้ พ.ศ. (เช่น 2568 หรือ "68") ให้ลบ 543 ก่อน; ถ้าไม่มีวันที่ ใช้วันนี้; คำว่า "เมื่อวาน/วันจันทร์ที่แล้ว" ให้คำนวณจากวันนี้',
     '- amount: ตัวเลขบวก ไม่มีคอมมา เป็นยอดสุทธิที่จ่าย/ได้รับจริง (หลังส่วนลด รวม VAT/ค่าบริการ) ไม่ใช่ราคาสินค้าย่อย ไม่ใช่ยอดเงินคงเหลือในบัญชี',
-    '- currency: ISO 4217 (฿ หรือ บาท = THB)',
+    '- currency: ISO 4217 (฿ หรือ บาท = THB, ¥/円 = JPY, ₩ = KRW ฯลฯ); ใบเสร็จต่างประเทศให้ amount เป็นยอดในสกุลนั้น',
+    '- thbCharged: ถ้าเป็นรายการสกุลต่างประเทศ และเอกสาร (เช่น แจ้งเตือนบัตร/แอปธนาคาร) แสดงยอดบาทที่ถูกเรียกเก็บด้วย ให้ใส่ยอดบาทนั้น; ไม่มีให้ใส่ 0',
     '- type: expense ถ้าเงินออกจากเจ้าของ, income ถ้าเงินเข้าเจ้าของ' + (owner ? ' — ชื่อเจ้าของบัญชีคือ "' + owner + '" (ถ้าเจ้าของเป็นผู้โอน = expense, เป็นผู้รับ = income)' : '') + '; ไม่แน่ใจให้ใช้ expense',
     '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest; โอน/ชำระยอดบัตรเครดิต = cc_payment; ต้นทุน/ค่าใช้จ่ายของกิจการตัวเอง = business',
     '- payMethod: card ถ้าจ่ายด้วยบัตรเครดิต (เห็น VISA/Mastercard/JCB/เลขบัตร ****), transfer ถ้าเป็นสลิปโอน/สแกน QR พร้อมเพย์, ewallet ถ้าจ่ายผ่าน TrueMoney/ShopeePay/LINE Pay ฯลฯ, cash ถ้าเป็นเงินสด, ไม่ทราบใช้ unknown',
@@ -7729,7 +7947,10 @@ async function billProcessText(text, source) {
 }
 
 async function billFillFx(drafts) {
-  for (const d of drafts) if (d.currency !== 'THB' && !(d.fx > 0)) d.fx = await billFxToThb(d.currency);
+  for (const d of drafts) {
+    billInitFee(d);
+    if (d.currency !== 'THB' && !(d.fx > 0)) { const r = await billFxRate(d.currency, d.date); d.fx = r.rate; d.fxSrc = r.src; }
+  }
 }
 
 // ─── พิมพ์ / พูด ───
@@ -7809,12 +8030,34 @@ function billRenderCardChips() {
   if (!el) return;
   const list = billCards();
   el.innerHTML = list.length
-    ? list.map((c, i) => `<span class="bill-card-chip">💳 ${esc(c)}<button title="ลบ" onclick="billRemoveCard(${i})">✕</button></span>`).join('')
+    ? list.map((c, i) => `<span class="bill-card-chip"><span style="cursor:pointer;" title="แตะเพื่อตั้งค่าธรรมเนียมแปลงสกุลเงินของบัตรนี้" onclick="billEditCardFee(${i})">💳 ${esc(c)} <span style="color:var(--text3);font-size:10.5px;">· FX ${billCardFee(c)}%</span></span><button title="ลบ" onclick="billRemoveCard(${i})">✕</button></span>`).join('')
     : '<span style="font-size:11px;color:var(--text3);">ยังไม่มีบัตร — เพิ่มด้านล่าง หรือเพิ่มจากหน้าบันทึกรายการก็ได้</span>';
 }
-// เก็บชื่อบัญชี/บัตรใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
+function billEditCardFee(i) {
+  const c = billCards()[i];
+  if (!c) return;
+  const v = prompt('ค่าธรรมเนียมแปลงสกุลเงินของบัตร ' + c + ' (%)\nบัตรเครดิตไทยส่วนใหญ่ 2–2.5%, Travel card/บัตรเดบิตบางใบ 0%', billCardFee(c));
+  if (v === null) return;
+  const n = parseFloat(String(v).replace('%', ''));
+  if (!(n >= 0 && n <= 10)) { showToast('ใส่ตัวเลข 0–10'); return; }
+  const fees = billCardFees(); fees[c] = n;
+  localStorage.setItem('folio_bill_card_fees', JSON.stringify(fees));
+  billSyncSettings(); billRenderCardChips();
+  showToast(c + ': ค่าธรรมเนียม FX ' + n + '%');
+}
+function billSaveDefaultFee(v) {
+  const n = parseFloat(v);
+  if (!(n >= 0 && n <= 10)) { showToast('ใส่ตัวเลข 0–10'); return; }
+  localStorage.setItem('folio_bill_fx_fee', String(n));
+  billSyncSettings(); billRenderCardChips();
+  showToast('ค่าธรรมเนียม FX เริ่มต้น ' + n + '%');
+}
+// เก็บชื่อบัญชี/บัตร/ค่าธรรมเนียมใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
 function billSyncSettings() {
-  if (window.FB) window.FB.setDoc('settings', 'bill', { owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards() }).catch(() => {});
+  if (window.FB) window.FB.setDoc('settings', 'bill', {
+    owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(),
+    fxFee: billDefaultFxFee(), cardFees: billCardFees()
+  }).catch(() => {});
 }
 async function billLoadSettings() {
   try {
@@ -7822,6 +8065,8 @@ async function billLoadSettings() {
     if (!doc) return;
     if (typeof doc.owner === 'string') localStorage.setItem('folio_bill_owner', doc.owner);
     if (Array.isArray(doc.cards)) localStorage.setItem('folio_bill_cards', doc.cards.join(', '));
+    if (typeof doc.fxFee === 'number') localStorage.setItem('folio_bill_fx_fee', String(doc.fxFee));
+    if (doc.cardFees && typeof doc.cardFees === 'object') localStorage.setItem('folio_bill_card_fees', JSON.stringify(doc.cardFees));
     const page = document.getElementById('page-bills');
     if (page && page.classList.contains('active')) billRender();
   } catch (e) {}
