@@ -2210,6 +2210,7 @@ function showPage(id) {
     if (b.dataset.page === id) b.classList.add('active');
   });
   if (id === 'bills' && typeof billRender === 'function') billRender(); // Chart.js ต้องวาดตอน canvas มองเห็นแล้ว
+  if (id === 'budget' && typeof renderBudget === 'function') renderBudget();
 }
 
 // ─── Autocomplete helpers ───
@@ -6848,7 +6849,7 @@ const BILL_CATS = {
     { key: 'business_in', label: 'ธุรกิจส่วนตัว',   icon: '🏪', color: '#9333EA' },
     { key: 'side',     label: 'รายได้เสริม',      icon: '🧑‍💻', color: '#0891B2' },
     { key: 'dividend', label: 'ปันผล/ดอกเบี้ย',   icon: '🪙', color: '#B45309' },
-    { key: 'refund',   label: 'คืนเงิน',          icon: '↩️', color: '#7C3AED' },
+    { key: 'refund',   label: 'เงินคืน (หาร/คืนสินค้า)', icon: '💸', color: '#7C3AED' },
     { key: 'other_in', label: 'อื่น ๆ',           icon: '📥', color: '#AAB0BB' }
   ]
 };
@@ -6856,6 +6857,11 @@ const BILL_CATS = {
 // 'invest' = เงินที่โอนไปลงทุน/ออมเอง
 // 'cc_payment' = โอนจ่ายบิลบัตรเครดิต — ของที่รูดบัตรถูกนับเป็นรายจ่ายไปแล้วตอนรูด ถ้านับตอนจ่ายบิลอีกจะซ้ำ
 const BILL_NON_SPEND = ['invest', 'cc_payment'];
+// 'refund' (ฝั่งรับ) = เงินคืน เช่น เพื่อนโอนคืนค่าหาร/ร้านคืนเงิน — ไม่นับเป็นรายรับ แต่หักออกจากรายจ่ายหมวด offsetCat
+// รายการเดิมก่อนมีช่องนี้ (ไม่มี offsetCat) หักจากหมวด "อื่น ๆ"
+function billOffsetCat(t) { return t.offsetCat || 'other'; }
+// หมวดที่เงินคืนหักได้ = หมวดรายจ่าย ยกเว้นลงทุน/จ่ายบิลบัตร (ไม่ใช่ค่าใช้จ่าย)
+function billOffsetCats() { return BILL_CATS.expense.filter(c => !BILL_NON_SPEND.includes(c.key)); }
 const BILL_PAY = { unknown: 'ไม่ระบุ', cash: '💵 เงินสด', transfer: '🏦 โอน/QR', card: '💳 บัตรเครดิต', ewallet: '📱 e-Wallet' };
 // รายชื่อบัตรของผู้ใช้ (ช่วย AI จับคู่ชื่อบัตร + ใช้เป็นตัวเลือกในฟอร์ม)
 function billCards() {
@@ -6914,11 +6920,19 @@ function billMonthTotals(ym) {
   return billTotals(t => billInPeriod(t, ym));
 }
 function billTotals(match) {
-  const r = { income: 0, consumption: 0, invest: 0, ccPaid: 0, count: 0, byCat: {}, byPay: {}, bizIncome: 0, bizExpense: 0, cards: {} };
+  const r = { income: 0, consumption: 0, invest: 0, ccPaid: 0, refund: 0, count: 0, byCat: {}, byPay: {}, bizIncome: 0, bizExpense: 0, cards: {} };
   (state.transactions || []).forEach(t => {
     if (!t.date || !match(t)) return;
     const v = billAmtThb(t);
     r.count++;
+    if (t.type === 'income' && t.category === 'refund') {
+      const oc = billOffsetCat(t);
+      r.refund += v;
+      r.consumption -= v;
+      r.byCat[oc] = (r.byCat[oc] || 0) - v;
+      if (oc === 'business') r.bizExpense -= v;
+      return;
+    }
     if (t.type === 'income') {
       r.income += v;
       if (t.category === 'business_in') r.bizIncome += v;
@@ -6979,7 +6993,7 @@ function billCashflowContext() {
     const t = billMonthTotals(ym);
     if (!t.count) continue;
     lines.push('- ' + ym + (i === 0 ? ' (เดือนนี้ ยังไม่จบ)' : '') + ': รายรับ ' + billFmt0(t.income) + ' | ใช้จ่าย ' + billFmt0(t.consumption) +
-      ' | โอนไปลงทุน/ออม ' + billFmt0(t.invest) + ' | เงินเหลือ ' + billFmt0(t.surplus) +
+      (t.refund ? ' (หักเงินคืนแล้ว ' + billFmt0(t.refund) + ')' : '') + ' | โอนไปลงทุน/ออม ' + billFmt0(t.invest) + ' | เงินเหลือ ' + billFmt0(t.surplus) +
       ' | อัตราออม ' + (t.savingsRate === null ? 'n/a' : t.savingsRate.toFixed(0) + '%'));
     if (i > 0) { catMonths++; Object.keys(t.byCat).forEach(k => { catSum[k] = (catSum[k] || 0) + t.byCat[k]; }); }
   }
@@ -7020,7 +7034,8 @@ function billSetView(v) {
 }
 // ─── ตัวกรองหมวด / ช่องทางจ่าย ───
 function billMatchFilters(t) {
-  if (billState.catFilter && t.category !== billState.catFilter) return false;
+  if (billState.catFilter && t.category !== billState.catFilter &&
+      !(t.category === 'refund' && billOffsetCat(t) === billState.catFilter)) return false; // เงินคืนที่หักหมวดนี้ ให้เห็นด้วย ยอดจะได้ตรงกับ dashboard
   const pf = billState.payFilter;
   if (pf) {
     if (pf.startsWith('card:')) {
@@ -7098,9 +7113,9 @@ function billRender() {
   // มุมมองปี: บรรทัดย่อยเป็นค่าเฉลี่ยต่อเดือน + เทียบรายจ่ายปีก่อนในช่วงเดียวกัน
   const nM = isYear ? billYearMonths(ym) : 0;
   const avgSub = v => nM ? 'เฉลี่ย ' + billFmt0(v / nM) + '/เดือน' : '';
-  let expSub = 'ไม่รวมเงินลงทุน/ออม';
+  let expSub = t.refund ? 'หักเงินคืนแล้ว ' + billFmt0(t.refund) : 'ไม่รวมเงินลงทุน/ออม';
   if (isYear) {
-    expSub = avgSub(t.consumption);
+    expSub = avgSub(t.consumption) + (t.refund ? ' · หักเงินคืน ' + billFmt0(t.refund) : '');
     const yoy = billYearOverYear(ym, t);
     if (yoy) expSub += ` · <span style="color:${yoy.pct > 0 ? 'var(--red)' : 'var(--green)'};">${yoy.pct > 0 ? '▲' : '▼'} ${Math.abs(yoy.pct).toFixed(0)}% vs ปีก่อน</span>`;
   }
@@ -7169,7 +7184,7 @@ function billRenderPay(t) {
   card.style.display = keys.length ? '' : 'none';
   if (!keys.length) return;
   document.getElementById('billPayPeriod').textContent = 'รายจ่าย' + (billState.view === 'year' ? 'ทั้งปี' : 'เดือนนี้');
-  const total = t.consumption;
+  const total = keys.reduce((a, k) => a + t.byPay[k], 0); // % ของยอดที่จ่ายออกจริง (ก่อนหักเงินคืน)
   const colors = { card: '#D95070', transfer: '#2563EB', cash: '#16A34A', ewallet: '#F59E0B', unknown: '#AAB0BB' };
   let html = '';
   keys.forEach(k => {
@@ -7184,6 +7199,7 @@ function billRenderPay(t) {
       });
     }
   });
+  if (t.refund > 0) html += `<div class="bill-cat-row bill-tap" onclick="billDrill('cat','refund')" title="แตะเพื่อดูรายการเงินคืน"><span style="width:118px;flex-shrink:0;">💸 หักเงินคืน ›</span><div style="flex:1;"></div><span style="width:92px;text-align:right;font-weight:500;color:var(--green);">−${billFmt0(t.refund)}</span><span style="width:36px;"></span></div><div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;">ยอดแต่ละช่องทางคือที่จ่ายออกไปจริง (ตรงกับสเตทเมนต์) · เงินคืนหักออกจากรายจ่ายรวม</div>`;
   if (t.byPay.unknown > 0) html += '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">❔ ไม่ระบุ = รายการที่ยังไม่ได้เลือก "จ่ายด้วย" — แตะรายการเพื่อแก้</div>';
   el.innerHTML = html;
 }
@@ -7231,7 +7247,7 @@ function billCssVar(n, fb) {
 }
 
 function billRenderCategories(t) {
-  const keys = Object.keys(t.byCat).sort((a, b) => t.byCat[b] - t.byCat[a]);
+  const keys = Object.keys(t.byCat).filter(k => t.byCat[k] > 0.005).sort((a, b) => t.byCat[b] - t.byCat[a]); // หมวดที่ได้เงินคืนครบ/เกินจะไม่แสดง
   const listEl = document.getElementById('billCatList');
   const wrap = document.getElementById('billCatChartWrap');
   if (billState.catChart) { billState.catChart.destroy(); billState.catChart = null; }
@@ -7241,7 +7257,7 @@ function billRenderCategories(t) {
     return;
   }
   wrap.style.display = '';
-  const total = t.consumption;
+  const total = keys.reduce((a, k) => a + t.byCat[k], 0); // สัดส่วนของหมวดที่ยังมียอดหลังหักเงินคืน
   const nM = billState.view === 'year' ? billYearMonths(billPeriod()) : 0;
   // งบต่อเดือนจากแท็บงบประมาณ (ใช้กับมุมมองเดือน)
   const budget = {};
@@ -7377,6 +7393,7 @@ function billRenderList() {
     if (rt.consumption || !(rt.income || rt.invest || rt.ccPaid)) parts.push(`จ่าย <strong style="color:var(--red);">−${billFmt0(rt.consumption)}</strong>`);
     if (rt.invest) parts.push(`ลงทุน/ออม <strong style="color:#7C3AED;">${billFmt0(rt.invest)}</strong>`);
     if (rt.ccPaid) parts.push(`จ่ายบิลบัตร ${billFmt0(rt.ccPaid)}`);
+    if (rt.refund) parts.push(`หักเงินคืนแล้ว <strong style="color:var(--green);">${billFmt0(rt.refund)}</strong>`);
     const est = (state.transactions || []).filter(t => match(t) && t.currency && t.currency !== 'THB' && !t.thbActual).length;
     if (est) parts.push(`<span style="color:var(--amber);" title="รายการต่างประเทศที่ยอดบาทยังเป็นค่าประมาณ — แตะรายการเพื่อใส่ยอดจริงจากสเตทเมนต์">⚠️ ${est} รายการยอดบาทประมาณ</span>`);
     sumEl.innerHTML = rt.count
@@ -7401,7 +7418,8 @@ function billRenderList() {
     const inc = t.type === 'income';
     const foreign = t.currency && t.currency !== 'THB';
     const pay = t.payMethod === 'card' || t.category === 'cc_payment' ? '💳 ' + esc(t.card || 'บัตร') : (t.payMethod && t.payMethod !== 'unknown' ? esc(BILL_PAY[t.payMethod] || '') : '');
-    const sub = [esc(c.label), t.time ? esc(t.time) : '', pay, esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
+    const offLabel = t.category === 'refund' ? 'หักจาก ' + billCat(billOffsetCat(t), 'expense').label : '';
+    const sub = [esc(offLabel || c.label), t.time ? esc(t.time) : '', pay, esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
     html += `<div class="bill-row" onclick="billEdit('${esc(t.id)}')">
       <div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>
       <div class="bill-main"><div class="bill-merchant">${esc(t.merchant || c.label)}${t.note ? ' <span style="color:var(--text3);font-weight:400;">· ' + esc(t.note) + '</span>' : ''}</div><div class="bill-sub">${sub}</div></div>
@@ -7470,7 +7488,9 @@ function billNewDraft(p) {
     merchant: String(p.merchant || '').slice(0, 80), ref: String(p.ref || '').slice(0, 80),
     note: String(p.note || '').slice(0, 120), source: p.source || 'manual', aiRead: !!p.aiRead,
     payMethod: BILL_PAY[p.payMethod] ? p.payMethod : (cat === 'cc_payment' ? 'transfer' : 'unknown'),
-    card: billMatchCard(p.card)
+    card: billMatchCard(p.card),
+    // รายการเงินคืนเก่า (มี id แต่ไม่มี offsetCat) คงหมวด "อื่น ๆ" ไว้เหมือนที่เคยคำนวณ; รายการใหม่เริ่มที่อาหาร
+    offsetCat: billOffsetCats().some(c => c.key === p.offsetCat) ? p.offsetCat : (p.id && p.category === 'refund' ? 'other' : 'food')
   };
 }
 // ค่าธรรมเนียมเริ่มต้นของรายการต่างประเทศ (หลังรู้ช่องทาง/บัตรแล้ว)
@@ -7636,6 +7656,7 @@ function billRenderDrafts() {
         <div class="form-group full"><div id="billFxPrev${i}" style="font-size:11.5px;background:var(--surface);border:0.5px dashed var(--border2);border-radius:8px;padding:7px 10px;line-height:1.6;">${billFxPreview(d)}</div></div>
         <div class="form-group full"><label class="form-label">ยอดบาทจริง (จากแอปธนาคาร/สเตทเมนต์ — ถ้ามี ใช้แทนยอดประมาณ)</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.thbActual)}" placeholder="เว้นว่างได้ แก้ทีหลังได้" oninput="billDraftSet(${i},'thbActual',this.value)"></div>` : ''}
         <div class="form-group full"><label class="form-label">หมวด</label><select class="form-select" onchange="billDraftSet(${i},'category',this.value,true)">${catOpts}</select></div>
+        ${d.type === 'income' && d.category === 'refund' ? `<div class="form-group full"><label class="form-label">หักออกจากค่าใช้จ่ายหมวด</label><select class="form-select" onchange="billDraftSet(${i},'offsetCat',this.value)">${billOffsetCats().map(c => `<option value="${c.key}" ${c.key === d.offsetCat ? 'selected' : ''}>${c.icon} ${esc(c.label)}</option>`).join('')}</select><span style="font-size:10px;color:var(--text3);line-height:1.5;">ไม่นับเป็นรายรับ — หักจากรายจ่ายของเดือนที่บันทึก (ถ้าคืนข้ามเดือน ตั้งวันที่เป็นวันที่จ่ายเดิมได้)</span></div>` : ''}
         <div class="form-group ${showCard ? '' : 'full'}"><label class="form-label">${d.type === 'income' ? 'รับเงินทาง' : 'จ่ายด้วย'}</label><select class="form-select" onchange="billDraftSet(${i},'payMethod',this.value,true)">${payOpts}</select></div>
         ${showCard ? billCardField(d, i) : ''}
         <div class="form-group full"><label class="form-label">${d.type === 'income' ? 'จาก' : 'ร้าน / ผู้รับเงิน'}</label><input class="form-input" value="${esc(d.merchant)}" oninput="billDraftSet(${i},'merchant',this.value)"></div>
@@ -7743,7 +7764,8 @@ async function billSaveDrafts() {
         merchant: d.merchant.trim(), note: d.note.trim(), ref: d.ref.trim(), refKey,
         source: d.source, aiRead: !!d.aiRead,
         payMethod: d.payMethod || 'unknown',
-        card: (d.payMethod === 'card' || d.category === 'cc_payment') ? (d.card || '').trim() : ''
+        card: (d.payMethod === 'card' || d.category === 'cc_payment') ? (d.card || '').trim() : '',
+        offsetCat: d.type === 'income' && d.category === 'refund' ? (d.offsetCat || 'other') : ''
       };
       if (billState.editingId) {
         if (d.dup === 'ref') { skipped++; continue; }
@@ -7813,6 +7835,7 @@ function billSchema() {
             ref: { type: 'STRING' },
             note: { type: 'STRING' },
             payMethod: { type: 'STRING', enum: Object.keys(BILL_PAY) },
+            offsetCat: { type: 'STRING', enum: BILL_CATS.expense.filter(c => !BILL_NON_SPEND.includes(c.key)).map(c => c.key), description: 'เฉพาะ category=refund: หมวดรายจ่ายที่เงินคืนนี้หักออก' },
             card: { type: 'STRING', description: 'ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้าย หรือ ""' },
             thbCharged: { type: 'NUMBER', description: 'ยอดเงินบาทที่ถูกเรียกเก็บจริง ถ้าเอกสารแสดงไว้คู่กับยอดสกุลต่างประเทศ ไม่มีใส่ 0' }
           },
@@ -7840,6 +7863,7 @@ function billRules() {
     '- payMethod: card ถ้าจ่ายด้วยบัตรเครดิต (เห็น VISA/Mastercard/JCB/เลขบัตร ****), transfer ถ้าเป็นสลิปโอน/สแกน QR พร้อมเพย์, ewallet ถ้าจ่ายผ่าน TrueMoney/ShopeePay/LINE Pay ฯลฯ, cash ถ้าเป็นเงินสด, ไม่ทราบใช้ unknown',
     '- card: เมื่อ payMethod=card หรือ category=cc_payment ให้ใส่ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้ายถ้ามี' + (billCards().length ? ' — ถ้าตรงกับบัตรของผู้ใช้ ให้ใช้ชื่อนี้ตรงตัว: ' + billCards().join(', ') : '') + '; ไม่ใช่บัตรใช้ ""',
     '- category (income): ' + incDesc,
+    '- refund = เงินที่ได้คืน ไม่ใช่รายได้ เช่น เพื่อนโอนคืนค่าอาหาร/ค่าของที่หารกัน ร้านคืนเงิน คืนค่าสินค้า; ให้ใส่ offsetCat เป็นหมวดรายจ่ายที่เงินนี้หักออก (หารค่าข้าว = food, ค่าแท็กซี่ = transport, คืนสินค้า = shopping); เงินโอนจากเพื่อนยอดเล็ก ๆ ที่ไม่ใช่เงินเดือนมักเป็น refund',
     '- merchant: ชื่อร้าน/ผู้รับเงิน (expense) หรือผู้โอน/แหล่งเงิน (income) สั้น ๆ',
     '- ref: เลขที่รายการ/เลขอ้างอิง/Transaction ID/เลขที่ใบเสร็จ ที่ระบุเอกสารนี้ได้ ถ้าไม่มีใช้ ""',
     '- note: รายละเอียดสั้น ไม่เกิน 60 ตัวอักษร หรือ ""',
