@@ -6181,6 +6181,25 @@ function bmRenderCustomTags() {
   ).join('');
 }
 
+// ราคาย้อนหลังจาก Alpha Vantage: 1 เดือนใช้รายวัน (compact = 100 วันทำการล่าสุด ≈ 5 เดือน)
+// 6/12 เดือนใช้รายสัปดาห์ (ฟรี มีย้อนหลังครบ) — เดิมใช้รายวัน compact ทุกช่วง ช่วง 6/12 เดือนจึงได้แค่ ~5 เดือน
+// คืน { pts } หรือ { limited: true } เมื่อโดน rate limit หรือ { pts: [] } เมื่อไม่พบ
+async function bmAvSeries(symbol, days, avKey) {
+  const weekly = days > 120;
+  const fn = weekly ? 'TIME_SERIES_WEEKLY' : 'TIME_SERIES_DAILY&outputsize=compact';
+  const r = await fetch('https://www.alphavantage.co/query?function=' + fn + '&symbol=' + encodeURIComponent(symbol) + '&apikey=' + avKey);
+  const d = await r.json();
+  if (d.Note || d.Information) return { limited: true };
+  const ts = d[weekly ? 'Weekly Time Series' : 'Time Series (Daily)'];
+  if (!ts) return { pts: [], missing: true };
+  const cutoff = new Date(Date.now() - days * 86400 * 1000);
+  const pts = Object.entries(ts)
+    .filter(([dt]) => new Date(dt) >= cutoff)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([dt,v]) => [new Date(dt).getTime(), parseFloat(v['4. close'])]);
+  return { pts };
+}
+
 async function bmFetchCustomTickers() {
   const CRYPTO_IDS = {
     'BTC':'bitcoin','ETH':'ethereum','BNB':'binancecoin','SOL':'solana',
@@ -6239,19 +6258,13 @@ async function bmFetchCustomTickers() {
     try {
       const avKey = getActiveKey('AV');
       if (!avKey) { showToast('ใส่ Alpha Vantage Key ก่อน (ตั้งค่า)'); continue; }
-      const r = await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=' + t.symbol + '&outputsize=compact&apikey=' + avKey);
-      const d = await r.json();
-      if (d.Note || d.Information) {
+      const res = await bmAvSeries(t.symbol, days, avKey);
+      if (res.limited) {
         showToast('Alpha Vantage rate limit — ' + t.symbol + ' ดึงไม่ได้ (25 req/day)');
         continue;
       }
-      const ts = d['Time Series (Daily)'];
-      if (ts) {
-        const cutoff = new Date(now.getTime() - days * 86400 * 1000);
-        const pts = Object.entries(ts)
-          .filter(([dt]) => new Date(dt) >= cutoff)
-          .sort(([a],[b]) => a.localeCompare(b))
-          .map(([dt,v]) => [new Date(dt).getTime(), parseFloat(v['4. close'])]);
+      if (!res.missing) {
+        const pts = res.pts;
         if (pts.length >= 2) {
           _bmData[key] = { label: t.label, icon: '', color: t.color, prices: pts };
         } else {
@@ -6329,17 +6342,8 @@ async function bmFetch() {
   try {
     const avKey = getActiveKey('AV');
     if (avKey) {
-      const r = await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=compact&apikey='+avKey);
-      const d = await r.json();
-      const ts = d['Time Series (Daily)'];
-      if (ts) {
-        const cutoff = new Date(now.getTime() - days*86400*1000);
-        const pts = Object.entries(ts)
-          .filter(([dt]) => new Date(dt) >= cutoff)
-          .sort(([a],[b]) => a.localeCompare(b))
-          .map(([dt,v]) => [new Date(dt).getTime(), parseFloat(v['4. close'])]);
-        if (pts.length >= 2) _bmData.spy = { label:'S&P500 (SPY)', icon:'🇺🇸', color:'#3B82F6', prices: pts };
-      }
+      const res = await bmAvSeries('SPY', days, avKey);
+      if (res.pts && res.pts.length >= 2) _bmData.spy = { label:'S&P500 (SPY)', icon:'🇺🇸', color:'#3B82F6', prices: res.pts };
     }
   } catch(e) {}
 
@@ -6402,7 +6406,7 @@ function bmDrawChart(returns) {
       var variance = dailyRets.reduce(function(a,b){ return a + Math.pow(b - mean, 2); }, 0) / dailyRets.length;
       var vol = Math.sqrt(variance) * Math.sqrt(252) * 100;
       return '<div style="background:var(--bg);border-radius:8px;padding:7px 10px;flex:1;min-width:120px;">' +
-        '<div style="font-size:9px;color:var(--text3);margin-bottom:3px;">'+(item.icon?item.icon+' ':'')+item.label+'</div>' +
+        '<div style="font-size:9px;color:var(--text3);margin-bottom:3px;">'+(item.icon?item.icon+' ':'')+esc(item.label)+'</div>' +
         '<div style="font-size:10px;color:var(--text);">MDD <span style="color:var(--red);font-weight:600;">-'+mdd.toFixed(1)+'%</span></div>' +
         '<div style="font-size:10px;color:var(--text);">Vol <span style="font-weight:600;">'+vol.toFixed(1)+'%</span>/ปี</div>' +
         '</div>';
@@ -6419,12 +6423,19 @@ function bmDrawChart(returns) {
     const retPct = ((last - base) / base) * 100;
     const isPos = retPct >= 0;
     const collapsed = idx >= 3;
+    // synthetic = proxy ให้แค่ราคาล่าสุด + % ของวันเดียว — ไม่มีราคาย้อนหลัง จึงไม่วาดเส้น และบอกให้ชัดว่าไม่ใช่ผลตอบแทนทั้งช่วง
+    if (item.synthetic) {
+      return '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+        '<div style="display:flex;align-items:center;gap:6px;"><div style="width:10px;height:10px;border-radius:50%;background:'+colorStr+';"></div>' +
+        '<span style="font-size:12px;font-weight:600;color:var(--text);">'+(item.icon?item.icon+' ':'')+esc(item.label)+' <span style="font-size:9px;color:var(--text3);font-weight:400;">เปลี่ยนแปลงวันล่าสุด (ไม่มีข้อมูลย้อนหลัง)</span></span></div>' +
+        '<span style="font-size:14px;font-family:var(--font-serif);color:'+(isPos?'var(--green)':'var(--red)')+';font-weight:600;">'+(isPos?'+':'')+retPct.toFixed(1)+'%</span></div>';
+    }
     return [
       '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:0.5px solid var(--border);">',
       '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="bmToggleChart(\'bmChartWrap_'+idx+'\');">',
       '<div style="display:flex;align-items:center;gap:6px;">',
       '<div style="width:10px;height:10px;border-radius:50%;background:'+colorStr+';"></div>',
-      '<span style="font-size:12px;font-weight:600;color:var(--text);">'+(item.icon?item.icon+' ':'')+item.label+(item.synthetic?' <span style="font-size:9px;color:var(--text3);font-weight:400;">(snapshot)</span>':'')+'</span>',
+      '<span style="font-size:12px;font-weight:600;color:var(--text);">'+(item.icon?item.icon+' ':'')+esc(item.label)+'</span>',
       '</div>',
       '<div style="display:flex;align-items:center;gap:8px;">',
       '<span style="font-size:14px;font-family:var(--font-serif);color:'+(isPos?'var(--green)':'var(--red)')+';font-weight:600;">'+(isPos?'+':'')+retPct.toFixed(1)+'%</span>',
@@ -6441,7 +6452,7 @@ function bmDrawChart(returns) {
   // วาด chart แต่ละอัน
   seriesData.forEach((item, idx) => {
     const canvas = document.getElementById('bmChart_'+idx);
-    if (!canvas) return;
+    if (!canvas || item.synthetic) return;
     const colorStr = item.color.startsWith('var(') ? '#D95070' : item.color;
     const base = item.prices[0][1];
     const normalized = item.prices.map(p => ((p[1] - base) / base) * 100);
