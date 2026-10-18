@@ -2914,7 +2914,7 @@ function renderBudgetCategories(act) {
       ? `<span style="color:var(--red);font-weight:600;">เกิน ${f0(used - g.plan)}</span>`
       : `<span style="color:var(--text3);">เหลือ ${f0(g.plan - used)}</span>`;
     html += `<div style="padding:9px 0;border-bottom:0.5px solid var(--bg2);">
-      <div class="bill-tap" onclick="budgetGoBills('cat','${k}')" title="แตะเพื่อดูรายการจริง" style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:2px 0;">
+      <div class="bill-tap" onclick="budgetGoBills('cat',${esc(JSON.stringify(k))})" title="แตะเพื่อดูรายการจริง" style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:2px 0;">
         <span>${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
         <span><strong>${f0(used)}</strong> <span style="color:var(--text3);">/ ${f0(g.plan)}</span></span>
       </div>
@@ -2930,9 +2930,9 @@ function renderBudgetCategories(act) {
     html += `<div style="font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin:12px 0 4px;">ใช้จ่ายนอกงบ</div>`;
     extra.forEach(k => {
       const c = catOf(k);
-      html += `<div class="bill-tap" onclick="budgetGoBills('cat','${k}')" style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;">
+      html += `<div class="bill-tap" onclick="budgetGoBills('cat',${esc(JSON.stringify(k))})" style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;">
         <span>${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
-        <span><strong>${f0(spent[k])}</strong> <button class="action" style="font-size:10.5px;color:var(--accent);background:none;border:none;cursor:pointer;" onclick="event.stopPropagation();budgetOpenExpense(null,'${k}')">+ ตั้งงบ</button></span></div>`;
+        <span><strong>${f0(spent[k])}</strong> <button class="action" style="font-size:10.5px;color:var(--accent);background:none;border:none;cursor:pointer;" onclick="event.stopPropagation();budgetOpenExpense(null,${esc(JSON.stringify(k))})">+ ตั้งงบ</button></span></div>`;
     });
   }
   if (state.budgetExpenses.some(e => !e.billCat)) html += '<div style="font-size:10.5px;color:var(--text3);margin-top:8px;"><span style="color:var(--amber);">•</span> = จับคู่หมวดให้อัตโนมัติจากชื่อเดิม แตะเพื่อตรวจ/เปลี่ยนหมวด</div>';
@@ -4083,7 +4083,7 @@ if (budget > 0 && eligible.length > 0) {
     var cappedShare = Math.min(rawShare, maxPerAsset);
     var amt = Math.min(Math.round(cappedShare * budget / 500) * 500, remaining);
     if (amt < 500) return;
-    allocationPlan.push({ asset: a.asset, amt: amt, drift: a.drift, score: a.score, status: a.status,
+    allocationPlan.push({ asset: a.asset, amt: amt, drift: a.drift, score: a.score, buyScore: a.buyScore, status: a.status,
       currentW: a.currentW, targetW: a.targetW, expRet: a.expRet });
     remaining -= amt;
   });
@@ -4129,7 +4129,7 @@ promptLines.push('');
   promptLines.push('');
   promptLines.push('LAYER 1 — กองที่มีในพอร์ต (pre-scored):');
   allocationPlan.forEach(function(a,i){
-    promptLines.push((i+1)+'. '+a.asset+': แนะนำ ฿'+a.amt.toLocaleString()+' (Drift='+a.drift.toFixed(1)+'%, BuyScore='+a.score.toFixed(1)+', status='+a.status+')');
+    promptLines.push((i+1)+'. '+a.asset+': แนะนำ ฿'+a.amt.toLocaleString()+' (Drift='+a.drift.toFixed(1)+'%, BuyScore='+a.buyScore.toFixed(1)+', คะแนนรวม='+a.score.toFixed(1)+', status='+a.status+')');
   });
   if (blocked.length) {
     promptLines.push('BLOCKED (overweight — ห้ามซื้อ): ' + blocked.map(function(a){ return a.asset; }).join(', '));
@@ -7020,7 +7020,7 @@ function billRenderCategories(t) {
   listEl.innerHTML = keys.map(k => {
     const c = billCat(k, 'expense');
     const pct = total > 0 ? t.byCat[k] / total * 100 : 0;
-    return `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('cat','${k}')"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
+    return `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('cat',${esc(JSON.stringify(k))})"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div></div>
       <span style="width:92px;text-align:right;font-weight:500;" title="${nM ? 'เฉลี่ย ' + billFmt0(t.byCat[k] / nM) + '/เดือน' : ''}">${billFmt0(t.byCat[k])}${nM ? '<div style="font-size:9.5px;color:var(--text3);font-weight:400;">' + billFmt0(t.byCat[k] / nM) + '/ด.</div>' : (budget[k] ? '<div style="font-size:9.5px;font-weight:400;color:' + (t.byCat[k] > budget[k] ? 'var(--red)' : 'var(--text3)') + ';">งบ ' + billFmt0(budget[k]) + '</div>' : '')}</span>
       <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;
