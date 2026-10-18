@@ -4839,21 +4839,33 @@ function sheetAssetKey(name) {
 }
 
 // หา row ใน Sheet ที่ตรงกับ holding — exact match ก่อน แล้วค่อย fuzzy ด้วย token แรก
-// claimed = row ที่ holding ตัวก่อนหน้าจับไปแล้ว กัน holding สองตัวชี้ row เดียวกันจนมูลค่าซ้ำ
+// entries = ทุกแถวของ Sheet (ไม่รวมแถวชื่อซ้ำเป็นแถวเดียว) — แถวที่ holding ตัวก่อนหน้าจับไปแล้วมี claimed = true
+// กัน holding สองตัวชี้ row เดียวกันจนมูลค่าซ้ำ
 // fuzzy จะยอมรับเฉพาะเมื่อ token แรกชี้ไป row เดียวเท่านั้น ("K CHINA SSF" กับ "K CHINA A" → ไม่เดา)
-function matchSheetRow(h, rowMap, claimed) {
-  claimed = claimed || {};
+function matchSheetRow(h, entries) {
+  const free = entries.filter(e => !e.claimed);
+  const broker = String(h.broker || '').trim().toLowerCase();
+  // ชื่อซ้ำหลายแถว (เช่น SCBNDQ(A) ที่ InnovestX กับ KBank) → เลือกแถวที่ Platform ตรงกับ broker ของ holding
+  const pick = hits => {
+    if (!hits.length) return null;
+    if (broker) {
+      const b = hits.find(e => e.platform === broker)
+        || hits.find(e => e.platform && (e.platform.includes(broker) || broker.includes(e.platform)));
+      if (b) return b;
+    }
+    return hits[0];
+  };
   const candidates = [h.name, h.ticker, (h.ticker || '').replace(/_/g, ' ')];
   for (let i = 0; i < candidates.length; i++) {
     const k = sheetAssetKey(candidates[i]);
-    if (k && rowMap[k] && !claimed[k]) return rowMap[k];
+    const hit = k ? pick(free.filter(e => e.key === k)) : null;
+    if (hit) return hit;
   }
-  const keys = Object.keys(rowMap).filter(k => !claimed[k]);
   for (let i = 0; i < candidates.length; i++) {
     const first = sheetAssetKey(candidates[i]).split(' ')[0];
     if (!first) continue;
-    const hits = keys.filter(k => k.split(' ')[0] === first);
-    if (hits.length === 1) return rowMap[hits[0]];
+    const keys = [...new Set(free.filter(e => e.key.split(' ')[0] === first).map(e => e.key))];
+    if (keys.length === 1) return pick(free.filter(e => e.key === keys[0]));
   }
   return null;
 }
@@ -4866,22 +4878,27 @@ function applySheetData(data) {
   const rows = (data && Array.isArray(data.holdings)) ? data.holdings : null;
   if (rows) window._p17SheetData = data;
 
-  const rowMap = {};
+  // เก็บทุกแถวแยกกัน — เดิมใช้ object ที่ key เป็นชื่อ แถวชื่อซ้ำ (คนละ broker) จึงทับกันเหลือแถวเดียว
+  const entries = [];
+  const addEntry = r => {
+    const key = sheetAssetKey(r['Asset']);
+    if (key) entries.push({ key, row: r, platform: String(r['Platform'] || r['Broker'] || '').trim().toLowerCase(), claimed: false });
+  };
   if (rows) {
-    rows.forEach(r => { const k = sheetAssetKey(r['Asset']); if (k) rowMap[k] = r; });
+    rows.forEach(addEntry);
   } else if (data) {
     Object.keys(data).forEach(k => {
-      if (data[k] && data[k].nav) rowMap[sheetAssetKey(k)] = { Asset: k, Price: Number(data[k].nav) };
+      if (data[k] && data[k].nav) addEntry({ Asset: k, Price: Number(data[k].nav) });
     });
   }
 
-  const matchedKeys = {};
   let updated = 0;
   state.holdings.forEach(h => {
     delete h._sheetValue; delete h._sheetPL; delete h._sheetMatched;
-    const row = matchSheetRow(h, rowMap, matchedKeys);
-    if (!row) { h.value = Math.round(valueThb(h)); return; }
-    matchedKeys[sheetAssetKey(row['Asset'])] = true;
+    const entry = matchSheetRow(h, entries);
+    if (!entry) { h.value = Math.round(valueThb(h)); return; }
+    entry.claimed = true;
+    const row = entry.row;
     h._sheetMatched = row['Asset'];
     const price = Number(row['Price']) || 0;
     if (price > 0) {
@@ -4908,7 +4925,7 @@ function applySheetData(data) {
       count: rows.length,
       syncedAt: Date.now(),
       // asset ที่มีใน Sheet แต่ไม่มี holding ในแอป — มูลค่าถูกนับ แต่กราฟสัดส่วนจะไม่เห็น
-      unmatchedSheet: rows.map(r => r['Asset']).filter(a => a && !matchedKeys[sheetAssetKey(a)]),
+      unmatchedSheet: entries.filter(e => !e.claimed).map(e => e.row['Asset']),
       // holding ในแอปที่จับคู่กับ Sheet ไม่ได้ — ชื่อน่าจะสะกดไม่ตรงกัน
       unmatchedLocal: state.holdings.filter(h => !h._sheetMatched).map(h => h.name || h.ticker)
     };
