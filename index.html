@@ -717,7 +717,7 @@ if (window._folioReady) {
           <button onclick="fetchFromNavSheet(true);toggleActionMenu()">🔄 ดึงจาก Sheet</button>
           <div class="dd-divider"></div>
           <div class="dd-label">เพิ่มรายการ</div>
-          <button onclick="openModal('holding-modal');toggleActionMenu()">+ เพิ่ม Holding</button>
+          <button onclick="openHoldingModal();toggleActionMenu()">+ เพิ่ม Holding</button>
           <button onclick="openModal('trade-modal');toggleActionMenu()">+ บันทึก Trade</button>
           <button onclick="openAddDcaModal();toggleActionMenu()">+ แผน DCA</button>
         </div>
@@ -2568,7 +2568,7 @@ function setDate() {
 function renderHoldings() {
   var el = document.getElementById('holdingsList');
   if (!state.holdings.length) {
-    el.innerHTML = '<div class="empty" style="padding:20px 0;"><div style="font-size:28px;margin-bottom:8px;">📭</div><div style="color:var(--text2);font-size:13px;margin-bottom:12px;">ยังไม่มีหลักทรัพย์</div><button onclick="openModal(\'holding-modal\')" class="btn-primary" style="font-size:12px;padding:7px 16px;">+ เพิ่มหลักทรัพย์แรก</button></div>';
+    el.innerHTML = '<div class="empty" style="padding:20px 0;"><div style="font-size:28px;margin-bottom:8px;">📭</div><div style="color:var(--text2);font-size:13px;margin-bottom:12px;">ยังไม่มีหลักทรัพย์</div><button onclick="openHoldingModal()" class="btn-primary" style="font-size:12px;padding:7px 16px;">+ เพิ่มหลักทรัพย์แรก</button></div>';
     return;
   }
 
@@ -3186,8 +3186,27 @@ function onTaxTypeChange() {
   if (hintEl) hintEl.style.display = t ? '' : 'none';
 }
 
+// ล้างฟอร์ม holding กลับเป็นโหมดเพิ่มใหม่ — กันค่าค้างจากการแก้ไขครั้งก่อน
+function resetHoldingForm() {
+  document.getElementById('h-edit-id').value = '';
+  document.getElementById('h-ticker').value = '';
+  document.getElementById('h-name-input').value = '';
+  document.getElementById('h-shares').value = '';
+  document.getElementById('h-price').value = '';
+  document.getElementById('h-currency').value = 'THB';
+  document.getElementById('h-type').value = 'set';
+  document.getElementById('h-broker').value = '';
+  document.getElementById('h-broker-custom').value = '';
+  document.getElementById('h-broker-custom').style.display = 'none';
+  document.getElementById('h-fund-region').value = 'thai';
+  var _ht = document.getElementById('h-tax-type'); if (_ht) _ht.value = '';
+  var _hy = document.getElementById('h-tax-year'); if (_hy) { _hy.value = ''; _hy.style.display = 'none'; }
+  var _hh = document.getElementById('h-tax-hint'); if (_hh) _hh.style.display = 'none';
+  onHoldingTypeChange();
+}
+
 function openHoldingModal(editId) {
-  // Reset to add mode
+  if (!editId) resetHoldingForm(); // โหมดแก้ไข: editHoldingGroup เติมฟอร์มไว้แล้วก่อนเรียก
   document.getElementById('h-edit-id').value = editId || '';
   const isEdit = !!editId;
   document.getElementById('h-modal-title').textContent = isEdit ? 'แก้ไขหลักทรัพย์' : 'เพิ่มหลักทรัพย์';
@@ -3276,21 +3295,7 @@ async function addHolding() {
     return;
   }
   closeModal('holding-modal');
-  document.getElementById('h-ticker').value = '';
-  document.getElementById('h-name-input').value = '';
-  document.getElementById('h-shares').value = '';
-  document.getElementById('h-price').value = '';
-  document.getElementById('h-type').value = 'set';
-  document.getElementById('h-broker').value = '';
-  document.getElementById('h-broker-custom').value = '';
-  document.getElementById('h-broker-custom').style.display = 'none';
-  document.getElementById('h-fund-region').value = 'thai';
-  document.getElementById('h-fund-region-group').style.display = 'none';
-  var _ht = document.getElementById('h-tax-type'); if (_ht) _ht.value = '';
-  var _hy = document.getElementById('h-tax-year'); if (_hy) { _hy.value = ''; _hy.style.display = 'none'; }
-  var _hh = document.getElementById('h-tax-hint'); if (_hh) _hh.style.display = 'none';
-  var _hbr = document.getElementById('h-buyrate'); if (_hbr) _hbr.value = '';
-  onHoldingTypeChange();
+  resetHoldingForm();
   showToast((isEdit ? 'อัพเดตแล้ว: ' : 'เพิ่มหลักทรัพย์แล้ว: ') + name);
   syncHoldingsToSheets();
   // Sync Qty + AvgCost back to Portfolio_NAV sheet
