@@ -1876,6 +1876,16 @@ function dcaNextFrom(iso, freq) {
   else d.setMonth(d.getMonth() + 1);
   return isoFromDate(d);
 }
+// ยอด DCA ต่อเดือนของทุกแผน ปรับตามความถี่ (รายสัปดาห์ ×52/12, ทุก 2 สัปดาห์ ×26/12)
+// ทุกหน้าใช้ตัวนี้ตัวเดียว — เดิมบางหน้ารวมยอดดิบ แผนรายสัปดาห์เลยถูกนับเป็นยอดต่อเดือน
+function dcaMonthly() {
+  return (state.dcaSchedules || []).reduce((s, d) => {
+    const a = Number(d.amount) || 0;
+    const mult = (d.freq === 'รายสัปดาห์' || d.freq === 'weekly') ? 52 / 12
+      : (d.freq === 'ทุก 2 สัปดาห์' || d.freq === 'biweekly') ? 26 / 12 : 1;
+    return s + a * mult;
+  }, 0);
+}
 function dcaDisplayDate(iso) {
   if (!iso) return 'ยังไม่ระบุ';
   const d = new Date(iso + 'T00:00:00');
@@ -2780,7 +2790,7 @@ async function deleteHoldingGroup(gi) {
 
 // --- Render DCA (card removed; function kept for DCA modal + Phase 11 alerts) ---
 function renderDCA() {
-  const total = state.dcaSchedules.reduce((s, d) => s + Number(d.amount), 0);
+  const total = Math.round(dcaMonthly());
   const el = document.getElementById('dcaTotal');
   if (el) el.textContent = total ? '฿' + total.toLocaleString() + ' / เดือน' : '';
   const list = document.getElementById('dcaPlanList');
@@ -2971,7 +2981,7 @@ function renderBudget() {
 
   const planExp = state.budgetExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   // DCA ต่อเดือนปรับตามความถี่ — ตัวเลขเดียวกับแท็บบิลและหน้าลงทุน
-  const planDca = typeof billDcaMonthly === 'function' ? billDcaMonthly() : state.dcaSchedules.reduce((s, d) => s + Number(d.amount || 0), 0);
+  const planDca = dcaMonthly();
   const planInc = state.budgetIncome || 0;
   const planLeft = planInc - planExp - planDca;
   const pctOf = (v, base) => base > 0 ? Math.round(v / base * 100) + '%' : '—';
@@ -5342,7 +5352,7 @@ function initPhase9() {
   if (!state.holdings.length) return;
   const totalCost  = portfolioCostThb();
   const totalValue = portfolioValueThb();
-  const totalMonthly = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
+  const totalMonthly = dcaMonthly();
   if (totalCost === 0) return;
 
   // ตั้ง baseline ครั้งแรกของปี แล้วย้ายเรคคอร์ดปี 2026 มาใช้รูปแบบใหม่
@@ -5692,7 +5702,7 @@ async function p10RefreshAI() {
     return `- ${h.name||h.ticker} [${P10_LABELS[cls]||cls}] มูลค่า ฿${v.toLocaleString()} (${w}%)` + (h.change ? ` P/L ${h.change.toFixed(1)}%` : '');
   }).join('\n');
 
-  const monthlyDca = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
+  const monthlyDca = Math.round(dcaMonthly());
   const yoyData = window._p9Data;
   const yoyLine = yoyData ? `YoY ปัจจุบัน: ${yoyData.currentYoy.toFixed(1)}% (เป้า ${yoyTargetPct().toFixed(0)}%, gap ${yoyData.gapPct.toFixed(1)}%)` : '';
   const lockedNames = taxLockedAssetNames();
@@ -5884,7 +5894,7 @@ function initPhase12() {
   plEl.style.color = monthPL >= 0 ? 'var(--green)' : 'var(--red)';
 
   // Monthly DCA total
-  const dcaTotal = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
+  const dcaTotal = Math.round(dcaMonthly());
   document.getElementById('p12Dca').textContent = '฿' + dcaTotal.toLocaleString();
 
   // Expenses this month — มีรายการจาก 🧾 บิล เดือนนี้ → ใช้รายจ่ายจริง, ไม่มี → ใช้รายการงบประมาณแบบเดิม
@@ -6975,15 +6985,8 @@ function billTotals(match) {
   return r;
 }
 
-// แผน DCA ต่อเดือน — ปรับตามความถี่ (รายสัปดาห์ = ×52/12, ทุก 2 สัปดาห์ = ×26/12)
-function billDcaMonthly() {
-  return (state.dcaSchedules || []).reduce((s, d) => {
-    const a = Number(d.amount) || 0;
-    const mult = (d.freq === 'รายสัปดาห์' || d.freq === 'weekly') ? 52 / 12
-      : (d.freq === 'ทุก 2 สัปดาห์' || d.freq === 'biweekly') ? 26 / 12 : 1;
-    return s + a * mult;
-  }, 0);
-}
+// แผน DCA ต่อเดือน (ปรับตามความถี่) — ชื่อเดิมของแท็บบิล ใช้ dcaMonthly() ตัวเดียวกับหน้าอื่น
+function billDcaMonthly() { return dcaMonthly(); }
 
 // เฉลี่ยเงินเหลือจากเดือนที่จบแล้วและมีข้อมูล (สูงสุด 3 เดือนก่อนเดือนปัจจุบัน)
 function billAvgSurplus() {
