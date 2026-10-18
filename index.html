@@ -3484,8 +3484,8 @@ function renderTrades() {
         <td>${esc(t.dateStr||'--')}</td>
         <td><span class="trade-type ${t.type==='BUY'?'buy':'sell'}">${t.type==='BUY'?'ซื้อ':'ขาย'}</span></td>
         <td>${esc(t.asset)}</td>
-        <td>${priceShow}</td>
-        <td>${t.qty}</td>
+        <td>${esc(priceShow)}</td>
+        <td>${esc(t.qty)}</td>
         <td style="color:var(--text2);font-size:11px;">${totalShow}${t.fee ? '<div style="font-size:9px;color:var(--text3);">fee ฿'+Number(t.fee).toLocaleString()+'</div>' : ''}</td>
         <td style="white-space:nowrap;">
           <button onclick="openEditTrade('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;" title="แก้ไข">✏️</button>
@@ -3949,7 +3949,7 @@ async function p17RunAnalysis() {
     }
 
     // Format: bold headers, colored buy/hold/sell tags
-    var html = bodyText.replace(/\n/g, '<br>');
+    var html = esc(bodyText).replace(/\n/g, '<br>');
     // Section headers - make them stand out
     headers.forEach(function(h) {
       html = html.split(h).join('<div style="font-size:11px;font-weight:600;color:var(--accent);margin:14px 0 6px;letter-spacing:0.3px;">' + h + '</div>');
@@ -3966,7 +3966,7 @@ async function p17RunAnalysis() {
   } catch(e) {
     var msg = e.message === 'no_key' ? 'ใส่ Gemini Key ก่อน' : 'วิเคราะห์ไม่ได้: ' + e.message;
     showToast(msg);
-    panel.innerHTML = '<span style="color:var(--red);">' + msg + '</span>';
+    panel.innerHTML = '<span style="color:var(--red);">' + esc(msg) + '</span>';
   }
   btn.disabled = false; sp.style.display = 'none';
 }
@@ -4339,10 +4339,10 @@ var prompt = promptLines.join('\n');
             // layer 2 = กองใหม่จากข่าว; หรือใช้ field source ที่ prompt ขอ
             var src = a.source || (a.layer === 2 ? 'news' : 'sheet');
             html += '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">';
-            html += '<span style="background:'+c+';color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;">'+a.rank+'</span>';
+            html += '<span style="background:'+c+';color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;">'+(Number(a.rank)||'')+'</span>';
             html += '<div style="flex:1;">';
             html += '<div style="font-size:13px;font-weight:500;color:var(--text);">'+esc(a.action)+' '+srcBadge(src)+'</div>';
-            html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+(a.amount||0).toLocaleString()+' — '+esc(a.reason)+'</div>';
+            html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+Number(a.amount||0).toLocaleString()+' — '+esc(a.reason)+'</div>';
             html += '</div></div>';
           });
           html += '</div>';
@@ -4362,15 +4362,15 @@ var prompt = promptLines.join('\n');
           return portfolioAssetNames.indexOf((a.asset||'').toLowerCase()) === -1;
         }).map(function(a){ return Object.assign({}, a, {is_new_fund: true}); });
         var bonusFunds = (parsed.bonus_funds||[]).concat(aiUnknowns);
-        var grandTotal = allAlloc.reduce(function(s,x){ return s+(x.amount||0); },0) + bonusFunds.reduce(function(s,x){ return s+(x.amount||0); },0);
+        var grandTotal = allAlloc.reduce(function(s,x){ return s+(Number(x.amount)||0); },0) + bonusFunds.reduce(function(s,x){ return s+(Number(x.amount)||0); },0);
         if (allAlloc.length) {
           html += '<div style="margin-bottom:12px;">';
           html += '<div style="font-size:10px;font-weight:600;color:var(--text2);letter-spacing:0.5px;margin-bottom:8px;">📊 กองที่มีในพอร์ต <span style="font-weight:400;color:var(--text3);">— จัดสรรตาม Drift/BuyScore ใน Sheet</span></div>';
           allAlloc.forEach(function(a) {
-            var pct = grandTotal > 0 ? Math.round((a.amount||0)/grandTotal*100) : 0;
+            var pct = grandTotal > 0 ? Math.round((Number(a.amount)||0)/grandTotal*100) : 0;
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border);">';
             html += '<span style="font-size:12px;color:var(--text);">'+esc(a.asset)+' '+srcBadge('sheet')+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+esc(a.reason)+'</span></span>';
-            html += '<span style="font-size:13px;font-weight:600;color:var(--accent);">฿'+(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
+            html += '<span style="font-size:13px;font-weight:600;color:var(--accent);">฿'+Number(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
             html += '</div>';
           });
           html += '</div>';
@@ -4380,13 +4380,13 @@ var prompt = promptLines.join('\n');
           html += '<div style="margin-bottom:12px;background:var(--green-bg);border-radius:10px;padding:10px 12px;border:0.5px solid var(--border2);">';
           html += '<div style="font-size:10px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px;">✨ กองแนะนำเพิ่มเติมจากตลาดปัจจุบัน <span style="font-weight:400;">— AI เสริมจากข่าว ไม่ได้อยู่ใน Sheet</span></div>';
           bonusFunds.forEach(function(a) {
-            var pct = grandTotal > 0 ? Math.round((a.amount||0)/grandTotal*100) : 0;
+            var pct = grandTotal > 0 ? Math.round((Number(a.amount)||0)/grandTotal*100) : 0;
             html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:0.5px solid var(--border);">';
             html += '<div style="flex:1;">';
             html += '<span style="font-size:12px;font-weight:500;color:var(--text);">'+esc(a.asset)+' '+srcBadge('news')+'</span>';
             html += '<span style="display:block;font-size:10px;color:var(--text2);margin-top:2px;">'+esc(a.reason)+'</span>';
             html += '</div>';
-            html += '<span style="font-size:13px;font-weight:600;color:var(--green);white-space:nowrap;margin-left:10px;">฿'+(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
+            html += '<span style="font-size:13px;font-weight:600;color:var(--green);white-space:nowrap;margin-left:10px;">฿'+Number(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
             html += '</div>';
           });
           html += '</div>';
@@ -4396,10 +4396,10 @@ var prompt = promptLines.join('\n');
         html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
         if (parsed.expected_yoy) {
           var ey = parsed.expected_yoy;
-          html += '<div style="background:var(--green-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--green);">📈 Conservative '+ey.conservative+' / Base '+ey.base+' / Aggressive '+ey.aggressive+'</div>';
+          html += '<div style="background:var(--green-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--green);">📈 Conservative '+esc(ey.conservative)+' / Base '+esc(ey.base)+' / Aggressive '+esc(ey.aggressive)+'</div>';
         }
         if (parsed.risk) {
-          html += '<div style="background:var(--orange-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--orange);">⚠️ Risk: '+(parsed.risk.level||'')+'  '+( parsed.risk.note||'')+'</div>';
+          html += '<div style="background:var(--orange-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--orange);">⚠️ Risk: '+esc(parsed.risk.level||'')+'  '+esc(parsed.risk.note||'')+'</div>';
         }
         html += '</div>';
 
@@ -4424,16 +4424,16 @@ var prompt = promptLines.join('\n');
           var label = isSell ? 'ขาย' : 'ซื้อ';
           html += '<div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);">';
           html += '<span style="background:'+bg+';color:'+color+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600;min-width:32px;text-align:center;">'+label+'</span>';
-          html += '<span style="flex:1;font-size:12px;color:var(--text);">'+r.asset+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+r.reason+'</span></span>';
-          html += '<span style="font-size:13px;font-weight:600;color:'+color+';">฿'+(r.amount||0).toLocaleString()+'</span>';
+          html += '<span style="flex:1;font-size:12px;color:var(--text);">'+esc(r.asset)+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+esc(r.reason)+'</span></span>';
+          html += '<span style="font-size:13px;font-weight:600;color:'+color+';">฿'+Number(r.amount||0).toLocaleString()+'</span>';
           html += '</div>';
         });
         html += '</div>';
-        if (parsed.timeline) html += '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;">⏱ '+parsed.timeline+'</div>';
+        if (parsed.timeline) html += '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;">⏱ '+esc(parsed.timeline)+'</div>';
         if ((parsed.triggers||[]).length) {
           html += '<div style="background:var(--bg);border-radius:8px;padding:8px 10px;">';
           html += '<div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:4px;">🎯 Triggers</div>';
-          (parsed.triggers).forEach(function(t){ html += '<div style="font-size:11px;color:var(--text2);">• '+t+'</div>'; });
+          (parsed.triggers).forEach(function(t){ html += '<div style="font-size:11px;color:var(--text2);">• '+esc(t)+'</div>'; });
           html += '</div>';
         }
       }
@@ -4450,7 +4450,7 @@ var prompt = promptLines.join('\n');
   } catch(e) {
     var msg = e.message==='no_key'?'ใส่ Gemini Key ก่อน':'วิเคราะห์ไม่ได้: '+e.message;
     showToast(msg);
-    result.innerHTML = '<span style="color:var(--red);">'+msg+'</span>';
+    result.innerHTML = '<span style="color:var(--red);">'+esc(msg)+'</span>';
   }
   btn.disabled = false; sp.style.display = 'none';
 }
@@ -4572,10 +4572,10 @@ async function p17ReviewRun() {
       } else {
         html += '<div style="color:var(--text2);">AI ไม่สามารถสรุป action จากข่าวได้รอบนี้ — ลองใหม่อีกครั้ง หรือกองที่ถืออาจไม่มีข่าวเด่นช่วงนี้</div>';
       }
-      if (text) html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;white-space:pre-wrap;">'+String(text).slice(0,300)+'</div>';
+      if (text) html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;white-space:pre-wrap;">'+esc(String(text).slice(0,300))+'</div>';
     } else {
       if (parsed.market_note) {
-        html += '<div style="font-size:11px;color:var(--text2);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:12px;">📰 '+parsed.market_note+'</div>';
+        html += '<div style="font-size:11px;color:var(--text2);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:12px;">📰 '+esc(parsed.market_note)+'</div>';
       }
       html += '<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.8px;margin-bottom:10px;">🔍 ACTION จากข่าว — เรียงตามผลกระทบ</div>';
       actions.slice(0,6).forEach(function(a) {
@@ -4612,7 +4612,7 @@ async function p17ReviewRun() {
   } catch(e) {
     var msg = e.message==='no_key' ? 'ใส่ Gemini Key ก่อน' : 'รีวิวไม่ได้: '+e.message;
     showToast(msg);
-    result.innerHTML = '<span style="color:var(--red);">'+msg+'</span>';
+    result.innerHTML = '<span style="color:var(--red);">'+esc(msg)+'</span>';
   }
   btn.disabled = false; if (sp) sp.style.display = 'none';
 }
@@ -5780,10 +5780,10 @@ function initPhase11() {
     const label = h.name && h.type === 'fund' ? h.name : h.ticker;
     if (chg <= -10) {
       var action = chg <= -20 ? 'ขายทั้งหมด / Cut Loss' : 'ขาย 30-50% หรือตั้ง Stop Loss';
-      alerts.push({ type: 'danger', icon: '📉', msg: '<strong>' + label + '</strong> ร่วง <strong>' + chg.toFixed(1) + '%</strong> -- ' + action });
+      alerts.push({ type: 'danger', icon: '📉', msg: '<strong>' + esc(label) + '</strong> ร่วง <strong>' + chg.toFixed(1) + '%</strong> -- ' + action });
     } else if (chg >= 10) {
       var profitAct = chg >= 20 ? 'ขาย 30-50% Take Profit' : 'ขาย 20-30% หรือตั้ง Trailing Stop';
-      alerts.push({ type: 'info', icon: '📈', msg: '<strong>' + label + '</strong> พุ่ง <strong>+' + chg.toFixed(1) + '%</strong> -- ' + profitAct });
+      alerts.push({ type: 'info', icon: '📈', msg: '<strong>' + esc(label) + '</strong> พุ่ง <strong>+' + chg.toFixed(1) + '%</strong> -- ' + profitAct });
     }
   });
 
@@ -5914,7 +5914,7 @@ function initPhase12() {
   ].filter(Boolean).map(p => `
     <div style="background:var(--bg);border-radius:10px;padding:12px;">
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">${p.label}</div>
-      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;">${p.name}</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;">${esc(p.name)}</div>
       <div style="font-size:16px;font-family:var(--font-serif);color:${p.color};">${p.val}</div>
     </div>`).join('');
 
@@ -5973,7 +5973,7 @@ async function p12RunReview() {
   try {
     const data = await callGemini({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 800, temperature: 0.6 } });
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    txt.innerHTML = text.replace(/\n/g, '<br>');
+    txt.innerHTML = esc(text).replace(/\n/g, '<br>');
     aiCacheSave('p12_review', txt.innerHTML);
   } catch(e) {
     txt.innerHTML = `<span style="color:var(--red);">${e.message === 'no_key' ? 'ใส่ Gemini Key ในหน้า ⚙️ ตั้งค่าก่อน' : e.message === 'all_quota' ? 'Gemini ทุก key หมด quota' : 'เกิดข้อผิดพลาด กรุณาลองใหม่'}</span>`;
@@ -6130,8 +6130,8 @@ function bmRenderCustomTags() {
   if (!el) return;
   el.innerHTML = _bmCustomTickers.map(t =>
     '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:99px;background:' + t.color + '22;color:' + t.color + ';border:0.5px solid ' + t.color + '44;">'
-    + t.label
-    + '<span onclick="bmRemoveCustom(\'' + t.symbol + '\')" style="cursor:pointer;font-size:11px;opacity:0.7;">×</span></span>'
+    + esc(t.label)
+    + '<span onclick="bmRemoveCustom(' + esc(JSON.stringify(t.symbol)) + ')" style="cursor:pointer;font-size:11px;opacity:0.7;">×</span></span>'
   ).join('');
 }
 
@@ -6452,10 +6452,10 @@ async function bmFetchAiHot() {
     const _aiPart = (_aiRaw.candidates&&_aiRaw.candidates[0]&&_aiRaw.candidates[0].content&&_aiRaw.candidates[0].content.parts||[]).find(p=>p.text);
     const txt = _aiPart ? _aiPart.text : '';
     resultEl.innerHTML = txt.split('\n').filter(Boolean).map(l =>
-      '<div style="padding:4px 0;border-bottom:0.5px solid var(--bg2);">' + l + '</div>'
+      '<div style="padding:4px 0;border-bottom:0.5px solid var(--bg2);">' + esc(l) + '</div>'
     ).join('');
   } catch(e) {
-    resultEl.innerHTML = '<div style="color:var(--red);font-size:11px;">เกิดข้อผิดพลาด: ' + e.message + '</div>';
+    resultEl.innerHTML = '<div style="color:var(--red);font-size:11px;">เกิดข้อผิดพลาด: ' + esc(e.message) + '</div>';
   }
   if (btn) { btn.disabled = false; btn.textContent = '🤖 วิเคราะห์'; }
 }
@@ -6612,7 +6612,7 @@ function mpBuildManualList() {
     const plColor = plPct === null ? '' : parseFloat(plPct) >= 0 ? 'var(--green)' : 'var(--red)';
     return `<div style="background:var(--bg);border-radius:8px;padding:8px 10px;">
       <div style="display:flex;align-items:center;gap:8px;">
-        <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${label}">${label}</div>
+        <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(label)}">${esc(label)}</div>
         <input type="number" step="0.0001" id="mp-inp-${i}" value="${liveVal}"
           style="width:100px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);border:0.5px solid var(--border2);border-radius:7px;padding:5px 8px;text-align:right;outline:none;"
           placeholder="${h.type==='fund'?'NAV':'ราคา'}">
@@ -6769,7 +6769,7 @@ async function mpAnalyzeImage() {
 
     // Build holding selector options
     const holdingOptions = ['<option value="">-- ไม่จับคู่ --</option>',
-      ...state.holdings.map((h,i) => `<option value="${i}">${h.name||h.ticker}</option>`)
+      ...state.holdings.map((h,i) => `<option value="${i}">${esc(h.name||h.ticker)}</option>`)
     ].join('');
 
     // Render editable result rows with dropdown for manual rematch
@@ -6779,7 +6779,7 @@ async function mpAnalyzeImage() {
       const matchLabel = r.score >= 80 ? '✅' : r.score >= 40 ? '⚠️ โปรดตรวจสอบ' : '❌ เลือกเอง';
       return `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:4px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);">${r.name}</div>
+          <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);">${esc(r.name)}</div>
           <span style="font-size:10px;color:${r.score>=80?'var(--green)':r.score>=40?'var(--amber)':'var(--red)'};">${matchLabel}</span>
           <input type="number" step="0.0001" id="mp-img-inp-${i}" value="${r.price}"
             style="width:90px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);border:0.5px solid var(--border2);border-radius:7px;padding:5px 8px;text-align:right;outline:none;">
@@ -6787,11 +6787,11 @@ async function mpAnalyzeImage() {
         <div style="display:flex;align-items:center;gap:6px;">
           <span style="font-size:10px;color:var(--text3);">จับคู่กับ:</span>
           <select id="mp-img-sel-${i}" style="flex:1;font-family:var(--font);font-size:11px;color:var(--text);background:var(--surface);border:0.5px solid var(--border2);border-radius:6px;padding:3px 6px;outline:none;">
-            ${state.holdings.map((h,hi) => `<option value="${hi}" ${hi===matchedIdx?'selected':''}>${h.name||h.ticker}</option>`).join('')}
+            ${state.holdings.map((h,hi) => `<option value="${hi}" ${hi===matchedIdx?'selected':''}>${esc(h.name||h.ticker)}</option>`).join('')}
             <option value="-1" ${matchedIdx===-1?'selected':''}>-- ไม่จับคู่ (ข้ามไป) --</option>
           </select>
         </div>
-        ${r.date ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">วันที่: ${r.date}</div>` : ''}
+        ${r.date ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">วันที่: ${esc(r.date)}</div>` : ''}
       </div>`;
     }).join('');
 
