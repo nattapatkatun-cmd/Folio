@@ -608,7 +608,7 @@ window.dispatchEvent(new Event('folio-fb-ready'));
 // --- Portfolio Value Time-Series ---
 async function savePortfolioSnapshot() {
   if (!state.holdings.length) return;
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = todayISO(); // YYYY-MM-DD วันที่ตามเวลาเครื่อง (ไม่ใช่ UTC)
   const lastKey = 'folio_last_snapshot_date';
   if (localStorage.getItem(lastKey) === today) return; // 1 write/day max
   const totalValue = portfolioValueThb();
@@ -1939,7 +1939,7 @@ async function fetchUSPrice(ticker) {
 // --- Price Cache ---
 function savePriceCache() {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayISO();
     const data = {};
     state.holdings.forEach((h, i) => {
       if (h.livePrice || typeof h._sheetValue === 'number') {
@@ -1961,7 +1961,7 @@ function loadPriceCache() {
     const raw = localStorage.getItem('folio_price_cache');
     if (!raw) return false;
     const cache = JSON.parse(raw);
-    if (cache.date !== new Date().toISOString().split('T')[0]) return false;
+    if (cache.date !== todayISO()) return false;
     if (typeof loadSheetTotalsCache === 'function') loadSheetTotalsCache();
     state.holdings.forEach((h, i) => {
       const c = cache.data[(h.id || h.ticker || i) + ''];
@@ -3543,7 +3543,7 @@ function startApp() {
   renderDCA();
   renderAllocation();
   renderTrades();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayISO();
   const dNext = document.getElementById('d-next');
   const tDate = document.getElementById('t-date');
   if (dNext) dNext.value = today;
@@ -5007,7 +5007,7 @@ function applySheetData(data) {
 function saveSheetTotalsCache() {
   try {
     localStorage.setItem('folio_sheet_totals', JSON.stringify({
-      date: new Date().toISOString().split('T')[0], totals: state.sheetTotals
+      date: todayISO(), totals: state.sheetTotals
     }));
   } catch(e) {}
 }
@@ -5016,7 +5016,7 @@ function loadSheetTotalsCache() {
     const raw = localStorage.getItem('folio_sheet_totals');
     if (!raw) return false;
     const c = JSON.parse(raw);
-    if (c.date !== new Date().toISOString().split('T')[0] || !c.totals) return false;
+    if (c.date !== todayISO() || !c.totals) return false;
     state.sheetTotals = c.totals;
     return true;
   } catch(e) { return false; }
@@ -5172,7 +5172,7 @@ function yoyMigrateSnapshot(totalCost, totalValue) {
     snapshotCost: c0,
     baseValue: c0,
     seedMethod: 'cost-minus-6pct',
-    seededAt: new Date().toISOString().slice(0, 10),
+    seededAt: todayISO(),
     previousSnapshotCost: snap.snapshotCost
   }));
 }
@@ -5982,7 +5982,7 @@ async function p12RunReview() {
 
 // ─── AI Result Cache (persists until next day) ───
 function aiCacheSave(key, html) {
-  var today = new Date().toISOString().split('T')[0];
+  var today = todayISO();
   try { localStorage.setItem('folio_ai_' + key, JSON.stringify({ date: today, html: html })); } catch(e) {}
 }
 function aiCacheLoad(key) {
@@ -5990,7 +5990,7 @@ function aiCacheLoad(key) {
     var raw = localStorage.getItem('folio_ai_' + key);
     if (!raw) return null;
     var obj = JSON.parse(raw);
-    var today = new Date().toISOString().split('T')[0];
+    var today = todayISO();
     if (obj.date !== today) { localStorage.removeItem('folio_ai_' + key); return null; }
     return obj.html;
   } catch(e) { return null; }
