@@ -6077,11 +6077,15 @@ function p14TrackDrawdown() {
   }
 
   // Inject drawdown alert into Phase 11 if severe
+  // ถูกเรียกหลายรอบต่อการอัปเดต (initPhase11 ถูก hook ให้เรียกตัวนี้ด้วย) — ลบอันเดิมก่อน กัน alert ซ้ำ
+  const oldDd = document.getElementById('p14DrawdownAlert');
+  if (oldDd) oldDd.remove();
   if (drawdown < -10) {
     const list = document.getElementById('p11AlertsList');
     const wrap = document.getElementById('p11AlertsWrap');
     if (list) {
       const ddAlert = document.createElement('div');
+      ddAlert.id = 'p14DrawdownAlert';
       ddAlert.style.cssText = 'display:flex;align-items:center;gap:10px;background:var(--red-bg);border:0.5px solid #FECACA;border-radius:9px;padding:10px 14px;font-size:12px;color:var(--text);';
       ddAlert.innerHTML = `<span style="font-size:15px;flex-shrink:0;">⚠️</span><span style="flex:1;line-height:1.5;">Max Drawdown <strong>${drawdown.toFixed(1)}%</strong> จากจุดสูงสุด ฿${Math.round(peak).toLocaleString()} -- พิจารณา Hedge หรือลด Exposure</span>`;
       list.prepend(ddAlert);
