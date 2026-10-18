@@ -3319,7 +3319,6 @@ async function addHolding() {
   closeModal('holding-modal');
   resetHoldingForm();
   showToast((isEdit ? 'อัพเดตแล้ว: ' : 'เพิ่มหลักทรัพย์แล้ว: ') + name);
-  syncHoldingsToSheets();
   // Sync Qty + AvgCost back to Portfolio_NAV sheet
   const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (base) {
@@ -3423,6 +3422,11 @@ async function saveTrade() {
     if (window.FB) await window.FB.update('trades', editId, data);
     await syncHoldingFromTrade(type, asset, price, qty, 1, broker);
     showToast(`✅ แก้ไข trade ${asset} แล้ว`);
+    // Sheet: ย้อน trade เดิมก่อน แล้วค่อยส่งตัวใหม่ (ต้องเรียงลำดับ ไม่งั้น avg cost เพี้ยน)
+    (async () => {
+      if (old) await p17PostTradeToSheet(old, true);
+      await p17PostTradeToSheet(data);
+    })().catch(e => console.error('p17PostTradeToSheet:', e));
   } else {
     // ADD MODE
     if (window.FB) {
@@ -3433,7 +3437,6 @@ async function saveTrade() {
     }
     const synced = await syncHoldingFromTrade(type, asset, price, qty, 1, broker);
     showToast(synced ? `✅ ${type==='BUY'?'ซื้อ':'ขาย'} ${asset} — อัพเดต port แล้ว` : `✅ บันทึก ${type} ${asset} (ไม่พบ holding — port ไม่เปลี่ยน)`);
-    syncTradesToSheets(data).catch(e => console.error('syncTradesToSheets:', e));
     p17PostTradeToSheet(data).catch(e => console.error('p17PostTradeToSheet:', e));
   }
   closeModal('trade-modal');
@@ -3482,6 +3485,7 @@ async function deleteTrade(id) {
   if (!confirm('ลบ trade นี้? holdings จะถูกปรับตาม')) return;
   const t = state.trades.find(t => t.id === id);
   if (t) await syncHoldingFromTrade(t.type, t.asset, t.price, t.qty, -1, t.broker);
+  if (t) p17PostTradeToSheet(t, true).catch(e => console.error('p17PostTradeToSheet:', e));
   if (window.FB && id) {
     await window.FB.del('trades', id);
   } else {
@@ -4639,13 +4643,14 @@ async function p17ReviewRun() {
   btn.disabled = false; if (sp) sp.style.display = 'none';
 }
 
-async function p17PostTradeToSheet(trade) {
+// undo = true → ส่ง UNDO_BUY/UNDO_SELL เพื่อย้อน trade เดิม (ตอนแก้ไข/ลบ trade)
+async function p17PostTradeToSheet(trade, undo) {
   const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (!base) return;
   const params = new URLSearchParams({
     action: 'update_holding',
     asset: trade.asset,
-    tradeType: trade.type,
+    tradeType: (undo ? 'UNDO_' : '') + trade.type,
     qty: String(trade.qty),
     price: String(trade.price),
     currency: trade.currency || 'THB',
@@ -4656,8 +4661,11 @@ async function p17PostTradeToSheet(trade) {
     const result = await res.json();
     if (!result.ok) {
       showToast(`⚠️ Sheet sync ล้มเหลว: ${result.error || 'ไม่ทราบสาเหตุ'}`);
-    } else if (result.row === -1 || result.row == null) {
+    } else if (result.row === -1) {
       showToast(`⚠️ ไม่พบ "${trade.asset}" ใน Portfolio_NAV — Cost Basis ในชีตยังไม่อัปเดต`);
+    } else if (result.row == null) {
+      // Apps Script รุ่นเก่าตอบแค่ {ok:true} ไม่บอกแถว — ไม่ใช่ "ไม่พบ"
+      showToast(`✅ ส่ง ${trade.asset} ไป Sheet แล้ว (อัปเดต Apps Script ใน ⚙️ เพื่อดูผลละเอียด)`);
     } else {
       const qtyTxt = result.newQty != null ? Number(result.newQty).toLocaleString('th-TH', { maximumFractionDigits: 6 }) : '';
       const avgTxt = result.newAvgCost != null ? Number(result.newAvgCost).toLocaleString('th-TH', { maximumFractionDigits: 4 }) : '';
@@ -4674,6 +4682,9 @@ function p17CopyAppScript() {
   // App ส่ง update_holding มาทาง GET query string (ไม่ใช่ POST body) เพื่อเลี่ยงปัญหา CORS preflight
   if (e.parameter && e.parameter.action === 'update_holding') {
     return handleUpdateHolding(e.parameter);
+  }
+  if (e.parameter && e.parameter.action === 'clear_append') {
+    return handleClearAppend(e.parameter);
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const navSheet = ss.getSheetByName('Portfolio_NAV');
@@ -4706,9 +4717,30 @@ function doPost(e) {
   }
 }
 
-// payload: {asset, platform/broker, tradeType: 'SET'|'BUY'|'SELL', qty, price}
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ล้างแท็บ (สร้างใหม่ถ้ายังไม่มี) แล้วเขียน headers + rows — ใช้กับปุ่มสำรองบิลไป Sheet
+function handleClearAppend(p) {
+  try {
+    const d = JSON.parse(p.data || '{}');
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName(p.tab) || ss.insertSheet(p.tab);
+    sh.clearContents();
+    const rows = [d.headers || []].concat(d.rows || []);
+    if (rows.length && rows[0].length) sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    return json({ok:true, rows:(d.rows || []).length});
+  } catch(err) {
+    return json({ok:false, error:err.message});
+  }
+}
+
+// payload: {asset, platform/broker, tradeType, qty, price}
 // SET = ตั้งค่า qty/avgCost ตรง ๆ (ใช้ตอนเพิ่ม/แก้ไข holding เอง)
 // BUY/SELL = ปรับตามธุรกรรม (ใช้ตอนบันทึก trade)
+// UNDO_BUY/UNDO_SELL = ย้อน BUY/SELL เดิม (ใช้ตอนแก้ไข/ลบ trade)
+// ตอบกลับ {ok, row} — row = -1 ถ้าไม่พบ asset
 function handleUpdateHolding(payload) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -4719,15 +4751,20 @@ function handleUpdateHolding(payload) {
     const qtyCol = headers.indexOf('Qty');
     const avgCostCol = headers.indexOf('Avg Cost / Unit');
     const brokerCol = headers.indexOf('Broker') !== -1 ? headers.indexOf('Broker') : headers.indexOf('Platform') !== -1 ? headers.indexOf('Platform') : -1;
-    const assetLower = String(payload.asset).toLowerCase();
+    const assetLower = String(payload.asset).trim().toLowerCase();
     const brokerLower = String(payload.broker || payload.platform || '').toLowerCase();
-    let matchRow = -1;
+    // ชื่อตรงเป๊ะก่อน — ชื่อที่แค่มีคำนี้อยู่ (เช่น K-CHINA ใน K-CHINA-RMF) ใช้เฉพาะเมื่อมีแถวเดียว
+    const exact = [], partial = [];
     for (let i = 1; i < data.length; i++) {
-      if (!String(data[i][assetCol]).toLowerCase().includes(assetLower)) continue;
-      if (brokerCol !== -1 && brokerLower && String(data[i][brokerCol]).toLowerCase() === brokerLower) {
-        matchRow = i; break; // exact broker match — stop here
-      }
-      if (matchRow === -1) matchRow = i; // asset-only fallback (first match)
+      const a = String(data[i][assetCol]).trim().toLowerCase();
+      if (a === assetLower) exact.push(i);
+      else if (assetLower && a.includes(assetLower)) partial.push(i);
+    }
+    const cands = exact.length ? exact : (partial.length === 1 ? partial : []);
+    let matchRow = cands.length ? cands[0] : -1;
+    if (brokerCol !== -1 && brokerLower) {
+      const byBroker = cands.filter(i => String(data[i][brokerCol]).toLowerCase() === brokerLower);
+      if (byBroker.length) matchRow = byBroker[0];
     }
     const tradeQty = Number(payload.qty) || 0;
     const tradePrice = Number(payload.price) || 0;
@@ -4746,7 +4783,17 @@ function handleUpdateHolding(payload) {
       } else if (payload.tradeType === 'SELL') {
         const newQty = Math.max(0, oldQty - tradeQty);
         sheet.getRange(i + 1, qtyCol + 1).setValue(newQty);
+      } else if (payload.tradeType === 'UNDO_BUY') {
+        const newQty = Math.max(0, oldQty - tradeQty);
+        const newAvg = newQty > 0 ? Math.max(0, (oldQty * oldAvg - tradeQty * tradePrice) / newQty) : oldAvg;
+        sheet.getRange(i + 1, qtyCol + 1).setValue(newQty);
+        sheet.getRange(i + 1, avgCostCol + 1).setValue(parseFloat(newAvg.toFixed(4)));
+      } else if (payload.tradeType === 'UNDO_SELL') {
+        sheet.getRange(i + 1, qtyCol + 1).setValue(oldQty + tradeQty);
       }
+      const newQty = Number(sheet.getRange(i + 1, qtyCol + 1).getValue()) || 0;
+      const newAvgCost = Number(sheet.getRange(i + 1, avgCostCol + 1).getValue()) || 0;
+      return json({ok:true, row:i + 1, newQty:newQty, newAvgCost:newAvgCost});
     } else if (payload.tradeType === 'SET') {
       // ไม่พบแถวเดิม — เป็น holding ใหม่ เพิ่มแถวท้ายตาราง
       const newRow = new Array(headers.length).fill('');
@@ -4755,10 +4802,11 @@ function handleUpdateHolding(payload) {
       newRow[avgCostCol] = tradePrice;
       if (brokerCol !== -1) newRow[brokerCol] = payload.broker || payload.platform || '';
       sheet.appendRow(newRow);
+      return json({ok:true, row:sheet.getLastRow(), newQty:tradeQty, newAvgCost:tradePrice});
     }
-    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+    return json({ok:true, row:-1});
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ok:false,error:err.message})).setMimeType(ContentService.MimeType.JSON);
+    return json({ok:false, error:err.message});
   }
 }`;
   navigator.clipboard.writeText(code).then(() => showToast('คัดลอก AppScript Code แล้ว ✓'));
@@ -5104,20 +5152,6 @@ async function autoFetchNavSheet() {
   await fetchFromNavSheet(false);
 }
 
-// --- Google Sheets Sync ---
-async function syncToSheets(tab, rows, headers) {
-  const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
-  if (!base) return;
-  try {
-    const params = new URLSearchParams({
-      action: 'clear_append',
-      tab: tab,
-      data: JSON.stringify({ headers, rows })
-    });
-    await fetch(base + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
-  } catch(e) {}
-}
-
 function testFirebaseWrite() {
   if (!window.FB) { showToast('Firebase ยังไม่พร้อม'); return; }
   showToast('กำลังทดสอบ Firebase...');
@@ -5139,18 +5173,6 @@ service cloud.firestore {
   }
 }`;
   navigator.clipboard.writeText(rules).then(() => showToast('คัดลอก Rules แล้ว ✓'));
-}
-
-function syncHoldingsToSheets() {
-  const headers = ['Ticker','ชื่อ','ประเภท','จำนวน','ราคาเฉลี่ย','สกุลเงิน','มูลค่า','เปลี่ยนแปลง%','DCA'];
-  const rows = state.holdings.map(h => [h.ticker, h.name||h.ticker, h.type, h.shares, h.avgPrice, h.currency, h.value||0, h.change||0, h.dca?'ใช่':'ไม่']);
-  syncToSheets('Holdings', rows, headers);
-}
-
-function syncTradesToSheets(trade) {
-  // Send ALL trades so clear_append preserves full history (not just the new one)
-  const allRows = state.trades.map(t => [t.dateStr||'', t.type, t.asset, t.price, t.qty, t.totalThb||'']);
-  syncToSheets('Trades', allRows, ['วันที่','ประเภท','หลักทรัพย์','ราคา','จำนวน','มูลค่า(THB)']);
 }
 
 // --- YoY Snapshot (Time-Weighted baseline) ---
