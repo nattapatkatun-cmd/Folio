@@ -602,6 +602,8 @@ window.FB = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 };
+// script ปกติรันก่อน module นี้เสมอ — แจ้งให้โค้ดที่รอ whenFB() รู้ว่าใช้ FB ได้แล้ว
+window.dispatchEvent(new Event('folio-fb-ready'));
 
 // --- Portfolio Value Time-Series ---
 async function savePortfolioSnapshot() {
@@ -1844,6 +1846,13 @@ function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// window.FB มาจาก <script type="module"> ซึ่งรันหลัง script ปกติทั้งหมด
+// โค้ดที่รันตอนโหลดหน้าต้องรอผ่านตัวนี้ ไม่งั้นเจอ window.FB เป็น undefined
+function whenFB() {
+  if (window.FB) return Promise.resolve(window.FB);
+  return new Promise(r => window.addEventListener('folio-fb-ready', () => r(window.FB), { once: true }));
 }
 
 function isoFromDate(d) {
@@ -3957,10 +3966,15 @@ async function p17RunAnalysis() {
   btn.disabled = false; sp.style.display = 'none';
 }
 var _p17bRiskLevel = localStorage.getItem('folio_riskProfile') || 'base';
+p17bApplyRiskUi(_p17bRiskLevel); // HTML ไฮไลต์ Base ไว้ตายตัว — ให้ตรงกับค่าที่บันทึกไว้
 function p17bSetRisk(level) {
   _p17bRiskLevel = level;
   localStorage.setItem('folio_riskProfile', level);
   if (window.FB) window.FB.setDoc('settings', 'profile', { riskLevel: level }).catch(function(){});
+  p17bApplyRiskUi(level);
+}
+// ไฮไลต์ปุ่ม Risk ให้ตรงกับค่าที่ใช้อยู่ (ไม่บันทึกอะไร)
+function p17bApplyRiskUi(level) {
   var btns = { low: 'p17b-risk-low', base: 'p17b-risk-base', high: 'p17b-risk-high' };
   var colors = { low: ['var(--blue-bg)','var(--blue)','0.5px solid var(--border)'], base: ['var(--accent)','#fff','0.5px solid var(--accent)'], high: ['var(--purple-bg)','var(--purple)','0.5px solid var(--border)'] };
   Object.keys(btns).forEach(function(k) {
@@ -4785,26 +4799,26 @@ async function loadSettings() {
   _applyUrlsToWindow(localUrls);
   _applyUrlsToInputs(localUrls);
 
-  try {
-    const docs = await window.FB.getAll('settings');
+  // ค่าใน Firestore มาทีหลัง — ไม่ await เพื่อไม่ให้แอปค้างรอ Firebase (เช่นตอน offline)
+  whenFB().then(FB => FB.getAll('settings')).then(docs => {
     const urlDoc = docs.find(d => d.id === 'urls');
-    if (urlDoc) {
-      _applyUrlsToWindow(urlDoc);
-      _applyUrlsToInputs(urlDoc);
-    }
-  } catch(e) {
-    // Firebase not ready yet — already applied localStorage fallback above
-  }
+    if (!urlDoc) return;
+    const before = window._PORTFOLIO_SHEET_URL;
+    _applyUrlsToWindow(urlDoc);
+    _applyUrlsToInputs(urlDoc);
+    // URL ของ Sheet ต่างจากที่ใช้ดึงตอนเปิดแอป → ดึงใหม่จาก URL ที่ถูกต้อง
+    if (window._PORTFOLIO_SHEET_URL !== before) autoFetchNavSheet();
+  }).catch(() => {});
 }
 
 (async function _loadRiskProfile() {
   try {
-    var docs = await window.FB.getAll('settings');
+    var docs = await (await whenFB()).getAll('settings');
     var prof = docs.find(function(d) { return d.id === 'profile'; });
     if (prof && prof.riskLevel) {
       _p17bRiskLevel = prof.riskLevel;
       localStorage.setItem('folio_riskProfile', prof.riskLevel);
-      p17bSetRisk(prof.riskLevel);
+      p17bApplyRiskUi(prof.riskLevel);
     }
     var budgetDoc = docs.find(function(d) { return d.id === 'budget'; });
     if (budgetDoc && typeof budgetDoc.income === 'number') {
