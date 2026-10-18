@@ -5869,17 +5869,14 @@ function initPhase12() {
   const label = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
   document.getElementById('p12MonthLabel').textContent = `ข้อมูลสรุป ${label}`;
 
-  // P&L this month from trades
+  // P&L เดือนนี้ = กำไรที่รับรู้จากการขาย (ยอดขาย − ต้นทุน − ค่าธรรมเนียม) สูตรเดียวกับ realizedPlThisYear
+  // อ่านวันที่ด้วย tradeDate — dateStr เป็นข้อความไทย ("17 ต.ค.") ที่ new Date() อ่านไม่ได้
   const thisMonth = now.getMonth(); const thisYear = now.getFullYear();
-  const monthTrades = state.trades.filter(t => {
-    if (!t.dateStr) return false;
-    const d = new Date(t.dateStr);
-    return !isNaN(d) && d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  const monthSells = state.trades.filter(t => {
+    const d = tradeDate(t);
+    return t.type === 'SELL' && typeof t.costBasisThb === 'number' && d && d.getMonth() === thisMonth && d.getFullYear() === thisYear;
   });
-  const monthPL = monthTrades.reduce((s,t) => {
-    const val = (t.totalThb || 0);
-    return s + (t.type === 'SELL' ? val : -val);
-  }, 0);
+  const monthPL = monthSells.reduce((s, t) => s + (t.totalThb || 0) - t.costBasisThb - (t.fee || 0), 0);
   const plEl = document.getElementById('p12Pl');
   plEl.textContent = (monthPL >= 0 ? '+' : '') + '฿' + Math.abs(Math.round(monthPL)).toLocaleString();
   plEl.style.color = monthPL >= 0 ? 'var(--green)' : 'var(--red)';
@@ -5954,7 +5951,7 @@ async function p12RunReview() {
   promptLines2.push('สรุปรีวิวประจำเดือน ' + label + ' สำหรับนักลงทุน DCA เป้าหมาย 10% YoY');
   promptLines2.push('');
   promptLines2.push('ข้อมูลเดือนนี้:');
-  promptLines2.push('- P&L จากการซื้อขาย: ' + (monthPL >= 0 ? '+' : '') + '฿' + Math.round(monthPL).toLocaleString());
+  promptLines2.push('- กำไรที่รับรู้จากการขายเดือนนี้: ' + (monthPL >= 0 ? '+' : '') + '฿' + Math.round(monthPL).toLocaleString());
   promptLines2.push('- DCA รวม: ฿' + dcaTotal.toLocaleString() + '/เดือน');
   promptLines2.push('- รายจ่าย: ฿' + Math.round(monthExpenses).toLocaleString());
   promptLines2.push('- อัตราออม: ' + saveRate + '%');
