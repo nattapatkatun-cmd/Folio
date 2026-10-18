@@ -2585,17 +2585,19 @@ function renderHoldings() {
   }
 
   // Group same-name + broker holdings
+  // มูลค่าคำนวณสดจาก valueThb() ทุกครั้ง — ฟิลด์ value ใน Firestore เป็นค่า ณ ตอนเพิ่ม/แก้ holding
+  // (ไม่อัปเดตตอนซื้อขาย และไม่ได้แปลง USD ตอนใส่ราคาเอง) ถ้าใช้ตรง ๆ ตัวเลขจะเก่าหรือผิดสกุล
   var grouped = {};
   state.holdings.forEach(function(h, i) {
     var key = (h.name || h.ticker).toUpperCase() + '|' + (h.broker || '');
     if (!grouped[key]) {
-      grouped[key] = Object.assign({}, h, { _ids: [{ id: h.id, i: i }] });
+      grouped[key] = Object.assign({}, h, { value: valueThb(h), _ids: [{ id: h.id, i: i }] });
     } else {
       var g = grouped[key];
       var totalShares = g.shares + h.shares;
       g.avgPrice = parseFloat(((g.avgPrice * g.shares + h.avgPrice * h.shares) / totalShares).toFixed(4));
       g.shares = parseFloat(totalShares.toFixed(4));
-      var gVal = g.value || 0, hVal = h.value || 0;
+      var gVal = g.value || 0, hVal = valueThb(h);
       // Weight %change by value, not a flat average — a ฿10k lot moving -50% shouldn't cancel out a ฿1M lot at +2%
       g.change = (gVal + hVal) > 0 ? ((g.change || 0) * gVal + (h.change || 0) * hVal) / (gVal + hVal) : 0;
       g.value = gVal + hVal;
@@ -2607,8 +2609,6 @@ function renderHoldings() {
   window._holdingGroups = groups;
 
   // ─── Smart filter: 4-segment logic ───
-  var totalPortValue = groups.reduce(function(s, h) { return s + (h.value || h.shares * h.avgPrice); }, 0);
-
   // Sort by value for ranking
   var byValue = groups.slice().sort(function(a,b) { return (b.value||b.shares*b.avgPrice) - (a.value||a.shares*a.avgPrice); });
   var top5ids = new Set(byValue.slice(0, 5).map(function(h) { return (h.name||h.ticker)+'|'+(h.broker||''); }));
@@ -2684,7 +2684,7 @@ function renderHoldings() {
   el.innerHTML = filtered.map(function(h) {
     var gi = gi_map[(h.name||h.ticker)+'|'+(h.broker||'')];
     var tags = h._cachedTags || getTags(h);
-    var val = h.value || Math.round(valueThb(h));
+    var val = Math.round(h.value);
     var tagsHtml = tags.map(function(t) {
       return '<span style="background:'+t.bg+';color:'+t.color+';border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;margin-left:3px;">'+esc(t.label)+'</span>';
     }).join('');
@@ -2737,7 +2737,7 @@ function renderAllHoldings() {
   groups.forEach(function(h, i) { gi_map[(h.name||h.ticker)+'|'+(h.broker||'')] = i; });
   el.innerHTML = groups.map(function(h) {
     var gi = gi_map[(h.name||h.ticker)+'|'+(h.broker||'')];
-    var val = h.value || Math.round(valueThb(h));
+    var val = Math.round(h.value);
     var merged = h._ids.length > 1;
     var mergedBadge = merged ? ' x'+h._ids.length : '';
     var fundLabel = h.type === 'fund' ? 'กองทุน' : esc(h.ticker);
@@ -3247,8 +3247,6 @@ function editHoldingGroup(gi) {
   document.getElementById('h-shares').value = firstEntry.shares || '';
   document.getElementById('h-price').value = firstEntry.avgPrice || '';
   document.getElementById('h-currency').value = firstEntry.currency || 'THB';
-  var _hbr2 = document.getElementById('h-buyrate');
-  if (_hbr2) _hbr2.value = firstEntry.avgBuyRate || '';
   const knownBrokers = ['KBANK','InnovestX','Settrade','KKPAM','SCB','Bualuang','Bitkub','Binance','OKX','Bybit','Coinbase','Interactive Brokers','Webull','Tastytrade'];
   const b = firstEntry.broker || '';
   if (knownBrokers.includes(b)) {
@@ -3285,9 +3283,11 @@ async function addHolding() {
   const taxYearEl = document.getElementById('h-tax-year');
   const taxType = (type === 'fund' && taxTypeEl) ? taxTypeEl.value : '';
   const taxYear = (taxType === 'SSF' && taxYearEl && taxYearEl.value) ? parseInt(taxYearEl.value, 10) : null;
-  const data = { ticker, name, type, shares, avgPrice: price, currency, broker, fundRegion, taxType, taxYear, change: 0, value: Math.round(shares * price * (currency === 'USD' ? (state.usdThb || 33) : 1)), dca: false };
+  const data = { ticker, name, type, shares, avgPrice: price, currency, broker, fundRegion, taxType, taxYear, value: Math.round(shares * price * (currency === 'USD' ? (state.usdThb || 33) : 1)) };
   const editId = document.getElementById('h-edit-id').value;
   const isEdit = editId && !editId.startsWith('__local__');
+  // change/dca ไม่ได้อยู่ในฟอร์ม — ตั้งค่าเริ่มต้นเฉพาะตอนเพิ่มใหม่ ตอนแก้ไขห้ามทับค่าเดิม
+  if (!isEdit) { data.change = 0; data.dca = false; }
   try {
     if (isEdit && window.FB) {
       await window.FB.update('holdings', editId, data);
@@ -6649,7 +6649,7 @@ function mpSaveManual() {
       holding.change = holding.avgPrice > 0
         ? parseFloat(((val - holding.avgPrice) / holding.avgPrice * 100).toFixed(2))
         : 0;
-      holding.value = Math.round(holding.shares * val);
+      holding.value = Math.round(valueThb(holding)); // แปลง USD→THB เหมือนตอนดึงจาก Sheet
       count++;
     });
   });
@@ -6831,7 +6831,7 @@ function mpSaveFromImage() {
       h.change = h.avgPrice > 0
         ? parseFloat(((val - h.avgPrice) / h.avgPrice * 100).toFixed(2))
         : 0;
-      h.value = Math.round(h.shares * val);
+      h.value = Math.round(valueThb(h)); // แปลง USD→THB เหมือนตอนดึงจาก Sheet
       count++;
     });
   });
