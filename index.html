@@ -602,11 +602,13 @@ window.FB = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 };
+// script ปกติรันก่อน module นี้เสมอ — แจ้งให้โค้ดที่รอ whenFB() รู้ว่าใช้ FB ได้แล้ว
+window.dispatchEvent(new Event('folio-fb-ready'));
 
 // --- Portfolio Value Time-Series ---
 async function savePortfolioSnapshot() {
   if (!state.holdings.length) return;
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = todayISO(); // YYYY-MM-DD วันที่ตามเวลาเครื่อง (ไม่ใช่ UTC)
   const lastKey = 'folio_last_snapshot_date';
   if (localStorage.getItem(lastKey) === today) return; // 1 write/day max
   const totalValue = portfolioValueThb();
@@ -715,7 +717,7 @@ if (window._folioReady) {
           <button onclick="fetchFromNavSheet(true);toggleActionMenu()">🔄 ดึงจาก Sheet</button>
           <div class="dd-divider"></div>
           <div class="dd-label">เพิ่มรายการ</div>
-          <button onclick="openModal('holding-modal');toggleActionMenu()">+ เพิ่ม Holding</button>
+          <button onclick="openHoldingModal();toggleActionMenu()">+ เพิ่ม Holding</button>
           <button onclick="openModal('trade-modal');toggleActionMenu()">+ บันทึก Trade</button>
           <button onclick="openAddDcaModal();toggleActionMenu()">+ แผน DCA</button>
         </div>
@@ -1810,7 +1812,6 @@ const SET_PROXY = 'https://folio-proxy.ojo0308.workers.dev';
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxjdzzg_dDVC2fSHdF7PpajatdfieI4C5yjhUWxW9PCxnz2O9LTdQv-0rqaYcwzQbks/exec';
 const NAV_SHEET_DEFAULT = 'https://script.google.com/macros/s/AKfycbx7nhAqsew76aq0rKUsfjPCEG8Aaz4KexYN6i9onNdiV7d7_iN8stlVtABV4bK1-dLf/exec';
 const PORTFOLIO_SHEET_DEFAULT = 'https://script.google.com/macros/s/AKfycbxKHbm-Ge9XTk5CRKstK1UEMhamsXpvWCAJCcEcnYqyLqEoXWgGXzg0ubzEJpZeIxo/exec';
-const CRYPTO_MAP = { BTC: 'bitcoin', ETH: 'ethereum', BNB: 'binancecoin', SOL: 'solana', XRP: 'ripple' };
 
 // --- Currency helpers: h.value always stores THB market value ---
 function fxRate(h) { return h.currency === 'USD' ? (state.usdThb || 33) : 1; }
@@ -1846,6 +1847,13 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// window.FB มาจาก <script type="module"> ซึ่งรันหลัง script ปกติทั้งหมด
+// โค้ดที่รันตอนโหลดหน้าต้องรอผ่านตัวนี้ ไม่งั้นเจอ window.FB เป็น undefined
+function whenFB() {
+  if (window.FB) return Promise.resolve(window.FB);
+  return new Promise(r => window.addEventListener('folio-fb-ready', () => r(window.FB), { once: true }));
+}
+
 function isoFromDate(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
@@ -1860,12 +1868,30 @@ function dcaDueDays(d) {
   const now = new Date(); now.setHours(0, 0, 0, 0);
   return Math.round((now - due) / 86400000);
 }
-function dcaNextFrom(iso, freq) {
+// รายเดือน: ยึดวันที่ตั้งต้น (anchorDay) — setMonth(+1) ตรง ๆ ทำให้ 31 ม.ค. เลยไปเป็นต้น มี.ค.
+// เดือนที่สั้นกว่าใช้วันสุดท้ายของเดือน แล้วเดือนถัดไปกลับมาวันเดิม (31 ม.ค. → 28 ก.พ. → 31 มี.ค.)
+function dcaNextFrom(iso, freq, anchorDay) {
   const d = new Date(iso + 'T00:00:00');
   if (freq === 'รายสัปดาห์') d.setDate(d.getDate() + 7);
   else if (freq === 'ทุก 2 สัปดาห์') d.setDate(d.getDate() + 14);
-  else d.setMonth(d.getMonth() + 1);
+  else {
+    const day = anchorDay || d.getDate();
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 2, 0).getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(Math.min(day, lastDay));
+  }
   return isoFromDate(d);
+}
+// ยอด DCA ต่อเดือนของทุกแผน ปรับตามความถี่ (รายสัปดาห์ ×52/12, ทุก 2 สัปดาห์ ×26/12)
+// ทุกหน้าใช้ตัวนี้ตัวเดียว — เดิมบางหน้ารวมยอดดิบ แผนรายสัปดาห์เลยถูกนับเป็นยอดต่อเดือน
+function dcaMonthly() {
+  return (state.dcaSchedules || []).reduce((s, d) => {
+    const a = Number(d.amount) || 0;
+    const mult = (d.freq === 'รายสัปดาห์' || d.freq === 'weekly') ? 52 / 12
+      : (d.freq === 'ทุก 2 สัปดาห์' || d.freq === 'biweekly') ? 26 / 12 : 1;
+    return s + a * mult;
+  }, 0);
 }
 function dcaDisplayDate(iso) {
   if (!iso) return 'ยังไม่ระบุ';
@@ -1881,6 +1907,8 @@ function tradeDate(t) {
 }
 function tradeYear(t) { const d = tradeDate(t); return d ? d.getFullYear() : null; }
 
+// อัตรา USD/THB สำหรับแปลงมูลค่า holding สกุล USD — เดิมถูกเรียกจาก fetchAllPrices ที่ไม่มีปุ่มเรียก
+// state.usdThb จึงค้างที่ค่าตั้งต้น 34.5 ตลอด ตอนนี้ดึงตอนเปิดแอป (init)
 async function fetchUsdThb() {
   try {
     const r = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
@@ -1889,48 +1917,14 @@ async function fetchUsdThb() {
   } catch(e) {}
 }
 
-async function fetchCryptoPrices() {
-  const cryptos = state.holdings.filter(h => h.type === 'crypto');
-  if (!cryptos.length) return;
-  const ids = cryptos.map(h => CRYPTO_MAP[h.ticker] || h.ticker.toLowerCase()).join(',');
-  try {
-    const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
-    const d = await r.json();
-    cryptos.forEach(h => {
-      const id = CRYPTO_MAP[h.ticker] || h.ticker.toLowerCase();
-      if (d[id]) {
-        const price = d[id].usd;
-        const chg = d[id].usd_24h_change || 0;
-        h.livePrice = price;
-        h.change = parseFloat(chg.toFixed(2));
-        h.value = Math.round(h.shares * price * state.usdThb);
-        h.currency = 'USD';
-      }
-    });
-  } catch(e) {}
-}
 
-async function fetchUSPrice(ticker) {
-  const avKey = getActiveKey('AV');
-  if (!avKey) return null; // ต้องใส่ Alpha Vantage key ใน ⚙️ ตั้งค่า
-  try {
-    const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${avKey}`);
-    const d = await r.json();
-    if (d.Note || d.Information) { rotateKey('AV'); return null; } // quota หมด — สลับ key
-    const q = d['Global Quote'];
-    if (q && q['05. price']) {
-      return { price: parseFloat(q['05. price']), change: parseFloat(q['10. change percent']?.replace('%','') || 0) };
-    }
-  } catch(e) {}
-  return null;
-}
 
 // --- Thai Fund NAV via SEC API (routed through Cloudflare Worker) ---
 // Cache proj_ids so we only look them up once per session
 // --- Price Cache ---
 function savePriceCache() {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayISO();
     const data = {};
     state.holdings.forEach((h, i) => {
       if (h.livePrice || typeof h._sheetValue === 'number') {
@@ -1952,7 +1946,7 @@ function loadPriceCache() {
     const raw = localStorage.getItem('folio_price_cache');
     if (!raw) return false;
     const cache = JSON.parse(raw);
-    if (cache.date !== new Date().toISOString().split('T')[0]) return false;
+    if (cache.date !== todayISO()) return false;
     if (typeof loadSheetTotalsCache === 'function') loadSheetTotalsCache();
     state.holdings.forEach((h, i) => {
       const c = cache.data[(h.id || h.ticker || i) + ''];
@@ -1974,93 +1968,7 @@ function loadPriceCache() {
   } catch(e) { return false; }
 }
 
-// --- Thai Fund NAV via Gemini AI ---
-async function fetchFundNAVsWithGemini(fundNames) {
-  const prompt = 'บอก NAV ล่าสุด (บาท/หน่วย) ของกองทุนไทยต่อไปนี้: ' + fundNames.join(', ') + '\nตอบ JSON เท่านั้น ห้าม backtick รูปแบบ: {"K-GTECHRMF":{"nav":15.18,"prev_nav":15.10,"nav_date":"2026-04-14"}} ถ้าไม่ทราบใส่ null';
-  try {
-    const d = await callGemini({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000, temperature: 0 } });
-    const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!txt) { showToast('Gemini: ไม่มีคำตอบ'); return {}; }
-    const nav = safeParseJSON(txt);
-    if (!nav) { showToast('Gemini parse ไม่ได้: ' + txt.substring(0, 60)); return {}; }
-    return nav;
-  } catch(e) { showToast(e.message==='no_key'?'ใส่ Gemini Key ในหน้า ⚙️ ก่อน':e.message==='all_quota'?'Gemini ทุก key หมด quota':'Gemini error: '+e.message); return {}; }
-}
 
-async function fetchAllPrices() {
-  if (!window._holdingsLoaded) {
-    showToast('รอโหลดข้อมูล...');
-    for (let i = 0; i < 50; i++) {
-      await new Promise(r => setTimeout(r, 100));
-      if (window._holdingsLoaded) break;
-    }
-  }
-  showToast('กำลังดึงราคาล่าสุด...');
-  await fetchUsdThb();
-  await fetchCryptoPrices();
-
-  // US & Tech stocks
-  const usStocks = state.holdings.filter(h => (h.type === 'us' || h.type === 'tech'));
-  for (const h of usStocks) {
-    const data = await fetchUSPrice(h.ticker);
-    if (data) {
-      h.livePrice = data.price;
-      h.change = parseFloat(data.change.toFixed(2));
-      h.value = Math.round(h.shares * data.price * state.usdThb);
-    }
-  }
-
-  // SET stocks - via Cloudflare Worker proxy
-  const proxyUrl = SET_PROXY;
-  const setStocks = state.holdings.filter(h => h.type === 'set');
-  for (const h of setStocks) {
-    try {
-      const r = await fetch(`${proxyUrl}/?ticker=${h.ticker}`);
-      const d = await r.json();
-      if (d.price) {
-        h.livePrice = d.price;
-        h.change = d.change || 0;
-        h.value = Math.round(h.shares * d.price);
-      }
-    } catch(e) {}
-  }
-
-  // Thai Funds - Gemini AI (LLM อาจตอบ NAV ผิดหรือ hallucinate — ตรวจสอบ nav_date ที่แสดงในรายการ holding เทียบกับ NAV จริงจาก AMC เป็นระยะ)
-  const fundHoldings = state.holdings.filter(h => h.type === 'fund');
-  if (fundHoldings.length) {
-    const fundNames = [...new Set(fundHoldings.map(h => h.name || h.ticker.replace(/_/g,' ')))];
-    showToast('⚠️ กำลังดึง NAV กองทุนผ่าน Gemini — ตัวเลขอาจไม่แม่นยำ 100% โปรดตรวจสอบกับ AMC เป็นระยะ');
-    const navMap = await fetchFundNAVsWithGemini(fundNames);
-    const navMapNorm = {};
-    Object.keys(navMap).forEach(k => { if (navMap[k]?.nav) navMapNorm[k.trim().toUpperCase()] = navMap[k]; });
-    let updatedCount = 0;
-    fundHoldings.forEach(h => {
-      const name = (h.name || h.ticker.replace(/_/g,' ')).trim().toUpperCase();
-      const data = navMapNorm[name];
-      if (data && data.nav) {
-        const prev = data.prev_nav || data.nav;
-        h.livePrice = parseFloat(data.nav);
-        h.change = prev > 0 ? parseFloat(((data.nav - prev) / prev * 100).toFixed(2)) : 0;
-        h.value = Math.round(h.shares * h.livePrice);
-        h._navDate = data.nav_date || '';
-        updatedCount++;
-      }
-    });
-    if (updatedCount > 0) showToast('อัพเดต NAV ' + updatedCount + ' กองทุนแล้ว ✓');
-    else showToast('Gemini ดึง NAV ไม่ได้ -- ลองอีกครั้ง');
-  }
-
-  savePriceCache();
-  updatePortfolioSummary();
-  renderHoldings();
-  renderAllocation();
-  initPhase9();
-  initPhase10();
-  initPhase11();
-  initPhase12();
-  p14TrackDrawdown();
-  showToast('อัพเดทราคาเสร็จแล้ว ✓');
-}
 
 function updatePortfolioSummary() {
   // Sheet sync แล้ว → ใช้ยอดจาก Sheet ทั้งมูลค่าและ P/L (เลขเดียวกับการ์ด Portfolio Analyzer)
@@ -2094,8 +2002,8 @@ function updatePortfolioSummary() {
     const worst = holdingsWithChange.reduce((a,b) => (b.change||0) < (a.change||0) ? b : a);
     const bestEl  = document.getElementById('bestPerformerLabel');
     const worstEl = document.getElementById('worstPerformerLabel');
-    if (bestEl)  { bestEl.textContent  = (best.name||best.ticker)  + ' ' + (best.change  >= 0 ? '+':'') + best.change.toFixed(2)  + '%'; bestEl.className  = 'pos'; }
-    if (worstEl) { worstEl.textContent = (worst.name||worst.ticker) + ' ' + (worst.change >= 0 ? '+':'') + worst.change.toFixed(2) + '%'; worstEl.className = 'neg'; }
+    if (bestEl)  { bestEl.textContent  = (best.name||best.ticker)  + ' ' + (best.change  >= 0 ? '+':'') + best.change.toFixed(2)  + '%'; bestEl.className  = best.change >= 0 ? 'pos' : 'neg'; }
+    if (worstEl) { worstEl.textContent = (worst.name||worst.ticker) + ' ' + (worst.change >= 0 ? '+':'') + worst.change.toFixed(2) + '%'; worstEl.className = worst.change >= 0 ? 'pos' : 'neg'; }
   } else {
     const bestEl  = document.getElementById('bestPerformerLabel');
     const worstEl = document.getElementById('worstPerformerLabel');
@@ -2497,8 +2405,10 @@ function acKeyNav(e, ddId) {
   var idx = cur ? parseInt(cur.dataset.idx) : -1;
   if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
-  else if (e.key === 'Enter' && cur) { e.preventDefault(); cur.click(); return; }
-  else if (e.key === 'Escape') { dd.classList.remove('open'); return; }
+  // รายการเลือกด้วย onmousedown (กัน blur ปิด dropdown ก่อน) — click() ไม่ยิง mousedown จึงต้องส่งเอง
+  else if (e.key === 'Enter' && cur) { e.preventDefault(); cur.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); return; }
+  // หยุดไม่ให้ไปถึงตัวปิด modal บน document — Escape ครั้งแรกปิดแค่ dropdown
+  else if (e.key === 'Escape') { e.stopPropagation(); dd.classList.remove('open'); return; }
   items.forEach(function(it){ it.classList.remove('active'); });
   if (items[idx]) items[idx].classList.add('active');
 }
@@ -2515,7 +2425,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
 });
-// Escape closes any open modal (autocomplete dropdown's own Escape handler runs first and stops here via open-check order)
+// Escape closes any open modal (acKeyNav stops propagation when it closes a dropdown, so the first Escape only closes the dropdown)
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   const openDD = document.querySelector('.ac-dropdown.open');
@@ -2529,25 +2439,7 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 4500);
 }
 
-function fmtCurrency(v, cur) {
-  if (cur === 'USD') return '$' + Number(v).toLocaleString();
-  return '฿' + Math.round(v).toLocaleString();
-}
 
-// แสดงทั้ง THB และ USD
-function fmtDual(h) {
-  const value = h.value || Math.round(h.shares * h.avgPrice);
-  if (h.currency === 'USD') {
-    const usd = h.livePrice
-      ? '$' + (h.shares * h.livePrice).toLocaleString(undefined, {maximumFractionDigits: 2})
-      : '$' + (h.shares * h.avgPrice).toLocaleString(undefined, {maximumFractionDigits: 2});
-    const thb = '฿' + Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-    return `<div class="holding-val">${thb}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${usd}</div>`;
-  }
-  // SET - แสดงบาทเป็นหลัก ไม่มี USD
-  return `<div class="holding-val">฿${Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`;
-}
 
 // --- Date ---
 function setDate() {
@@ -2559,22 +2451,24 @@ function setDate() {
 function renderHoldings() {
   var el = document.getElementById('holdingsList');
   if (!state.holdings.length) {
-    el.innerHTML = '<div class="empty" style="padding:20px 0;"><div style="font-size:28px;margin-bottom:8px;">📭</div><div style="color:var(--text2);font-size:13px;margin-bottom:12px;">ยังไม่มีหลักทรัพย์</div><button onclick="openModal(\'holding-modal\')" class="btn-primary" style="font-size:12px;padding:7px 16px;">+ เพิ่มหลักทรัพย์แรก</button></div>';
+    el.innerHTML = '<div class="empty" style="padding:20px 0;"><div style="font-size:28px;margin-bottom:8px;">📭</div><div style="color:var(--text2);font-size:13px;margin-bottom:12px;">ยังไม่มีหลักทรัพย์</div><button onclick="openHoldingModal()" class="btn-primary" style="font-size:12px;padding:7px 16px;">+ เพิ่มหลักทรัพย์แรก</button></div>';
     return;
   }
 
   // Group same-name + broker holdings
+  // มูลค่าคำนวณสดจาก valueThb() ทุกครั้ง — ฟิลด์ value ใน Firestore เป็นค่า ณ ตอนเพิ่ม/แก้ holding
+  // (ไม่อัปเดตตอนซื้อขาย และไม่ได้แปลง USD ตอนใส่ราคาเอง) ถ้าใช้ตรง ๆ ตัวเลขจะเก่าหรือผิดสกุล
   var grouped = {};
   state.holdings.forEach(function(h, i) {
     var key = (h.name || h.ticker).toUpperCase() + '|' + (h.broker || '');
     if (!grouped[key]) {
-      grouped[key] = Object.assign({}, h, { _ids: [{ id: h.id, i: i }] });
+      grouped[key] = Object.assign({}, h, { value: valueThb(h), _ids: [{ id: h.id, i: i }] });
     } else {
       var g = grouped[key];
       var totalShares = g.shares + h.shares;
       g.avgPrice = parseFloat(((g.avgPrice * g.shares + h.avgPrice * h.shares) / totalShares).toFixed(4));
       g.shares = parseFloat(totalShares.toFixed(4));
-      var gVal = g.value || 0, hVal = h.value || 0;
+      var gVal = g.value || 0, hVal = valueThb(h);
       // Weight %change by value, not a flat average — a ฿10k lot moving -50% shouldn't cancel out a ฿1M lot at +2%
       g.change = (gVal + hVal) > 0 ? ((g.change || 0) * gVal + (h.change || 0) * hVal) / (gVal + hVal) : 0;
       g.value = gVal + hVal;
@@ -2586,8 +2480,6 @@ function renderHoldings() {
   window._holdingGroups = groups;
 
   // ─── Smart filter: 4-segment logic ───
-  var totalPortValue = groups.reduce(function(s, h) { return s + (h.value || h.shares * h.avgPrice); }, 0);
-
   // Sort by value for ranking
   var byValue = groups.slice().sort(function(a,b) { return (b.value||b.shares*b.avgPrice) - (a.value||a.shares*a.avgPrice); });
   var top5ids = new Set(byValue.slice(0, 5).map(function(h) { return (h.name||h.ticker)+'|'+(h.broker||''); }));
@@ -2663,7 +2555,7 @@ function renderHoldings() {
   el.innerHTML = filtered.map(function(h) {
     var gi = gi_map[(h.name||h.ticker)+'|'+(h.broker||'')];
     var tags = h._cachedTags || getTags(h);
-    var val = h.value || Math.round(valueThb(h));
+    var val = Math.round(h.value);
     var tagsHtml = tags.map(function(t) {
       return '<span style="background:'+t.bg+';color:'+t.color+';border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;margin-left:3px;">'+esc(t.label)+'</span>';
     }).join('');
@@ -2716,7 +2608,7 @@ function renderAllHoldings() {
   groups.forEach(function(h, i) { gi_map[(h.name||h.ticker)+'|'+(h.broker||'')] = i; });
   el.innerHTML = groups.map(function(h) {
     var gi = gi_map[(h.name||h.ticker)+'|'+(h.broker||'')];
-    var val = h.value || Math.round(valueThb(h));
+    var val = Math.round(h.value);
     var merged = h._ids.length > 1;
     var mergedBadge = merged ? ' x'+h._ids.length : '';
     var fundLabel = h.type === 'fund' ? 'กองทุน' : esc(h.ticker);
@@ -2740,14 +2632,6 @@ function renderAllHoldings() {
     '</div>';
   }).join('') + '<div style="text-align:center;padding:8px;font-size:11px;color:var(--accent);cursor:pointer;" onclick="renderHoldings()">ย่อกลับ (smart view)</div>';
 }
-async function deleteHolding(i) {
-  const h = state.holdings[i];
-  if (window.FB && h.id) await window.FB.del('holdings', h.id);
-  state.holdings.splice(i, 1);
-  renderHoldings();
-  updatePortfolioSummary();
-  showToast('ลบหลักทรัพย์แล้ว');
-}
 
 async function deleteHoldingGroup(gi) {
   const group = (window._holdingGroups || [])[gi];
@@ -2769,7 +2653,7 @@ async function deleteHoldingGroup(gi) {
 
 // --- Render DCA (card removed; function kept for DCA modal + Phase 11 alerts) ---
 function renderDCA() {
-  const total = state.dcaSchedules.reduce((s, d) => s + Number(d.amount), 0);
+  const total = Math.round(dcaMonthly());
   const el = document.getElementById('dcaTotal');
   if (el) el.textContent = total ? '฿' + total.toLocaleString() + ' / เดือน' : '';
   const list = document.getElementById('dcaPlanList');
@@ -2859,7 +2743,7 @@ async function saveDCA() {
     // Edit mode - update in place (FB.update, not del+add, so the doc id/history stays intact)
     const i = parseInt(editIndex);
     const existing = state.dcaSchedules[i];
-    const patch = { ticker, type, amount, freq, nextISO };
+    const patch = { ticker, type, amount, freq, nextISO, anchorDay: nextISO ? +nextISO.slice(8, 10) : null };
     if (window.FB && existing.id) {
       await window.FB.update('dca', existing.id, patch);
     } else {
@@ -2869,7 +2753,7 @@ async function saveDCA() {
     showToast('แก้ไขแผน DCA แล้ว: ' + ticker);
   } else {
     // Add mode
-    const data = { ticker, type, amount, freq, nextISO, boughtCount: 0, boughtTotalAmount: 0, boughtTotalQty: 0 };
+    const data = { ticker, type, amount, freq, nextISO, anchorDay: nextISO ? +nextISO.slice(8, 10) : null, boughtCount: 0, boughtTotalAmount: 0, boughtTotalQty: 0 };
     if (window.FB) {
       await window.FB.add('dca', data);
     } else {
@@ -2908,9 +2792,11 @@ async function executeDCA(i) {
     showToast('⚠️ ไม่พบราคาปัจจุบันของ ' + d.ticker + ' — บันทึกแค่การเลื่อนวันถัดไป');
   }
 
-  const nextISO = dcaNextFrom(d.nextISO || todayISO(), d.freq);
+  // แผนเก่าไม่มี anchorDay → ใช้วันของ nextISO ปัจจุบันเป็นวันตั้งต้น
+  const anchorDay = d.anchorDay || +(d.nextISO || todayISO()).slice(8, 10);
+  const nextISO = dcaNextFrom(d.nextISO || todayISO(), d.freq, anchorDay);
   const patch = {
-    nextISO,
+    nextISO, anchorDay,
     boughtCount: (d.boughtCount || 0) + 1,
     boughtTotalAmount: (d.boughtTotalAmount || 0) + Number(d.amount),
     boughtTotalQty: (d.boughtTotalQty || 0) + (h && price ? d.amount / (h.currency === 'USD' ? price * fxRate(h) : price) : 0)
@@ -2960,7 +2846,7 @@ function renderBudget() {
 
   const planExp = state.budgetExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   // DCA ต่อเดือนปรับตามความถี่ — ตัวเลขเดียวกับแท็บบิลและหน้าลงทุน
-  const planDca = typeof billDcaMonthly === 'function' ? billDcaMonthly() : state.dcaSchedules.reduce((s, d) => s + Number(d.amount || 0), 0);
+  const planDca = dcaMonthly();
   const planInc = state.budgetIncome || 0;
   const planLeft = planInc - planExp - planDca;
   const pctOf = (v, base) => base > 0 ? Math.round(v / base * 100) + '%' : '—';
@@ -3028,7 +2914,7 @@ function renderBudgetCategories(act) {
       ? `<span style="color:var(--red);font-weight:600;">เกิน ${f0(used - g.plan)}</span>`
       : `<span style="color:var(--text3);">เหลือ ${f0(g.plan - used)}</span>`;
     html += `<div style="padding:9px 0;border-bottom:0.5px solid var(--bg2);">
-      <div class="bill-tap" onclick="budgetGoBills('cat','${k}')" title="แตะเพื่อดูรายการจริง" style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:2px 0;">
+      <div class="bill-tap" onclick="budgetGoBills('cat',${esc(JSON.stringify(k))})" title="แตะเพื่อดูรายการจริง" style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:2px 0;">
         <span>${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
         <span><strong>${f0(used)}</strong> <span style="color:var(--text3);">/ ${f0(g.plan)}</span></span>
       </div>
@@ -3044,9 +2930,9 @@ function renderBudgetCategories(act) {
     html += `<div style="font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin:12px 0 4px;">ใช้จ่ายนอกงบ</div>`;
     extra.forEach(k => {
       const c = catOf(k);
-      html += `<div class="bill-tap" onclick="budgetGoBills('cat','${k}')" style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;">
+      html += `<div class="bill-tap" onclick="budgetGoBills('cat',${esc(JSON.stringify(k))})" style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;">
         <span>${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
-        <span><strong>${f0(spent[k])}</strong> <button class="action" style="font-size:10.5px;color:var(--accent);background:none;border:none;cursor:pointer;" onclick="event.stopPropagation();budgetOpenExpense(null,'${k}')">+ ตั้งงบ</button></span></div>`;
+        <span><strong>${f0(spent[k])}</strong> <button class="action" style="font-size:10.5px;color:var(--accent);background:none;border:none;cursor:pointer;" onclick="event.stopPropagation();budgetOpenExpense(null,${esc(JSON.stringify(k))})">+ ตั้งงบ</button></span></div>`;
     });
   }
   if (state.budgetExpenses.some(e => !e.billCat)) html += '<div style="font-size:10.5px;color:var(--text3);margin-top:8px;"><span style="color:var(--amber);">•</span> = จับคู่หมวดให้อัตโนมัติจากชื่อเดิม แตะเพื่อตรวจ/เปลี่ยนหมวด</div>';
@@ -3177,8 +3063,27 @@ function onTaxTypeChange() {
   if (hintEl) hintEl.style.display = t ? '' : 'none';
 }
 
+// ล้างฟอร์ม holding กลับเป็นโหมดเพิ่มใหม่ — กันค่าค้างจากการแก้ไขครั้งก่อน
+function resetHoldingForm() {
+  document.getElementById('h-edit-id').value = '';
+  document.getElementById('h-ticker').value = '';
+  document.getElementById('h-name-input').value = '';
+  document.getElementById('h-shares').value = '';
+  document.getElementById('h-price').value = '';
+  document.getElementById('h-currency').value = 'THB';
+  document.getElementById('h-type').value = 'set';
+  document.getElementById('h-broker').value = '';
+  document.getElementById('h-broker-custom').value = '';
+  document.getElementById('h-broker-custom').style.display = 'none';
+  document.getElementById('h-fund-region').value = 'thai';
+  var _ht = document.getElementById('h-tax-type'); if (_ht) _ht.value = '';
+  var _hy = document.getElementById('h-tax-year'); if (_hy) { _hy.value = ''; _hy.style.display = 'none'; }
+  var _hh = document.getElementById('h-tax-hint'); if (_hh) _hh.style.display = 'none';
+  onHoldingTypeChange();
+}
+
 function openHoldingModal(editId) {
-  // Reset to add mode
+  if (!editId) resetHoldingForm(); // โหมดแก้ไข: editHoldingGroup เติมฟอร์มไว้แล้วก่อนเรียก
   document.getElementById('h-edit-id').value = editId || '';
   const isEdit = !!editId;
   document.getElementById('h-modal-title').textContent = isEdit ? 'แก้ไขหลักทรัพย์' : 'เพิ่มหลักทรัพย์';
@@ -3207,8 +3112,6 @@ function editHoldingGroup(gi) {
   document.getElementById('h-shares').value = firstEntry.shares || '';
   document.getElementById('h-price').value = firstEntry.avgPrice || '';
   document.getElementById('h-currency').value = firstEntry.currency || 'THB';
-  var _hbr2 = document.getElementById('h-buyrate');
-  if (_hbr2) _hbr2.value = firstEntry.avgBuyRate || '';
   const knownBrokers = ['KBANK','InnovestX','Settrade','KKPAM','SCB','Bualuang','Bitkub','Binance','OKX','Bybit','Coinbase','Interactive Brokers','Webull','Tastytrade'];
   const b = firstEntry.broker || '';
   if (knownBrokers.includes(b)) {
@@ -3245,9 +3148,11 @@ async function addHolding() {
   const taxYearEl = document.getElementById('h-tax-year');
   const taxType = (type === 'fund' && taxTypeEl) ? taxTypeEl.value : '';
   const taxYear = (taxType === 'SSF' && taxYearEl && taxYearEl.value) ? parseInt(taxYearEl.value, 10) : null;
-  const data = { ticker, name, type, shares, avgPrice: price, currency, broker, fundRegion, taxType, taxYear, change: 0, value: Math.round(shares * price * (currency === 'USD' ? (state.usdThb || 33) : 1)), dca: false };
+  const data = { ticker, name, type, shares, avgPrice: price, currency, broker, fundRegion, taxType, taxYear, value: Math.round(shares * price * (currency === 'USD' ? (state.usdThb || 33) : 1)) };
   const editId = document.getElementById('h-edit-id').value;
   const isEdit = editId && !editId.startsWith('__local__');
+  // change/dca ไม่ได้อยู่ในฟอร์ม — ตั้งค่าเริ่มต้นเฉพาะตอนเพิ่มใหม่ ตอนแก้ไขห้ามทับค่าเดิม
+  if (!isEdit) { data.change = 0; data.dca = false; }
   try {
     if (isEdit && window.FB) {
       await window.FB.update('holdings', editId, data);
@@ -3267,23 +3172,8 @@ async function addHolding() {
     return;
   }
   closeModal('holding-modal');
-  document.getElementById('h-ticker').value = '';
-  document.getElementById('h-name-input').value = '';
-  document.getElementById('h-shares').value = '';
-  document.getElementById('h-price').value = '';
-  document.getElementById('h-type').value = 'set';
-  document.getElementById('h-broker').value = '';
-  document.getElementById('h-broker-custom').value = '';
-  document.getElementById('h-broker-custom').style.display = 'none';
-  document.getElementById('h-fund-region').value = 'thai';
-  document.getElementById('h-fund-region-group').style.display = 'none';
-  var _ht = document.getElementById('h-tax-type'); if (_ht) _ht.value = '';
-  var _hy = document.getElementById('h-tax-year'); if (_hy) { _hy.value = ''; _hy.style.display = 'none'; }
-  var _hh = document.getElementById('h-tax-hint'); if (_hh) _hh.style.display = 'none';
-  var _hbr = document.getElementById('h-buyrate'); if (_hbr) _hbr.value = '';
-  onHoldingTypeChange();
+  resetHoldingForm();
   showToast((isEdit ? 'อัพเดตแล้ว: ' : 'เพิ่มหลักทรัพย์แล้ว: ') + name);
-  syncHoldingsToSheets();
   // Sync Qty + AvgCost back to Portfolio_NAV sheet
   const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (base) {
@@ -3387,6 +3277,11 @@ async function saveTrade() {
     if (window.FB) await window.FB.update('trades', editId, data);
     await syncHoldingFromTrade(type, asset, price, qty, 1, broker);
     showToast(`✅ แก้ไข trade ${asset} แล้ว`);
+    // Sheet: ย้อน trade เดิมก่อน แล้วค่อยส่งตัวใหม่ (ต้องเรียงลำดับ ไม่งั้น avg cost เพี้ยน)
+    (async () => {
+      if (old) await p17PostTradeToSheet(old, true);
+      await p17PostTradeToSheet(data);
+    })().catch(e => console.error('p17PostTradeToSheet:', e));
   } else {
     // ADD MODE
     if (window.FB) {
@@ -3397,7 +3292,6 @@ async function saveTrade() {
     }
     const synced = await syncHoldingFromTrade(type, asset, price, qty, 1, broker);
     showToast(synced ? `✅ ${type==='BUY'?'ซื้อ':'ขาย'} ${asset} — อัพเดต port แล้ว` : `✅ บันทึก ${type} ${asset} (ไม่พบ holding — port ไม่เปลี่ยน)`);
-    syncTradesToSheets(data).catch(e => console.error('syncTradesToSheets:', e));
     p17PostTradeToSheet(data).catch(e => console.error('p17PostTradeToSheet:', e));
   }
   closeModal('trade-modal');
@@ -3446,6 +3340,7 @@ async function deleteTrade(id) {
   if (!confirm('ลบ trade นี้? holdings จะถูกปรับตาม')) return;
   const t = state.trades.find(t => t.id === id);
   if (t) await syncHoldingFromTrade(t.type, t.asset, t.price, t.qty, -1, t.broker);
+  if (t) p17PostTradeToSheet(t, true).catch(e => console.error('p17PostTradeToSheet:', e));
   if (window.FB && id) {
     await window.FB.del('trades', id);
   } else {
@@ -3470,8 +3365,8 @@ function renderTrades() {
         <td>${esc(t.dateStr||'--')}</td>
         <td><span class="trade-type ${t.type==='BUY'?'buy':'sell'}">${t.type==='BUY'?'ซื้อ':'ขาย'}</span></td>
         <td>${esc(t.asset)}</td>
-        <td>${priceShow}</td>
-        <td>${t.qty}</td>
+        <td>${esc(priceShow)}</td>
+        <td>${esc(t.qty)}</td>
         <td style="color:var(--text2);font-size:11px;">${totalShow}${t.fee ? '<div style="font-size:9px;color:var(--text3);">fee ฿'+Number(t.fee).toLocaleString()+'</div>' : ''}</td>
         <td style="white-space:nowrap;">
           <button onclick="openEditTrade('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;" title="แก้ไข">✏️</button>
@@ -3527,7 +3422,7 @@ function startApp() {
   renderDCA();
   renderAllocation();
   renderTrades();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayISO();
   const dNext = document.getElementById('d-next');
   const tDate = document.getElementById('t-date');
   if (dNext) dNext.value = today;
@@ -3709,15 +3604,6 @@ function rotateKey(service) {
   }
 }
 
-function getKey(name) {
-  // Legacy single-key support
-  if (['AV_KEY','PROXY_URL','SHEETS_URL'].includes(name)) {
-    return window['_' + name] || localStorage.getItem('folio_' + name) || '';
-  }
-  // Multi-key support
-  const svc = name.replace('_KEY','');
-  return getActiveKey(svc) || window['_' + name] || '';
-}
 
 // --- Phase 17: Portfolio Analyzer ---
 window._p17SheetData = null;
@@ -3935,7 +3821,7 @@ async function p17RunAnalysis() {
     }
 
     // Format: bold headers, colored buy/hold/sell tags
-    var html = bodyText.replace(/\n/g, '<br>');
+    var html = esc(bodyText).replace(/\n/g, '<br>');
     // Section headers - make them stand out
     headers.forEach(function(h) {
       html = html.split(h).join('<div style="font-size:11px;font-weight:600;color:var(--accent);margin:14px 0 6px;letter-spacing:0.3px;">' + h + '</div>');
@@ -3952,15 +3838,20 @@ async function p17RunAnalysis() {
   } catch(e) {
     var msg = e.message === 'no_key' ? 'ใส่ Gemini Key ก่อน' : 'วิเคราะห์ไม่ได้: ' + e.message;
     showToast(msg);
-    panel.innerHTML = '<span style="color:var(--red);">' + msg + '</span>';
+    panel.innerHTML = '<span style="color:var(--red);">' + esc(msg) + '</span>';
   }
   btn.disabled = false; sp.style.display = 'none';
 }
 var _p17bRiskLevel = localStorage.getItem('folio_riskProfile') || 'base';
+p17bApplyRiskUi(_p17bRiskLevel); // HTML ไฮไลต์ Base ไว้ตายตัว — ให้ตรงกับค่าที่บันทึกไว้
 function p17bSetRisk(level) {
   _p17bRiskLevel = level;
   localStorage.setItem('folio_riskProfile', level);
   if (window.FB) window.FB.setDoc('settings', 'profile', { riskLevel: level }).catch(function(){});
+  p17bApplyRiskUi(level);
+}
+// ไฮไลต์ปุ่ม Risk ให้ตรงกับค่าที่ใช้อยู่ (ไม่บันทึกอะไร)
+function p17bApplyRiskUi(level) {
   var btns = { low: 'p17b-risk-low', base: 'p17b-risk-base', high: 'p17b-risk-high' };
   var colors = { low: ['var(--blue-bg)','var(--blue)','0.5px solid var(--border)'], base: ['var(--accent)','#fff','0.5px solid var(--accent)'], high: ['var(--purple-bg)','var(--purple)','0.5px solid var(--border)'] };
   Object.keys(btns).forEach(function(k) {
@@ -4192,7 +4083,7 @@ if (budget > 0 && eligible.length > 0) {
     var cappedShare = Math.min(rawShare, maxPerAsset);
     var amt = Math.min(Math.round(cappedShare * budget / 500) * 500, remaining);
     if (amt < 500) return;
-    allocationPlan.push({ asset: a.asset, amt: amt, drift: a.drift, score: a.score, status: a.status,
+    allocationPlan.push({ asset: a.asset, amt: amt, drift: a.drift, score: a.score, buyScore: a.buyScore, status: a.status,
       currentW: a.currentW, targetW: a.targetW, expRet: a.expRet });
     remaining -= amt;
   });
@@ -4238,7 +4129,7 @@ promptLines.push('');
   promptLines.push('');
   promptLines.push('LAYER 1 — กองที่มีในพอร์ต (pre-scored):');
   allocationPlan.forEach(function(a,i){
-    promptLines.push((i+1)+'. '+a.asset+': แนะนำ ฿'+a.amt.toLocaleString()+' (Drift='+a.drift.toFixed(1)+'%, BuyScore='+a.score.toFixed(1)+', status='+a.status+')');
+    promptLines.push((i+1)+'. '+a.asset+': แนะนำ ฿'+a.amt.toLocaleString()+' (Drift='+a.drift.toFixed(1)+'%, BuyScore='+a.buyScore.toFixed(1)+', คะแนนรวม='+a.score.toFixed(1)+', status='+a.status+')');
   });
   if (blocked.length) {
     promptLines.push('BLOCKED (overweight — ห้ามซื้อ): ' + blocked.map(function(a){ return a.asset; }).join(', '));
@@ -4320,10 +4211,10 @@ var prompt = promptLines.join('\n');
             // layer 2 = กองใหม่จากข่าว; หรือใช้ field source ที่ prompt ขอ
             var src = a.source || (a.layer === 2 ? 'news' : 'sheet');
             html += '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">';
-            html += '<span style="background:'+c+';color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;">'+a.rank+'</span>';
+            html += '<span style="background:'+c+';color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;">'+(Number(a.rank)||'')+'</span>';
             html += '<div style="flex:1;">';
             html += '<div style="font-size:13px;font-weight:500;color:var(--text);">'+esc(a.action)+' '+srcBadge(src)+'</div>';
-            html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+(a.amount||0).toLocaleString()+' — '+esc(a.reason)+'</div>';
+            html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">฿'+Number(a.amount||0).toLocaleString()+' — '+esc(a.reason)+'</div>';
             html += '</div></div>';
           });
           html += '</div>';
@@ -4343,15 +4234,15 @@ var prompt = promptLines.join('\n');
           return portfolioAssetNames.indexOf((a.asset||'').toLowerCase()) === -1;
         }).map(function(a){ return Object.assign({}, a, {is_new_fund: true}); });
         var bonusFunds = (parsed.bonus_funds||[]).concat(aiUnknowns);
-        var grandTotal = allAlloc.reduce(function(s,x){ return s+(x.amount||0); },0) + bonusFunds.reduce(function(s,x){ return s+(x.amount||0); },0);
+        var grandTotal = allAlloc.reduce(function(s,x){ return s+(Number(x.amount)||0); },0) + bonusFunds.reduce(function(s,x){ return s+(Number(x.amount)||0); },0);
         if (allAlloc.length) {
           html += '<div style="margin-bottom:12px;">';
           html += '<div style="font-size:10px;font-weight:600;color:var(--text2);letter-spacing:0.5px;margin-bottom:8px;">📊 กองที่มีในพอร์ต <span style="font-weight:400;color:var(--text3);">— จัดสรรตาม Drift/BuyScore ใน Sheet</span></div>';
           allAlloc.forEach(function(a) {
-            var pct = grandTotal > 0 ? Math.round((a.amount||0)/grandTotal*100) : 0;
+            var pct = grandTotal > 0 ? Math.round((Number(a.amount)||0)/grandTotal*100) : 0;
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border);">';
             html += '<span style="font-size:12px;color:var(--text);">'+esc(a.asset)+' '+srcBadge('sheet')+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+esc(a.reason)+'</span></span>';
-            html += '<span style="font-size:13px;font-weight:600;color:var(--accent);">฿'+(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
+            html += '<span style="font-size:13px;font-weight:600;color:var(--accent);">฿'+Number(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
             html += '</div>';
           });
           html += '</div>';
@@ -4361,13 +4252,13 @@ var prompt = promptLines.join('\n');
           html += '<div style="margin-bottom:12px;background:var(--green-bg);border-radius:10px;padding:10px 12px;border:0.5px solid var(--border2);">';
           html += '<div style="font-size:10px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px;">✨ กองแนะนำเพิ่มเติมจากตลาดปัจจุบัน <span style="font-weight:400;">— AI เสริมจากข่าว ไม่ได้อยู่ใน Sheet</span></div>';
           bonusFunds.forEach(function(a) {
-            var pct = grandTotal > 0 ? Math.round((a.amount||0)/grandTotal*100) : 0;
+            var pct = grandTotal > 0 ? Math.round((Number(a.amount)||0)/grandTotal*100) : 0;
             html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:0.5px solid var(--border);">';
             html += '<div style="flex:1;">';
             html += '<span style="font-size:12px;font-weight:500;color:var(--text);">'+esc(a.asset)+' '+srcBadge('news')+'</span>';
             html += '<span style="display:block;font-size:10px;color:var(--text2);margin-top:2px;">'+esc(a.reason)+'</span>';
             html += '</div>';
-            html += '<span style="font-size:13px;font-weight:600;color:var(--green);white-space:nowrap;margin-left:10px;">฿'+(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
+            html += '<span style="font-size:13px;font-weight:600;color:var(--green);white-space:nowrap;margin-left:10px;">฿'+Number(a.amount||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;">'+pct+'%</span></span>';
             html += '</div>';
           });
           html += '</div>';
@@ -4377,10 +4268,10 @@ var prompt = promptLines.join('\n');
         html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
         if (parsed.expected_yoy) {
           var ey = parsed.expected_yoy;
-          html += '<div style="background:var(--green-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--green);">📈 Conservative '+ey.conservative+' / Base '+ey.base+' / Aggressive '+ey.aggressive+'</div>';
+          html += '<div style="background:var(--green-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--green);">📈 Conservative '+esc(ey.conservative)+' / Base '+esc(ey.base)+' / Aggressive '+esc(ey.aggressive)+'</div>';
         }
         if (parsed.risk) {
-          html += '<div style="background:var(--orange-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--orange);">⚠️ Risk: '+(parsed.risk.level||'')+'  '+( parsed.risk.note||'')+'</div>';
+          html += '<div style="background:var(--orange-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--orange);">⚠️ Risk: '+esc(parsed.risk.level||'')+'  '+esc(parsed.risk.note||'')+'</div>';
         }
         html += '</div>';
 
@@ -4405,16 +4296,16 @@ var prompt = promptLines.join('\n');
           var label = isSell ? 'ขาย' : 'ซื้อ';
           html += '<div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);">';
           html += '<span style="background:'+bg+';color:'+color+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600;min-width:32px;text-align:center;">'+label+'</span>';
-          html += '<span style="flex:1;font-size:12px;color:var(--text);">'+r.asset+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+r.reason+'</span></span>';
-          html += '<span style="font-size:13px;font-weight:600;color:'+color+';">฿'+(r.amount||0).toLocaleString()+'</span>';
+          html += '<span style="flex:1;font-size:12px;color:var(--text);">'+esc(r.asset)+'<span style="font-size:10px;color:var(--text3);margin-left:6px;">'+esc(r.reason)+'</span></span>';
+          html += '<span style="font-size:13px;font-weight:600;color:'+color+';">฿'+Number(r.amount||0).toLocaleString()+'</span>';
           html += '</div>';
         });
         html += '</div>';
-        if (parsed.timeline) html += '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;">⏱ '+parsed.timeline+'</div>';
+        if (parsed.timeline) html += '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;">⏱ '+esc(parsed.timeline)+'</div>';
         if ((parsed.triggers||[]).length) {
           html += '<div style="background:var(--bg);border-radius:8px;padding:8px 10px;">';
           html += '<div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:4px;">🎯 Triggers</div>';
-          (parsed.triggers).forEach(function(t){ html += '<div style="font-size:11px;color:var(--text2);">• '+t+'</div>'; });
+          (parsed.triggers).forEach(function(t){ html += '<div style="font-size:11px;color:var(--text2);">• '+esc(t)+'</div>'; });
           html += '</div>';
         }
       }
@@ -4431,7 +4322,7 @@ var prompt = promptLines.join('\n');
   } catch(e) {
     var msg = e.message==='no_key'?'ใส่ Gemini Key ก่อน':'วิเคราะห์ไม่ได้: '+e.message;
     showToast(msg);
-    result.innerHTML = '<span style="color:var(--red);">'+msg+'</span>';
+    result.innerHTML = '<span style="color:var(--red);">'+esc(msg)+'</span>';
   }
   btn.disabled = false; sp.style.display = 'none';
 }
@@ -4553,10 +4444,10 @@ async function p17ReviewRun() {
       } else {
         html += '<div style="color:var(--text2);">AI ไม่สามารถสรุป action จากข่าวได้รอบนี้ — ลองใหม่อีกครั้ง หรือกองที่ถืออาจไม่มีข่าวเด่นช่วงนี้</div>';
       }
-      if (text) html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;white-space:pre-wrap;">'+String(text).slice(0,300)+'</div>';
+      if (text) html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;white-space:pre-wrap;">'+esc(String(text).slice(0,300))+'</div>';
     } else {
       if (parsed.market_note) {
-        html += '<div style="font-size:11px;color:var(--text2);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:12px;">📰 '+parsed.market_note+'</div>';
+        html += '<div style="font-size:11px;color:var(--text2);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:12px;">📰 '+esc(parsed.market_note)+'</div>';
       }
       html += '<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.8px;margin-bottom:10px;">🔍 ACTION จากข่าว — เรียงตามผลกระทบ</div>';
       actions.slice(0,6).forEach(function(a) {
@@ -4593,18 +4484,19 @@ async function p17ReviewRun() {
   } catch(e) {
     var msg = e.message==='no_key' ? 'ใส่ Gemini Key ก่อน' : 'รีวิวไม่ได้: '+e.message;
     showToast(msg);
-    result.innerHTML = '<span style="color:var(--red);">'+msg+'</span>';
+    result.innerHTML = '<span style="color:var(--red);">'+esc(msg)+'</span>';
   }
   btn.disabled = false; if (sp) sp.style.display = 'none';
 }
 
-async function p17PostTradeToSheet(trade) {
+// undo = true → ส่ง UNDO_BUY/UNDO_SELL เพื่อย้อน trade เดิม (ตอนแก้ไข/ลบ trade)
+async function p17PostTradeToSheet(trade, undo) {
   const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || '';
   if (!base) return;
   const params = new URLSearchParams({
     action: 'update_holding',
     asset: trade.asset,
-    tradeType: trade.type,
+    tradeType: (undo ? 'UNDO_' : '') + trade.type,
     qty: String(trade.qty),
     price: String(trade.price),
     currency: trade.currency || 'THB',
@@ -4615,8 +4507,11 @@ async function p17PostTradeToSheet(trade) {
     const result = await res.json();
     if (!result.ok) {
       showToast(`⚠️ Sheet sync ล้มเหลว: ${result.error || 'ไม่ทราบสาเหตุ'}`);
-    } else if (result.row === -1 || result.row == null) {
+    } else if (result.row === -1) {
       showToast(`⚠️ ไม่พบ "${trade.asset}" ใน Portfolio_NAV — Cost Basis ในชีตยังไม่อัปเดต`);
+    } else if (result.row == null) {
+      // Apps Script รุ่นเก่าตอบแค่ {ok:true} ไม่บอกแถว — ไม่ใช่ "ไม่พบ"
+      showToast(`✅ ส่ง ${trade.asset} ไป Sheet แล้ว (อัปเดต Apps Script ใน ⚙️ เพื่อดูผลละเอียด)`);
     } else {
       const qtyTxt = result.newQty != null ? Number(result.newQty).toLocaleString('th-TH', { maximumFractionDigits: 6 }) : '';
       const avgTxt = result.newAvgCost != null ? Number(result.newAvgCost).toLocaleString('th-TH', { maximumFractionDigits: 4 }) : '';
@@ -4633,6 +4528,9 @@ function p17CopyAppScript() {
   // App ส่ง update_holding มาทาง GET query string (ไม่ใช่ POST body) เพื่อเลี่ยงปัญหา CORS preflight
   if (e.parameter && e.parameter.action === 'update_holding') {
     return handleUpdateHolding(e.parameter);
+  }
+  if (e.parameter && e.parameter.action === 'clear_append') {
+    return handleClearAppend(e.parameter);
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const navSheet = ss.getSheetByName('Portfolio_NAV');
@@ -4665,9 +4563,30 @@ function doPost(e) {
   }
 }
 
-// payload: {asset, platform/broker, tradeType: 'SET'|'BUY'|'SELL', qty, price}
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ล้างแท็บ (สร้างใหม่ถ้ายังไม่มี) แล้วเขียน headers + rows — ใช้กับปุ่มสำรองบิลไป Sheet
+function handleClearAppend(p) {
+  try {
+    const d = JSON.parse(p.data || '{}');
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName(p.tab) || ss.insertSheet(p.tab);
+    sh.clearContents();
+    const rows = [d.headers || []].concat(d.rows || []);
+    if (rows.length && rows[0].length) sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    return json({ok:true, rows:(d.rows || []).length});
+  } catch(err) {
+    return json({ok:false, error:err.message});
+  }
+}
+
+// payload: {asset, platform/broker, tradeType, qty, price}
 // SET = ตั้งค่า qty/avgCost ตรง ๆ (ใช้ตอนเพิ่ม/แก้ไข holding เอง)
 // BUY/SELL = ปรับตามธุรกรรม (ใช้ตอนบันทึก trade)
+// UNDO_BUY/UNDO_SELL = ย้อน BUY/SELL เดิม (ใช้ตอนแก้ไข/ลบ trade)
+// ตอบกลับ {ok, row} — row = -1 ถ้าไม่พบ asset
 function handleUpdateHolding(payload) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -4678,15 +4597,20 @@ function handleUpdateHolding(payload) {
     const qtyCol = headers.indexOf('Qty');
     const avgCostCol = headers.indexOf('Avg Cost / Unit');
     const brokerCol = headers.indexOf('Broker') !== -1 ? headers.indexOf('Broker') : headers.indexOf('Platform') !== -1 ? headers.indexOf('Platform') : -1;
-    const assetLower = String(payload.asset).toLowerCase();
+    const assetLower = String(payload.asset).trim().toLowerCase();
     const brokerLower = String(payload.broker || payload.platform || '').toLowerCase();
-    let matchRow = -1;
+    // ชื่อตรงเป๊ะก่อน — ชื่อที่แค่มีคำนี้อยู่ (เช่น K-CHINA ใน K-CHINA-RMF) ใช้เฉพาะเมื่อมีแถวเดียว
+    const exact = [], partial = [];
     for (let i = 1; i < data.length; i++) {
-      if (!String(data[i][assetCol]).toLowerCase().includes(assetLower)) continue;
-      if (brokerCol !== -1 && brokerLower && String(data[i][brokerCol]).toLowerCase() === brokerLower) {
-        matchRow = i; break; // exact broker match — stop here
-      }
-      if (matchRow === -1) matchRow = i; // asset-only fallback (first match)
+      const a = String(data[i][assetCol]).trim().toLowerCase();
+      if (a === assetLower) exact.push(i);
+      else if (assetLower && a.includes(assetLower)) partial.push(i);
+    }
+    const cands = exact.length ? exact : (partial.length === 1 ? partial : []);
+    let matchRow = cands.length ? cands[0] : -1;
+    if (brokerCol !== -1 && brokerLower) {
+      const byBroker = cands.filter(i => String(data[i][brokerCol]).toLowerCase() === brokerLower);
+      if (byBroker.length) matchRow = byBroker[0];
     }
     const tradeQty = Number(payload.qty) || 0;
     const tradePrice = Number(payload.price) || 0;
@@ -4705,7 +4629,17 @@ function handleUpdateHolding(payload) {
       } else if (payload.tradeType === 'SELL') {
         const newQty = Math.max(0, oldQty - tradeQty);
         sheet.getRange(i + 1, qtyCol + 1).setValue(newQty);
+      } else if (payload.tradeType === 'UNDO_BUY') {
+        const newQty = Math.max(0, oldQty - tradeQty);
+        const newAvg = newQty > 0 ? Math.max(0, (oldQty * oldAvg - tradeQty * tradePrice) / newQty) : oldAvg;
+        sheet.getRange(i + 1, qtyCol + 1).setValue(newQty);
+        sheet.getRange(i + 1, avgCostCol + 1).setValue(parseFloat(newAvg.toFixed(4)));
+      } else if (payload.tradeType === 'UNDO_SELL') {
+        sheet.getRange(i + 1, qtyCol + 1).setValue(oldQty + tradeQty);
       }
+      const newQty = Number(sheet.getRange(i + 1, qtyCol + 1).getValue()) || 0;
+      const newAvgCost = Number(sheet.getRange(i + 1, avgCostCol + 1).getValue()) || 0;
+      return json({ok:true, row:i + 1, newQty:newQty, newAvgCost:newAvgCost});
     } else if (payload.tradeType === 'SET') {
       // ไม่พบแถวเดิม — เป็น holding ใหม่ เพิ่มแถวท้ายตาราง
       const newRow = new Array(headers.length).fill('');
@@ -4714,10 +4648,11 @@ function handleUpdateHolding(payload) {
       newRow[avgCostCol] = tradePrice;
       if (brokerCol !== -1) newRow[brokerCol] = payload.broker || payload.platform || '';
       sheet.appendRow(newRow);
+      return json({ok:true, row:sheet.getLastRow(), newQty:tradeQty, newAvgCost:tradePrice});
     }
-    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+    return json({ok:true, row:-1});
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ok:false,error:err.message})).setMimeType(ContentService.MimeType.JSON);
+    return json({ok:false, error:err.message});
   }
 }`;
   navigator.clipboard.writeText(code).then(() => showToast('คัดลอก AppScript Code แล้ว ✓'));
@@ -4785,26 +4720,26 @@ async function loadSettings() {
   _applyUrlsToWindow(localUrls);
   _applyUrlsToInputs(localUrls);
 
-  try {
-    const docs = await window.FB.getAll('settings');
+  // ค่าใน Firestore มาทีหลัง — ไม่ await เพื่อไม่ให้แอปค้างรอ Firebase (เช่นตอน offline)
+  whenFB().then(FB => FB.getAll('settings')).then(docs => {
     const urlDoc = docs.find(d => d.id === 'urls');
-    if (urlDoc) {
-      _applyUrlsToWindow(urlDoc);
-      _applyUrlsToInputs(urlDoc);
-    }
-  } catch(e) {
-    // Firebase not ready yet — already applied localStorage fallback above
-  }
+    if (!urlDoc) return;
+    const before = window._PORTFOLIO_SHEET_URL;
+    _applyUrlsToWindow(urlDoc);
+    _applyUrlsToInputs(urlDoc);
+    // URL ของ Sheet ต่างจากที่ใช้ดึงตอนเปิดแอป → ดึงใหม่จาก URL ที่ถูกต้อง
+    if (window._PORTFOLIO_SHEET_URL !== before) autoFetchNavSheet();
+  }).catch(() => {});
 }
 
 (async function _loadRiskProfile() {
   try {
-    var docs = await window.FB.getAll('settings');
+    var docs = await (await whenFB()).getAll('settings');
     var prof = docs.find(function(d) { return d.id === 'profile'; });
     if (prof && prof.riskLevel) {
       _p17bRiskLevel = prof.riskLevel;
       localStorage.setItem('folio_riskProfile', prof.riskLevel);
-      p17bSetRisk(prof.riskLevel);
+      p17bApplyRiskUi(prof.riskLevel);
     }
     var budgetDoc = docs.find(function(d) { return d.id === 'budget'; });
     if (budgetDoc && typeof budgetDoc.income === 'number') {
@@ -4986,7 +4921,7 @@ function applySheetData(data) {
 function saveSheetTotalsCache() {
   try {
     localStorage.setItem('folio_sheet_totals', JSON.stringify({
-      date: new Date().toISOString().split('T')[0], totals: state.sheetTotals
+      date: todayISO(), totals: state.sheetTotals
     }));
   } catch(e) {}
 }
@@ -4995,7 +4930,7 @@ function loadSheetTotalsCache() {
     const raw = localStorage.getItem('folio_sheet_totals');
     if (!raw) return false;
     const c = JSON.parse(raw);
-    if (c.date !== new Date().toISOString().split('T')[0] || !c.totals) return false;
+    if (c.date !== todayISO() || !c.totals) return false;
     state.sheetTotals = c.totals;
     return true;
   } catch(e) { return false; }
@@ -5063,20 +4998,6 @@ async function autoFetchNavSheet() {
   await fetchFromNavSheet(false);
 }
 
-// --- Google Sheets Sync ---
-async function syncToSheets(tab, rows, headers) {
-  const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
-  if (!base) return;
-  try {
-    const params = new URLSearchParams({
-      action: 'clear_append',
-      tab: tab,
-      data: JSON.stringify({ headers, rows })
-    });
-    await fetch(base + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
-  } catch(e) {}
-}
-
 function testFirebaseWrite() {
   if (!window.FB) { showToast('Firebase ยังไม่พร้อม'); return; }
   showToast('กำลังทดสอบ Firebase...');
@@ -5098,18 +5019,6 @@ service cloud.firestore {
   }
 }`;
   navigator.clipboard.writeText(rules).then(() => showToast('คัดลอก Rules แล้ว ✓'));
-}
-
-function syncHoldingsToSheets() {
-  const headers = ['Ticker','ชื่อ','ประเภท','จำนวน','ราคาเฉลี่ย','สกุลเงิน','มูลค่า','เปลี่ยนแปลง%','DCA'];
-  const rows = state.holdings.map(h => [h.ticker, h.name||h.ticker, h.type, h.shares, h.avgPrice, h.currency, h.value||0, h.change||0, h.dca?'ใช่':'ไม่']);
-  syncToSheets('Holdings', rows, headers);
-}
-
-function syncTradesToSheets(trade) {
-  // Send ALL trades so clear_append preserves full history (not just the new one)
-  const allRows = state.trades.map(t => [t.dateStr||'', t.type, t.asset, t.price, t.qty, t.totalThb||'']);
-  syncToSheets('Trades', allRows, ['วันที่','ประเภท','หลักทรัพย์','ราคา','จำนวน','มูลค่า(THB)']);
 }
 
 // --- YoY Snapshot (Time-Weighted baseline) ---
@@ -5151,7 +5060,7 @@ function yoyMigrateSnapshot(totalCost, totalValue) {
     snapshotCost: c0,
     baseValue: c0,
     seedMethod: 'cost-minus-6pct',
-    seededAt: new Date().toISOString().slice(0, 10),
+    seededAt: todayISO(),
     previousSnapshotCost: snap.snapshotCost
   }));
 }
@@ -5314,14 +5223,12 @@ async function yoyInspectBaseline() {
 }
 
 // --- Phase 9: YoY Gap Calculator ---
-let _p9Chart = null;
-
 function initPhase9() {
   // p9Data computed for Alerts + Monthly Review (UI card removed)
   if (!state.holdings.length) return;
   const totalCost  = portfolioCostThb();
   const totalValue = portfolioValueThb();
-  const totalMonthly = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
+  const totalMonthly = dcaMonthly();
   if (totalCost === 0) return;
 
   // ตั้ง baseline ครั้งแรกของปี แล้วย้ายเรคคอร์ดปี 2026 มาใช้รูปแบบใหม่
@@ -5346,26 +5253,6 @@ function initPhase9() {
   const projBase   = yoy.v0 + Math.max(0, projFlows);
   const projYoy    = projBase > 0 ? ((projValue - yoy.v0 - projFlows) / projBase) * 100 : 0;
 
-  const fmt = v => `${v>=0?'+':''}${v.toFixed(1)}%`;
-  const fmtB = v => `฿${Math.abs(v).toLocaleString('th-TH',{maximumFractionDigits:0})}`;
-
-  // KPIs (null-guarded: these elements only exist on Overview page)
-  const yoyEl = document.getElementById('p9CurrentYoy');
-  if (yoyEl) { yoyEl.textContent = fmt(currentYoy); yoyEl.style.color = currentYoy >= TARGET ? 'var(--green)' : currentYoy >= 5 ? 'var(--amber)' : 'var(--red)'; }
-
-  const gapEl = document.getElementById('p9Gap');
-  if (gapEl) { gapEl.textContent = gapPct <= 0 ? fmt(-gapPct) + ' 🎉' : fmt(gapPct); gapEl.style.color = gapPct <= 0 ? 'var(--green)' : 'var(--red)'; }
-  const gapBahtEl = document.getElementById('p9GapBaht');
-  if (gapBahtEl) gapBahtEl.textContent = gapBaht > 0 ? `ขาดอีก ${fmtB(gapBaht)}` : `เกินเป้า ${fmtB(-gapBaht)}`;
-
-  const dcaNeededEl = document.getElementById('p9DcaNeeded');
-  if (dcaNeededEl) { dcaNeededEl.textContent = dcaNeeded > 0 ? fmtB(dcaNeeded) : '--'; dcaNeededEl.style.color = dcaNeeded > 0 ? 'var(--accent)' : 'var(--green)'; }
-
-  const projEl = document.getElementById('p9Projected');
-  if (projEl) { projEl.textContent = fmt(projYoy); projEl.style.color = projYoy >= TARGET ? 'var(--green)' : projYoy >= 5 ? 'var(--amber)' : 'var(--red)'; }
-
-
-
   // Hero bar (top card) - sync with real YoY
   const yoyPctEl = document.getElementById('yoyPct');
   const yoyBarEl = document.getElementById('yoyBar');
@@ -5382,58 +5269,12 @@ function initPhase9() {
     }
   }
 
-  // Alert
-  const alertEl = null; // p9Alert removed
-  if (alertEl) {
-    if (gapPct <= 0) {
-      alertEl.style.background = 'var(--green-bg)'; alertEl.style.borderColor = '#86EFAC'; alertEl.style.color = 'var(--green)';
-      alertEl.innerHTML = `✅ คุณเกินเป้าแล้ว! YoY <strong>${fmt(currentYoy)}</strong> -- ยอดเยี่ยม 🎉`;
-    } else {
-      alertEl.style.background = 'var(--amber-bg)'; alertEl.style.borderColor = '#FCD34D'; alertEl.style.color = 'var(--amber)';
-      alertEl.innerHTML = `⚡ ต้องการ DCA เพิ่ม <strong>${fmtB(dcaNeeded)}/เดือน</strong> เพื่อปิด gap ${fmt(gapPct)} ภายใน ${monthsLeft} เดือน`;
-    }
-  }
-
-  // Chart
-  const labels = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  const monthsPast = 12 - monthsLeft;
-  const paceLine = labels.map((_,i) => {
-    const mFromNow = Math.max(0, i - monthsPast);
-    const f = yoy.flows + totalMonthly * mFromNow;
-    const v = totalValue + totalMonthly * mFromNow;
-    const b = yoy.v0 + Math.max(0, f);
-    return b > 0 ? parseFloat(((v - yoy.v0 - f) / b * 100).toFixed(2)) : 0;
-  });
-  const targetLine = labels.map(() => TARGET);
-
   window._p9Data = { holdings: state.holdings, totalCost, snapshotCost, baseValue: yoy.v0, yearStartCost: yoy.c0, flows: yoy.flows, totalValue, totalMonthly, currentYoy, gapPct, gapBaht, dcaNeeded, monthsLeft, projectedYoy: projYoy };
 
   // Save daily snapshot (1 write/day — foundation for trajectory data)
-  // ต้องอยู่ก่อนส่วนกราฟ เพราะการ์ดกราฟ p9Chart ถูกถอดออกจาก UI แล้ว
-  // โค้ดเดิม return ตรงนี้ทุกครั้ง snapshot จึงไม่เคยถูกเขียนเลย
   if (typeof window.savePortfolioSnapshot === 'function') {
     window.savePortfolioSnapshot().catch(e => console.error('snapshot failed:', e));
   }
-
-  const p9ChartEl = document.getElementById('p9Chart');
-  if (!p9ChartEl) return;
-  const ctx = p9ChartEl.getContext('2d');
-  if (_p9Chart) _p9Chart.destroy();
-  _p9Chart = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets: [
-      { label: 'YoY pace ปัจจุบัน', data: paceLine, borderColor: '#D95070', backgroundColor: 'rgba(217,80,112,0.07)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
-      { label: 'เป้า ' + TARGET.toFixed(0) + '%', data: targetLine, borderColor: '#16A34A', borderDash: [5,4], pointRadius: 0, borderWidth: 1.5, fill: false, tension: 0 }
-    ]},
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'top', labels: { font:{size:10}, boxWidth:14, padding:10 } } },
-      scales: {
-        y: { ticks: { callback: v => v+'%', font:{size:10}, color:'var(--text3)' }, grid: { color:'rgba(0,0,0,0.04)' } },
-        x: { ticks: { font:{size:10}, color:'var(--text3)' }, grid: { display:false } }
-      }
-    }
-  });
 
 }
 
@@ -5671,7 +5512,7 @@ async function p10RefreshAI() {
     return `- ${h.name||h.ticker} [${P10_LABELS[cls]||cls}] มูลค่า ฿${v.toLocaleString()} (${w}%)` + (h.change ? ` P/L ${h.change.toFixed(1)}%` : '');
   }).join('\n');
 
-  const monthlyDca = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
+  const monthlyDca = Math.round(dcaMonthly());
   const yoyData = window._p9Data;
   const yoyLine = yoyData ? `YoY ปัจจุบัน: ${yoyData.currentYoy.toFixed(1)}% (เป้า ${yoyTargetPct().toFixed(0)}%, gap ${yoyData.gapPct.toFixed(1)}%)` : '';
   const lockedNames = taxLockedAssetNames();
@@ -5761,10 +5602,10 @@ function initPhase11() {
     const label = h.name && h.type === 'fund' ? h.name : h.ticker;
     if (chg <= -10) {
       var action = chg <= -20 ? 'ขายทั้งหมด / Cut Loss' : 'ขาย 30-50% หรือตั้ง Stop Loss';
-      alerts.push({ type: 'danger', icon: '📉', msg: '<strong>' + label + '</strong> ร่วง <strong>' + chg.toFixed(1) + '%</strong> -- ' + action });
+      alerts.push({ type: 'danger', icon: '📉', msg: '<strong>' + esc(label) + '</strong> ร่วง <strong>' + chg.toFixed(1) + '%</strong> -- ' + action });
     } else if (chg >= 10) {
       var profitAct = chg >= 20 ? 'ขาย 30-50% Take Profit' : 'ขาย 20-30% หรือตั้ง Trailing Stop';
-      alerts.push({ type: 'info', icon: '📈', msg: '<strong>' + label + '</strong> พุ่ง <strong>+' + chg.toFixed(1) + '%</strong> -- ' + profitAct });
+      alerts.push({ type: 'info', icon: '📈', msg: '<strong>' + esc(label) + '</strong> พุ่ง <strong>+' + chg.toFixed(1) + '%</strong> -- ' + profitAct });
     }
   });
 
@@ -5850,23 +5691,20 @@ function initPhase12() {
   const label = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
   document.getElementById('p12MonthLabel').textContent = `ข้อมูลสรุป ${label}`;
 
-  // P&L this month from trades
+  // P&L เดือนนี้ = กำไรที่รับรู้จากการขาย (ยอดขาย − ต้นทุน − ค่าธรรมเนียม) สูตรเดียวกับ realizedPlThisYear
+  // อ่านวันที่ด้วย tradeDate — dateStr เป็นข้อความไทย ("17 ต.ค.") ที่ new Date() อ่านไม่ได้
   const thisMonth = now.getMonth(); const thisYear = now.getFullYear();
-  const monthTrades = state.trades.filter(t => {
-    if (!t.dateStr) return false;
-    const d = new Date(t.dateStr);
-    return !isNaN(d) && d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  const monthSells = state.trades.filter(t => {
+    const d = tradeDate(t);
+    return t.type === 'SELL' && typeof t.costBasisThb === 'number' && d && d.getMonth() === thisMonth && d.getFullYear() === thisYear;
   });
-  const monthPL = monthTrades.reduce((s,t) => {
-    const val = (t.totalThb || 0);
-    return s + (t.type === 'SELL' ? val : -val);
-  }, 0);
+  const monthPL = monthSells.reduce((s, t) => s + (t.totalThb || 0) - t.costBasisThb - (t.fee || 0), 0);
   const plEl = document.getElementById('p12Pl');
   plEl.textContent = (monthPL >= 0 ? '+' : '') + '฿' + Math.abs(Math.round(monthPL)).toLocaleString();
   plEl.style.color = monthPL >= 0 ? 'var(--green)' : 'var(--red)';
 
   // Monthly DCA total
-  const dcaTotal = state.dcaSchedules.reduce((s,d) => s + Number(d.amount||0), 0);
+  const dcaTotal = Math.round(dcaMonthly());
   document.getElementById('p12Dca').textContent = '฿' + dcaTotal.toLocaleString();
 
   // Expenses this month — มีรายการจาก 🧾 บิล เดือนนี้ → ใช้รายจ่ายจริง, ไม่มี → ใช้รายการงบประมาณแบบเดิม
@@ -5890,12 +5728,13 @@ function initPhase12() {
   const bot = sortedHoldings[sortedHoldings.length - 1];
   const perfEl = document.getElementById('p12Performers');
   perfEl.innerHTML = [
-    top ? { label:'🏆 ดีสุดวันนี้', name: top.name||top.ticker, val: `+${(top.change||0).toFixed(2)}%`, color:'var(--green)' } : null,
-    bot && bot !== top ? { label:'📉 แย่สุดวันนี้', name: bot.name||bot.ticker, val: `${(bot.change||0).toFixed(2)}%`, color:'var(--red)' } : null
+    // change = กำไร/ขาดทุนเทียบต้นทุน (avgPrice) ไม่ใช่การเปลี่ยนแปลงของวันนี้ — สีและเครื่องหมายตามค่าจริง
+    top ? { label:'🏆 กำไรดีสุด (เทียบทุน)', name: top.name||top.ticker, val: `${(top.change||0) >= 0 ? '+' : ''}${(top.change||0).toFixed(2)}%`, color: (top.change||0) >= 0 ? 'var(--green)' : 'var(--red)' } : null,
+    bot && bot !== top ? { label:'📉 แย่สุด (เทียบทุน)', name: bot.name||bot.ticker, val: `${(bot.change||0) >= 0 ? '+' : ''}${(bot.change||0).toFixed(2)}%`, color: (bot.change||0) >= 0 ? 'var(--green)' : 'var(--red)' } : null
   ].filter(Boolean).map(p => `
     <div style="background:var(--bg);border-radius:10px;padding:12px;">
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">${p.label}</div>
-      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;">${p.name}</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;">${esc(p.name)}</div>
       <div style="font-size:16px;font-family:var(--font-serif);color:${p.color};">${p.val}</div>
     </div>`).join('');
 
@@ -5935,7 +5774,7 @@ async function p12RunReview() {
   promptLines2.push('สรุปรีวิวประจำเดือน ' + label + ' สำหรับนักลงทุน DCA เป้าหมาย 10% YoY');
   promptLines2.push('');
   promptLines2.push('ข้อมูลเดือนนี้:');
-  promptLines2.push('- P&L จากการซื้อขาย: ' + (monthPL >= 0 ? '+' : '') + '฿' + Math.round(monthPL).toLocaleString());
+  promptLines2.push('- กำไรที่รับรู้จากการขายเดือนนี้: ' + (monthPL >= 0 ? '+' : '') + '฿' + Math.round(monthPL).toLocaleString());
   promptLines2.push('- DCA รวม: ฿' + dcaTotal.toLocaleString() + '/เดือน');
   promptLines2.push('- รายจ่าย: ฿' + Math.round(monthExpenses).toLocaleString());
   promptLines2.push('- อัตราออม: ' + saveRate + '%');
@@ -5943,8 +5782,8 @@ async function p12RunReview() {
     const billCtx = billCashflowContext();
     if (billCtx) { promptLines2.push('- กระแสเงินสดจริงจาก Bill Manager:'); promptLines2.push(billCtx); }
   }
-  promptLines2.push('- ดีสุดวันนี้: ' + (top ? (top.name||top.ticker) + ' ' + (top.change||0).toFixed(1) + '%' : '--'));
-  promptLines2.push('- แย่สุดวันนี้: ' + (bot ? (bot.name||bot.ticker) + ' ' + (bot.change||0).toFixed(1) + '%' : '--'));
+  promptLines2.push('- holding กำไรดีสุด (เทียบต้นทุน): ' + (top ? (top.name||top.ticker) + ' ' + (top.change||0).toFixed(1) + '%' : '--'));
+  promptLines2.push('- holding แย่สุด (เทียบต้นทุน): ' + (bot ? (bot.name||bot.ticker) + ' ' + (bot.change||0).toFixed(1) + '%' : '--'));
   if (yoy) { promptLines2.push('- YoY ปัจจุบัน: ' + yoy.currentYoy.toFixed(1) + '% (เป้า ' + yoyTargetPct().toFixed(0) + '%, gap ' + yoy.gapPct.toFixed(1) + '%)'); }
   if (sheetCtx) { promptLines2.push(''); promptLines2.push('ข้อมูลพอร์ตจาก Google Sheet:'); promptLines2.push(sheetCtx); }
   promptLines2.push('');
@@ -5954,7 +5793,7 @@ async function p12RunReview() {
   try {
     const data = await callGemini({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 800, temperature: 0.6 } });
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    txt.innerHTML = text.replace(/\n/g, '<br>');
+    txt.innerHTML = esc(text).replace(/\n/g, '<br>');
     aiCacheSave('p12_review', txt.innerHTML);
   } catch(e) {
     txt.innerHTML = `<span style="color:var(--red);">${e.message === 'no_key' ? 'ใส่ Gemini Key ในหน้า ⚙️ ตั้งค่าก่อน' : e.message === 'all_quota' ? 'Gemini ทุก key หมด quota' : 'เกิดข้อผิดพลาด กรุณาลองใหม่'}</span>`;
@@ -5964,7 +5803,7 @@ async function p12RunReview() {
 
 // ─── AI Result Cache (persists until next day) ───
 function aiCacheSave(key, html) {
-  var today = new Date().toISOString().split('T')[0];
+  var today = todayISO();
   try { localStorage.setItem('folio_ai_' + key, JSON.stringify({ date: today, html: html })); } catch(e) {}
 }
 function aiCacheLoad(key) {
@@ -5972,13 +5811,13 @@ function aiCacheLoad(key) {
     var raw = localStorage.getItem('folio_ai_' + key);
     if (!raw) return null;
     var obj = JSON.parse(raw);
-    var today = new Date().toISOString().split('T')[0];
+    var today = todayISO();
     if (obj.date !== today) { localStorage.removeItem('folio_ai_' + key); return null; }
     return obj.html;
   } catch(e) { return null; }
 }
 function aiCacheRestore() {
-  var keys = ['p17_analysis', 'p17b_advisor', 'p17_review', 'p9_dca', 'p10_rebalance', 'p12_review', 'ai_suggestions'];
+  var keys = ['p17_analysis', 'p17b_advisor', 'p17_review', 'p10_rebalance', 'p12_review'];
   keys.forEach(function(k) {
     var html = aiCacheLoad(k);
     if (!html) return;
@@ -5986,10 +5825,8 @@ function aiCacheRestore() {
     if (k === 'p17_analysis') { el = document.getElementById('p17panel-summary'); if (el) { el.innerHTML = html; document.getElementById('p17AiResult').style.display=''; document.getElementById('p17Empty').style.display='none'; var ls=document.getElementById('p17LastSync'); if(ls) ls.textContent='โหลดจาก cache วันนี้'; } }
     if (k === 'p17b_advisor') { el = document.getElementById('p17bResult'); if (el) { el.innerHTML = html; el.style.display=''; } }
     if (k === 'p17_review') { el = document.getElementById('p17revResult'); if (el) { el.innerHTML = html; el.style.display=''; } }
-    if (k === 'p9_dca') { /* p9AiBox card removed */ }
     if (k === 'p10_rebalance') { el = document.getElementById('p10AiBox'); if (el) { el.style.display=''; document.getElementById('p10AiText').innerHTML = html; } }
     if (k === 'p12_review') { el = document.getElementById('p12AiBox'); if (el) { el.style.display=''; document.getElementById('p12AiText').innerHTML = html; } }
-    if (k === 'ai_suggestions') { el = document.getElementById('aiCards'); if (el && html.includes('ai-card')) el.innerHTML = html; } // aiCards may not exist
   });
 }
 
@@ -6001,6 +5838,10 @@ async function init() {
   renderApiStatus();
   renderBudget();
   startApp();
+  fetchUsdThb().then(() => {
+    if (!state.holdings.some(h => h.currency === 'USD')) return;
+    updatePortfolioSummary(); renderHoldings(); renderAllocation(); initPhase10();
+  });
   if ('serviceWorker' in navigator) {
     // controllerchange also fires on the very first install (when clients.claim() first takes control) —
     // only reload when a controller already existed, i.e. this is a genuine update replacing an older SW
@@ -6049,11 +5890,15 @@ function p14TrackDrawdown() {
   }
 
   // Inject drawdown alert into Phase 11 if severe
+  // ถูกเรียกหลายรอบต่อการอัปเดต (initPhase11 ถูก hook ให้เรียกตัวนี้ด้วย) — ลบอันเดิมก่อน กัน alert ซ้ำ
+  const oldDd = document.getElementById('p14DrawdownAlert');
+  if (oldDd) oldDd.remove();
   if (drawdown < -10) {
     const list = document.getElementById('p11AlertsList');
     const wrap = document.getElementById('p11AlertsWrap');
     if (list) {
       const ddAlert = document.createElement('div');
+      ddAlert.id = 'p14DrawdownAlert';
       ddAlert.style.cssText = 'display:flex;align-items:center;gap:10px;background:var(--red-bg);border:0.5px solid #FECACA;border-radius:9px;padding:10px 14px;font-size:12px;color:var(--text);';
       ddAlert.innerHTML = `<span style="font-size:15px;flex-shrink:0;">⚠️</span><span style="flex:1;line-height:1.5;">Max Drawdown <strong>${drawdown.toFixed(1)}%</strong> จากจุดสูงสุด ฿${Math.round(peak).toLocaleString()} -- พิจารณา Hedge หรือลด Exposure</span>`;
       list.prepend(ddAlert);
@@ -6062,15 +5907,6 @@ function p14TrackDrawdown() {
   }
 }
 
-// Hook Phase 14 into fetchAllPrices and Firebase listeners
-const _origFetchAllPrices = fetchAllPrices;
-// Override: call p14 after prices update - patched via initPhase11 hook below
-
-// --- Phase 15: Benchmark Comparison ---
-const P15_BENCHMARKS = [
-  { id:'bitcoin', label:'BTC (Crypto)', color:'var(--orange)', icon:'🟡', source:'coingecko' },
-  { id:'spy',    label:'S&P 500',       color:'var(--blue)',   icon:'🇺🇸', source:'av' },
-];
 
 // ─────────── BENCHMARK PAGE JS ───────────
 let _bmPeriod = '12m';
@@ -6111,9 +5947,28 @@ function bmRenderCustomTags() {
   if (!el) return;
   el.innerHTML = _bmCustomTickers.map(t =>
     '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:99px;background:' + t.color + '22;color:' + t.color + ';border:0.5px solid ' + t.color + '44;">'
-    + t.label
-    + '<span onclick="bmRemoveCustom(\'' + t.symbol + '\')" style="cursor:pointer;font-size:11px;opacity:0.7;">×</span></span>'
+    + esc(t.label)
+    + '<span onclick="bmRemoveCustom(' + esc(JSON.stringify(t.symbol)) + ')" style="cursor:pointer;font-size:11px;opacity:0.7;">×</span></span>'
   ).join('');
+}
+
+// ราคาย้อนหลังจาก Alpha Vantage: 1 เดือนใช้รายวัน (compact = 100 วันทำการล่าสุด ≈ 5 เดือน)
+// 6/12 เดือนใช้รายสัปดาห์ (ฟรี มีย้อนหลังครบ) — เดิมใช้รายวัน compact ทุกช่วง ช่วง 6/12 เดือนจึงได้แค่ ~5 เดือน
+// คืน { pts } หรือ { limited: true } เมื่อโดน rate limit หรือ { pts: [] } เมื่อไม่พบ
+async function bmAvSeries(symbol, days, avKey) {
+  const weekly = days > 120;
+  const fn = weekly ? 'TIME_SERIES_WEEKLY' : 'TIME_SERIES_DAILY&outputsize=compact';
+  const r = await fetch('https://www.alphavantage.co/query?function=' + fn + '&symbol=' + encodeURIComponent(symbol) + '&apikey=' + avKey);
+  const d = await r.json();
+  if (d.Note || d.Information) return { limited: true };
+  const ts = d[weekly ? 'Weekly Time Series' : 'Time Series (Daily)'];
+  if (!ts) return { pts: [], missing: true };
+  const cutoff = new Date(Date.now() - days * 86400 * 1000);
+  const pts = Object.entries(ts)
+    .filter(([dt]) => new Date(dt) >= cutoff)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([dt,v]) => [new Date(dt).getTime(), parseFloat(v['4. close'])]);
+  return { pts };
 }
 
 async function bmFetchCustomTickers() {
@@ -6174,19 +6029,13 @@ async function bmFetchCustomTickers() {
     try {
       const avKey = getActiveKey('AV');
       if (!avKey) { showToast('ใส่ Alpha Vantage Key ก่อน (ตั้งค่า)'); continue; }
-      const r = await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=' + t.symbol + '&outputsize=compact&apikey=' + avKey);
-      const d = await r.json();
-      if (d.Note || d.Information) {
+      const res = await bmAvSeries(t.symbol, days, avKey);
+      if (res.limited) {
         showToast('Alpha Vantage rate limit — ' + t.symbol + ' ดึงไม่ได้ (25 req/day)');
         continue;
       }
-      const ts = d['Time Series (Daily)'];
-      if (ts) {
-        const cutoff = new Date(now.getTime() - days * 86400 * 1000);
-        const pts = Object.entries(ts)
-          .filter(([dt]) => new Date(dt) >= cutoff)
-          .sort(([a],[b]) => a.localeCompare(b))
-          .map(([dt,v]) => [new Date(dt).getTime(), parseFloat(v['4. close'])]);
+      if (!res.missing) {
+        const pts = res.pts;
         if (pts.length >= 2) {
           _bmData[key] = { label: t.label, icon: '', color: t.color, prices: pts };
         } else {
@@ -6264,17 +6113,8 @@ async function bmFetch() {
   try {
     const avKey = getActiveKey('AV');
     if (avKey) {
-      const r = await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=compact&apikey='+avKey);
-      const d = await r.json();
-      const ts = d['Time Series (Daily)'];
-      if (ts) {
-        const cutoff = new Date(now.getTime() - days*86400*1000);
-        const pts = Object.entries(ts)
-          .filter(([dt]) => new Date(dt) >= cutoff)
-          .sort(([a],[b]) => a.localeCompare(b))
-          .map(([dt,v]) => [new Date(dt).getTime(), parseFloat(v['4. close'])]);
-        if (pts.length >= 2) _bmData.spy = { label:'S&P500 (SPY)', icon:'🇺🇸', color:'#3B82F6', prices: pts };
-      }
+      const res = await bmAvSeries('SPY', days, avKey);
+      if (res.pts && res.pts.length >= 2) _bmData.spy = { label:'S&P500 (SPY)', icon:'🇺🇸', color:'#3B82F6', prices: res.pts };
     }
   } catch(e) {}
 
@@ -6337,7 +6177,7 @@ function bmDrawChart(returns) {
       var variance = dailyRets.reduce(function(a,b){ return a + Math.pow(b - mean, 2); }, 0) / dailyRets.length;
       var vol = Math.sqrt(variance) * Math.sqrt(252) * 100;
       return '<div style="background:var(--bg);border-radius:8px;padding:7px 10px;flex:1;min-width:120px;">' +
-        '<div style="font-size:9px;color:var(--text3);margin-bottom:3px;">'+(item.icon?item.icon+' ':'')+item.label+'</div>' +
+        '<div style="font-size:9px;color:var(--text3);margin-bottom:3px;">'+(item.icon?item.icon+' ':'')+esc(item.label)+'</div>' +
         '<div style="font-size:10px;color:var(--text);">MDD <span style="color:var(--red);font-weight:600;">-'+mdd.toFixed(1)+'%</span></div>' +
         '<div style="font-size:10px;color:var(--text);">Vol <span style="font-weight:600;">'+vol.toFixed(1)+'%</span>/ปี</div>' +
         '</div>';
@@ -6354,12 +6194,19 @@ function bmDrawChart(returns) {
     const retPct = ((last - base) / base) * 100;
     const isPos = retPct >= 0;
     const collapsed = idx >= 3;
+    // synthetic = proxy ให้แค่ราคาล่าสุด + % ของวันเดียว — ไม่มีราคาย้อนหลัง จึงไม่วาดเส้น และบอกให้ชัดว่าไม่ใช่ผลตอบแทนทั้งช่วง
+    if (item.synthetic) {
+      return '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+        '<div style="display:flex;align-items:center;gap:6px;"><div style="width:10px;height:10px;border-radius:50%;background:'+colorStr+';"></div>' +
+        '<span style="font-size:12px;font-weight:600;color:var(--text);">'+(item.icon?item.icon+' ':'')+esc(item.label)+' <span style="font-size:9px;color:var(--text3);font-weight:400;">เปลี่ยนแปลงวันล่าสุด (ไม่มีข้อมูลย้อนหลัง)</span></span></div>' +
+        '<span style="font-size:14px;font-family:var(--font-serif);color:'+(isPos?'var(--green)':'var(--red)')+';font-weight:600;">'+(isPos?'+':'')+retPct.toFixed(1)+'%</span></div>';
+    }
     return [
       '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:0.5px solid var(--border);">',
       '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="bmToggleChart(\'bmChartWrap_'+idx+'\');">',
       '<div style="display:flex;align-items:center;gap:6px;">',
       '<div style="width:10px;height:10px;border-radius:50%;background:'+colorStr+';"></div>',
-      '<span style="font-size:12px;font-weight:600;color:var(--text);">'+(item.icon?item.icon+' ':'')+item.label+(item.synthetic?' <span style="font-size:9px;color:var(--text3);font-weight:400;">(snapshot)</span>':'')+'</span>',
+      '<span style="font-size:12px;font-weight:600;color:var(--text);">'+(item.icon?item.icon+' ':'')+esc(item.label)+'</span>',
       '</div>',
       '<div style="display:flex;align-items:center;gap:8px;">',
       '<span style="font-size:14px;font-family:var(--font-serif);color:'+(isPos?'var(--green)':'var(--red)')+';font-weight:600;">'+(isPos?'+':'')+retPct.toFixed(1)+'%</span>',
@@ -6376,7 +6223,7 @@ function bmDrawChart(returns) {
   // วาด chart แต่ละอัน
   seriesData.forEach((item, idx) => {
     const canvas = document.getElementById('bmChart_'+idx);
-    if (!canvas) return;
+    if (!canvas || item.synthetic) return;
     const colorStr = item.color.startsWith('var(') ? '#D95070' : item.color;
     const base = item.prices[0][1];
     const normalized = item.prices.map(p => ((p[1] - base) / base) * 100);
@@ -6433,101 +6280,16 @@ async function bmFetchAiHot() {
     const _aiPart = (_aiRaw.candidates&&_aiRaw.candidates[0]&&_aiRaw.candidates[0].content&&_aiRaw.candidates[0].content.parts||[]).find(p=>p.text);
     const txt = _aiPart ? _aiPart.text : '';
     resultEl.innerHTML = txt.split('\n').filter(Boolean).map(l =>
-      '<div style="padding:4px 0;border-bottom:0.5px solid var(--bg2);">' + l + '</div>'
+      '<div style="padding:4px 0;border-bottom:0.5px solid var(--bg2);">' + esc(l) + '</div>'
     ).join('');
   } catch(e) {
-    resultEl.innerHTML = '<div style="color:var(--red);font-size:11px;">เกิดข้อผิดพลาด: ' + e.message + '</div>';
+    resultEl.innerHTML = '<div style="color:var(--red);font-size:11px;">เกิดข้อผิดพลาด: ' + esc(e.message) + '</div>';
   }
   if (btn) { btn.disabled = false; btn.textContent = '🤖 วิเคราะห์'; }
 }
 
-async function p15FetchBenchmarks() {
-  const btn = document.getElementById('p15RefreshBtn');
-  const rows = document.getElementById('p15Rows');
-  btn.disabled = true;
-  rows.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;">กำลังดึงข้อมูลตลาด...</div>';
 
-  const results = [];
-
-  // Your portfolio YTD
-  const p9 = window._p9Data;
-  const portfolioYtd = p9 ? p9.currentYoy : null;
-  if (portfolioYtd !== null) {
-    results.push({ label:'พอร์ตของคุณ', icon:'🌸', ytd: portfolioYtd, color:'var(--accent)', note:'คำนวณจาก Holdings จริง' });
-  }
-
-  // BTC YTD via CoinGecko
-  try {
-    const now = new Date();
-    const jan1 = new Date(now.getFullYear(), 0, 1);
-    const jan1Unix = Math.floor(jan1.getTime()/1000);
-    const nowUnix = Math.floor(now.getTime()/1000);
-    const r = await fetch(`https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${jan1Unix}&to=${nowUnix}`);
-    const d = await r.json();
-    if (d.prices && d.prices.length >= 2) {
-      const startPrice = d.prices[0][1];
-      const endPrice   = d.prices[d.prices.length - 1][1];
-      const ytd = ((endPrice - startPrice) / startPrice) * 100;
-      results.push({ label:'BTC YTD', icon:'🟡', ytd, color:'var(--orange)', note:`$${Math.round(endPrice).toLocaleString()}` });
-    }
-  } catch(e) {}
-
-  // S&P500 via Alpha Vantage
-  try {
-    const avKey = getActiveKey('AV');
-    if (avKey) {
-      const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=${avKey}`);
-      const d = await r.json();
-      const q = d['Global Quote'];
-      if (q && q['10. change percent']) {
-        const ytdApprox = parseFloat(q['10. change percent'].replace('%',''));
-        results.push({ label:'S&P500 (SPY)', icon:'🇺🇸', ytd: ytdApprox, color:'var(--blue)', note:'เปลี่ยนแปลงล่าสุด' });
-      }
-    }
-  } catch(e) {}
-
-  // SET Index via our proxy
-  try {
-    const r = await fetch(`${SET_PROXY}/?ticker=^SET.BK`);
-    const d = await r.json();
-    if (d.price && d.change !== undefined) {
-      results.push({ label:'SET Index', icon:'🇹🇭', ytd: d.change, color:'var(--purple)', note:`฿${d.price.toLocaleString()}` });
-    }
-  } catch(e) {}
-
-  if (!results.length) {
-    rows.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;">ไม่สามารถดึงข้อมูลได้ -- ตรวจสอบ API key ใน ⚙️ ตั้งค่า</div>';
-    btn.disabled = false;
-    return;
-  }
-
-  const maxAbs = Math.max(...results.map(r => Math.abs(r.ytd)), 1);
-  rows.innerHTML = results.map(r => {
-    const barW = Math.min(100, (Math.abs(r.ytd) / maxAbs) * 100).toFixed(1);
-    const isPos = r.ytd >= 0;
-    const isYours = r.label === 'พอร์ตของคุณ';
-    return `
-    <div style="background:${isYours?'var(--accent-light)':'var(--bg)'};border-radius:10px;padding:12px 14px;${isYours?'border:0.5px solid var(--border2);':''}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
-        <div style="display:flex;align-items:center;gap:7px;">
-          <span style="font-size:14px;">${r.icon}</span>
-          <span style="font-size:12.5px;font-weight:${isYours?'600':'400'};color:var(--text);">${r.label}</span>
-          <span style="font-size:10px;color:var(--text3);">${r.note}</span>
-        </div>
-        <span style="font-size:16px;font-family:var(--font-serif);color:${isPos?'var(--green)':'var(--red)'};">${isPos?'+':''}${r.ytd.toFixed(1)}%</span>
-      </div>
-      <div style="background:var(--bg2);border-radius:99px;height:5px;overflow:hidden;">
-        <div style="width:${barW}%;height:100%;background:${isPos?r.color:'var(--red)'};border-radius:99px;transition:width 0.8s ease;"></div>
-      </div>
-    </div>`;
-  }).join('');
-
-  btn.disabled = false;
-}
-
-// --- Hook Phase 14 into fetchAllPrices ---
-// Extend the existing fetchAllPrices to call p14 after completion
-const _p14_origUpdate = updatePortfolioSummary;
+// --- Hook Phase 14: initPhase11 เรียก p14TrackDrawdown ต่อท้ายเสมอ ---
 window._p14Hooked = false;
 document.addEventListener('DOMContentLoaded', () => {
   if (!window._p14Hooked) {
@@ -6593,7 +6355,7 @@ function mpBuildManualList() {
     const plColor = plPct === null ? '' : parseFloat(plPct) >= 0 ? 'var(--green)' : 'var(--red)';
     return `<div style="background:var(--bg);border-radius:8px;padding:8px 10px;">
       <div style="display:flex;align-items:center;gap:8px;">
-        <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${label}">${label}</div>
+        <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(label)}">${esc(label)}</div>
         <input type="number" step="0.0001" id="mp-inp-${i}" value="${liveVal}"
           style="width:100px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);border:0.5px solid var(--border2);border-radius:7px;padding:5px 8px;text-align:right;outline:none;"
           placeholder="${h.type==='fund'?'NAV':'ราคา'}">
@@ -6621,7 +6383,7 @@ function mpSaveManual() {
       holding.change = holding.avgPrice > 0
         ? parseFloat(((val - holding.avgPrice) / holding.avgPrice * 100).toFixed(2))
         : 0;
-      holding.value = Math.round(holding.shares * val);
+      holding.value = Math.round(valueThb(holding)); // แปลง USD→THB เหมือนตอนดึงจาก Sheet
       count++;
     });
   });
@@ -6750,7 +6512,7 @@ async function mpAnalyzeImage() {
 
     // Build holding selector options
     const holdingOptions = ['<option value="">-- ไม่จับคู่ --</option>',
-      ...state.holdings.map((h,i) => `<option value="${i}">${h.name||h.ticker}</option>`)
+      ...state.holdings.map((h,i) => `<option value="${i}">${esc(h.name||h.ticker)}</option>`)
     ].join('');
 
     // Render editable result rows with dropdown for manual rematch
@@ -6760,7 +6522,7 @@ async function mpAnalyzeImage() {
       const matchLabel = r.score >= 80 ? '✅' : r.score >= 40 ? '⚠️ โปรดตรวจสอบ' : '❌ เลือกเอง';
       return `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:4px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);">${r.name}</div>
+          <div style="flex:1;font-size:12px;font-weight:500;color:var(--text);">${esc(r.name)}</div>
           <span style="font-size:10px;color:${r.score>=80?'var(--green)':r.score>=40?'var(--amber)':'var(--red)'};">${matchLabel}</span>
           <input type="number" step="0.0001" id="mp-img-inp-${i}" value="${r.price}"
             style="width:90px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);border:0.5px solid var(--border2);border-radius:7px;padding:5px 8px;text-align:right;outline:none;">
@@ -6768,11 +6530,11 @@ async function mpAnalyzeImage() {
         <div style="display:flex;align-items:center;gap:6px;">
           <span style="font-size:10px;color:var(--text3);">จับคู่กับ:</span>
           <select id="mp-img-sel-${i}" style="flex:1;font-family:var(--font);font-size:11px;color:var(--text);background:var(--surface);border:0.5px solid var(--border2);border-radius:6px;padding:3px 6px;outline:none;">
-            ${state.holdings.map((h,hi) => `<option value="${hi}" ${hi===matchedIdx?'selected':''}>${h.name||h.ticker}</option>`).join('')}
+            ${state.holdings.map((h,hi) => `<option value="${hi}" ${hi===matchedIdx?'selected':''}>${esc(h.name||h.ticker)}</option>`).join('')}
             <option value="-1" ${matchedIdx===-1?'selected':''}>-- ไม่จับคู่ (ข้ามไป) --</option>
           </select>
         </div>
-        ${r.date ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">วันที่: ${r.date}</div>` : ''}
+        ${r.date ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">วันที่: ${esc(r.date)}</div>` : ''}
       </div>`;
     }).join('');
 
@@ -6803,7 +6565,7 @@ function mpSaveFromImage() {
       h.change = h.avgPrice > 0
         ? parseFloat(((val - h.avgPrice) / h.avgPrice * 100).toFixed(2))
         : 0;
-      h.value = Math.round(h.shares * val);
+      h.value = Math.round(valueThb(h)); // แปลง USD→THB เหมือนตอนดึงจาก Sheet
       count++;
     });
   });
@@ -6957,15 +6719,8 @@ function billTotals(match) {
   return r;
 }
 
-// แผน DCA ต่อเดือน — ปรับตามความถี่ (รายสัปดาห์ = ×52/12, ทุก 2 สัปดาห์ = ×26/12)
-function billDcaMonthly() {
-  return (state.dcaSchedules || []).reduce((s, d) => {
-    const a = Number(d.amount) || 0;
-    const mult = (d.freq === 'รายสัปดาห์' || d.freq === 'weekly') ? 52 / 12
-      : (d.freq === 'ทุก 2 สัปดาห์' || d.freq === 'biweekly') ? 26 / 12 : 1;
-    return s + a * mult;
-  }, 0);
-}
+// แผน DCA ต่อเดือน (ปรับตามความถี่) — ชื่อเดิมของแท็บบิล ใช้ dcaMonthly() ตัวเดียวกับหน้าอื่น
+function billDcaMonthly() { return dcaMonthly(); }
 
 // เฉลี่ยเงินเหลือจากเดือนที่จบแล้วและมีข้อมูล (สูงสุด 3 เดือนก่อนเดือนปัจจุบัน)
 function billAvgSurplus() {
@@ -7265,7 +7020,7 @@ function billRenderCategories(t) {
   listEl.innerHTML = keys.map(k => {
     const c = billCat(k, 'expense');
     const pct = total > 0 ? t.byCat[k] / total * 100 : 0;
-    return `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('cat','${k}')"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
+    return `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('cat',${esc(JSON.stringify(k))})"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div></div>
       <span style="width:92px;text-align:right;font-weight:500;" title="${nM ? 'เฉลี่ย ' + billFmt0(t.byCat[k] / nM) + '/เดือน' : ''}">${billFmt0(t.byCat[k])}${nM ? '<div style="font-size:9.5px;color:var(--text3);font-weight:400;">' + billFmt0(t.byCat[k] / nM) + '/ด.</div>' : (budget[k] ? '<div style="font-size:9.5px;font-weight:400;color:' + (t.byCat[k] > budget[k] ? 'var(--red)' : 'var(--text3)') + ';">งบ ' + billFmt0(budget[k]) + '</div>' : '')}</span>
       <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;

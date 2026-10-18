@@ -56,15 +56,27 @@ self.addEventListener('fetch', e => {
   if (isShell) {
     e.respondWith(
       fetch(e.request).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
+        // เก็บเฉพาะหน้าที่โหลดสำเร็จ — ไม่เอาหน้า error มาทับ shell ที่ใช้ได้
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy));
+        }
         return res;
-      }).catch(() => caches.match(e.request))
+      // offline: URL ที่มี query (เช่น ?share-target=1) ใช้ shell เดียวกัน
+      }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('/Folio/')))
     );
     return;
   }
-  // Cache-first for other static assets (icons, manifest, etc. - rarely change)
+  // Cache-first for other static assets (icons, manifest, Chart.js/Firebase SDK ที่ระบุเวอร์ชันใน URL)
+  // เดิมไม่เคย put ลง cache เลย ไฟล์พวกนี้จึงไม่มีให้ใช้ตอน offline
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+      // res.ok = same-origin หรือ CORS ปกติ (ไม่เก็บ opaque/error response)
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+      }
+      return res;
+    }))
   );
 });
