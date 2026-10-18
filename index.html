@@ -1869,11 +1869,19 @@ function dcaDueDays(d) {
   const now = new Date(); now.setHours(0, 0, 0, 0);
   return Math.round((now - due) / 86400000);
 }
-function dcaNextFrom(iso, freq) {
+// รายเดือน: ยึดวันที่ตั้งต้น (anchorDay) — setMonth(+1) ตรง ๆ ทำให้ 31 ม.ค. เลยไปเป็นต้น มี.ค.
+// เดือนที่สั้นกว่าใช้วันสุดท้ายของเดือน แล้วเดือนถัดไปกลับมาวันเดิม (31 ม.ค. → 28 ก.พ. → 31 มี.ค.)
+function dcaNextFrom(iso, freq, anchorDay) {
   const d = new Date(iso + 'T00:00:00');
   if (freq === 'รายสัปดาห์') d.setDate(d.getDate() + 7);
   else if (freq === 'ทุก 2 สัปดาห์') d.setDate(d.getDate() + 14);
-  else d.setMonth(d.getMonth() + 1);
+  else {
+    const day = anchorDay || d.getDate();
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 2, 0).getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(Math.min(day, lastDay));
+  }
   return isoFromDate(d);
 }
 // ยอด DCA ต่อเดือนของทุกแผน ปรับตามความถี่ (รายสัปดาห์ ×52/12, ทุก 2 สัปดาห์ ×26/12)
@@ -2880,7 +2888,7 @@ async function saveDCA() {
     // Edit mode - update in place (FB.update, not del+add, so the doc id/history stays intact)
     const i = parseInt(editIndex);
     const existing = state.dcaSchedules[i];
-    const patch = { ticker, type, amount, freq, nextISO };
+    const patch = { ticker, type, amount, freq, nextISO, anchorDay: nextISO ? +nextISO.slice(8, 10) : null };
     if (window.FB && existing.id) {
       await window.FB.update('dca', existing.id, patch);
     } else {
@@ -2890,7 +2898,7 @@ async function saveDCA() {
     showToast('แก้ไขแผน DCA แล้ว: ' + ticker);
   } else {
     // Add mode
-    const data = { ticker, type, amount, freq, nextISO, boughtCount: 0, boughtTotalAmount: 0, boughtTotalQty: 0 };
+    const data = { ticker, type, amount, freq, nextISO, anchorDay: nextISO ? +nextISO.slice(8, 10) : null, boughtCount: 0, boughtTotalAmount: 0, boughtTotalQty: 0 };
     if (window.FB) {
       await window.FB.add('dca', data);
     } else {
@@ -2929,9 +2937,11 @@ async function executeDCA(i) {
     showToast('⚠️ ไม่พบราคาปัจจุบันของ ' + d.ticker + ' — บันทึกแค่การเลื่อนวันถัดไป');
   }
 
-  const nextISO = dcaNextFrom(d.nextISO || todayISO(), d.freq);
+  // แผนเก่าไม่มี anchorDay → ใช้วันของ nextISO ปัจจุบันเป็นวันตั้งต้น
+  const anchorDay = d.anchorDay || +(d.nextISO || todayISO()).slice(8, 10);
+  const nextISO = dcaNextFrom(d.nextISO || todayISO(), d.freq, anchorDay);
   const patch = {
-    nextISO,
+    nextISO, anchorDay,
     boughtCount: (d.boughtCount || 0) + 1,
     boughtTotalAmount: (d.boughtTotalAmount || 0) + Number(d.amount),
     boughtTotalQty: (d.boughtTotalQty || 0) + (h && price ? d.amount / (h.currency === 'USD' ? price * fxRate(h) : price) : 0)
