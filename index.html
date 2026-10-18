@@ -2121,8 +2121,8 @@ function updatePortfolioSummary() {
     const worst = holdingsWithChange.reduce((a,b) => (b.change||0) < (a.change||0) ? b : a);
     const bestEl  = document.getElementById('bestPerformerLabel');
     const worstEl = document.getElementById('worstPerformerLabel');
-    if (bestEl)  { bestEl.textContent  = (best.name||best.ticker)  + ' ' + (best.change  >= 0 ? '+':'') + best.change.toFixed(2)  + '%'; bestEl.className  = 'pos'; }
-    if (worstEl) { worstEl.textContent = (worst.name||worst.ticker) + ' ' + (worst.change >= 0 ? '+':'') + worst.change.toFixed(2) + '%'; worstEl.className = 'neg'; }
+    if (bestEl)  { bestEl.textContent  = (best.name||best.ticker)  + ' ' + (best.change  >= 0 ? '+':'') + best.change.toFixed(2)  + '%'; bestEl.className  = best.change >= 0 ? 'pos' : 'neg'; }
+    if (worstEl) { worstEl.textContent = (worst.name||worst.ticker) + ' ' + (worst.change >= 0 ? '+':'') + worst.change.toFixed(2) + '%'; worstEl.className = worst.change >= 0 ? 'pos' : 'neg'; }
   } else {
     const bestEl  = document.getElementById('bestPerformerLabel');
     const worstEl = document.getElementById('worstPerformerLabel');
@@ -5928,8 +5928,9 @@ function initPhase12() {
   const bot = sortedHoldings[sortedHoldings.length - 1];
   const perfEl = document.getElementById('p12Performers');
   perfEl.innerHTML = [
-    top ? { label:'🏆 ดีสุดวันนี้', name: top.name||top.ticker, val: `+${(top.change||0).toFixed(2)}%`, color:'var(--green)' } : null,
-    bot && bot !== top ? { label:'📉 แย่สุดวันนี้', name: bot.name||bot.ticker, val: `${(bot.change||0).toFixed(2)}%`, color:'var(--red)' } : null
+    // change = กำไร/ขาดทุนเทียบต้นทุน (avgPrice) ไม่ใช่การเปลี่ยนแปลงของวันนี้ — สีและเครื่องหมายตามค่าจริง
+    top ? { label:'🏆 กำไรดีสุด (เทียบทุน)', name: top.name||top.ticker, val: `${(top.change||0) >= 0 ? '+' : ''}${(top.change||0).toFixed(2)}%`, color: (top.change||0) >= 0 ? 'var(--green)' : 'var(--red)' } : null,
+    bot && bot !== top ? { label:'📉 แย่สุด (เทียบทุน)', name: bot.name||bot.ticker, val: `${(bot.change||0) >= 0 ? '+' : ''}${(bot.change||0).toFixed(2)}%`, color: (bot.change||0) >= 0 ? 'var(--green)' : 'var(--red)' } : null
   ].filter(Boolean).map(p => `
     <div style="background:var(--bg);border-radius:10px;padding:12px;">
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">${p.label}</div>
@@ -5981,8 +5982,8 @@ async function p12RunReview() {
     const billCtx = billCashflowContext();
     if (billCtx) { promptLines2.push('- กระแสเงินสดจริงจาก Bill Manager:'); promptLines2.push(billCtx); }
   }
-  promptLines2.push('- ดีสุดวันนี้: ' + (top ? (top.name||top.ticker) + ' ' + (top.change||0).toFixed(1) + '%' : '--'));
-  promptLines2.push('- แย่สุดวันนี้: ' + (bot ? (bot.name||bot.ticker) + ' ' + (bot.change||0).toFixed(1) + '%' : '--'));
+  promptLines2.push('- holding กำไรดีสุด (เทียบต้นทุน): ' + (top ? (top.name||top.ticker) + ' ' + (top.change||0).toFixed(1) + '%' : '--'));
+  promptLines2.push('- holding แย่สุด (เทียบต้นทุน): ' + (bot ? (bot.name||bot.ticker) + ' ' + (bot.change||0).toFixed(1) + '%' : '--'));
   if (yoy) { promptLines2.push('- YoY ปัจจุบัน: ' + yoy.currentYoy.toFixed(1) + '% (เป้า ' + yoyTargetPct().toFixed(0) + '%, gap ' + yoy.gapPct.toFixed(1) + '%)'); }
   if (sheetCtx) { promptLines2.push(''); promptLines2.push('ข้อมูลพอร์ตจาก Google Sheet:'); promptLines2.push(sheetCtx); }
   promptLines2.push('');
