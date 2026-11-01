@@ -7191,7 +7191,7 @@ function billRenderList() {
     const foreign = t.currency && t.currency !== 'THB';
     const pay = t.payMethod === 'card' || t.category === 'cc_payment' ? '💳 ' + esc(t.card || 'บัตร') : (t.payMethod && t.payMethod !== 'unknown' ? esc(BILL_PAY[t.payMethod] || '') : '');
     const offLabel = t.category === 'refund' ? 'หักจาก ' + billCat(billOffsetCat(t), 'expense').label : '';
-    const sub = [esc(offLabel || c.label), t.time ? esc(t.time) : '', pay, esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
+    const sub = [esc(offLabel || c.label), t.installmentOf > 1 ? '🗓️ ผ่อน ' + t.installmentNo + '/' + t.installmentOf : '', t.time ? esc(t.time) : '', pay, esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
     html += `<div class="bill-row" onclick="billEdit('${esc(t.id)}')">
       <div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>
       <div class="bill-main"><div class="bill-merchant">${esc(t.merchant || c.label)}${t.note ? ' <span style="color:var(--text3);font-weight:400;">· ' + esc(t.note) + '</span>' : ''}</div><div class="bill-sub">${sub}</div></div>
@@ -7236,6 +7236,15 @@ async function billDelete(id) {
   const t = (state.transactions || []).find(x => x.id === id);
   if (!t) return;
   if (!confirm('ลบรายการ ' + (t.merchant || billCat(t.category, t.type).label) + ' ' + billFmt(billAmtThb(t)) + ' ?')) return;
+  const series = t.installmentId ? (state.transactions || []).filter(x => x.installmentId === t.installmentId) : [];
+  if (series.length > 1 && confirm('รายการนี้เป็นงวด ' + t.installmentNo + '/' + t.installmentOf + ' ของรายการผ่อน\n\nลบทั้งชุด ' + series.length + ' งวดด้วยไหม?\nตกลง = ลบทั้งชุด · ยกเลิก = ลบเฉพาะงวดนี้')) {
+    try {
+      if (window.FB) for (const x of series) await window.FB.del('transactions', x.id);
+      else { state.transactions = state.transactions.filter(x => x.installmentId !== t.installmentId); billRender(); }
+      showToast('ลบรายการผ่อน ' + series.length + ' งวดแล้ว');
+    } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); }
+    return;
+  }
   try {
     if (window.FB) await window.FB.del('transactions', id);
     else { state.transactions = state.transactions.filter(x => x.id !== id); billRender(); }
@@ -7262,8 +7271,41 @@ function billNewDraft(p) {
     payMethod: BILL_PAY[p.payMethod] ? p.payMethod : (cat === 'cc_payment' ? 'transfer' : 'unknown'),
     card: billMatchCard(p.card),
     // รายการเงินคืนเก่า (มี id แต่ไม่มี offsetCat) คงหมวด "อื่น ๆ" ไว้เหมือนที่เคยคำนวณ; รายการใหม่เริ่มที่อาหาร
-    offsetCat: billOffsetCats().some(c => c.key === p.offsetCat) ? p.offsetCat : (p.id && p.category === 'refund' ? 'other' : 'food')
+    offsetCat: billOffsetCats().some(c => c.key === p.offsetCat) ? p.offsetCat : (p.id && p.category === 'refund' ? 'other' : 'food'),
+    // ผ่อนชำระ: inst = เปิดผ่อน (เฉพาะรายการใหม่), amount = ยอดต่อเดือน, instMonths = จำนวนงวดทั้งหมด, instPaid = จ่ายไปแล้วกี่งวด
+    inst: false, instMonths: 10, instPaid: 0,
+    installmentId: p.installmentId || '', installmentNo: Number(p.installmentNo) || 0, installmentOf: Number(p.installmentOf) || 0
   };
+}
+// วันที่ของงวดที่ k (0 = งวดแรก): เดือนถัดไปทีละเดือน วันเดียวกัน — ถ้าเดือนนั้นไม่มีวันนั้น (เช่น 31) ใช้วันสุดท้ายของเดือน
+function billInstDate(iso, k) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const last = new Date(y, m + k, 0).getDate();
+  return isoFromDate(new Date(y, m - 1 + k, Math.min(d, last)));
+}
+function billInstMonths(d) {
+  const n = Math.floor(Number(d.instMonths));
+  return n >= 2 && n <= 120 ? n : 0;
+}
+// จำนวนงวดที่จ่ายไปแล้ว (ว่าง = 0) — ต้องเหลืออย่างน้อย 1 งวด, คืน -1 ถ้าไม่ถูกต้อง
+function billInstPaid(d) {
+  const raw = String(d.instPaid ?? '').trim();
+  if (!raw) return 0;
+  const p = Number(raw), n = billInstMonths(d);
+  return Number.isInteger(p) && p >= 0 && (!n || p < n) ? p : -1;
+}
+function billInstPreview(d) {
+  const n = billInstMonths(d), paid = billInstPaid(d), per = billDraftThb(d);
+  if (!n) return '<span style="color:var(--amber);">ผ่อนทั้งหมดต้องอยู่ระหว่าง 2–120 งวด</span>';
+  if (paid < 0) return '<span style="color:var(--amber);">งวดที่จ่ายแล้วต้องเป็น 0–' + (n - 1) + ' (ต้องเหลืออย่างน้อย 1 งวด)</span>';
+  if (!(per > 0)) return '<span style="color:var(--amber);">ใส่ยอดผ่อนต่อเดือน</span>';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date || '')) return '<span style="color:var(--amber);">เลือกวันที่งวดถัดไป</span>';
+  const left = n - paid;
+  const fmt = iso => new Date(iso + 'T00:00:00').toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+  return (paid ? `ทั้งแผน ${billFmt(per)} × ${n} = ${billFmt(per * n)} · จ่ายแล้ว ${paid} งวด ${billFmt(per * paid)}<br>` +
+      `คงเหลือ ${left} งวด = <strong>${billFmt(per * left)}</strong><br>`
+    : `${billFmt(per)} × ${n} เดือน = <strong>${billFmt(per * n)}</strong><br>`) +
+    `<span style="color:var(--text3);">งวด ${paid + 1}/${n} ${fmt(d.date)} → งวด ${n}/${n} ${fmt(billInstDate(d.date, left - 1))} · บันทึก ${left} รายการ เดือนละรายการ${paid ? ' (งวดที่จ่ายแล้วไม่บันทึกซ้ำ)' : ''}</span>`;
 }
 // ค่าธรรมเนียมเริ่มต้นของรายการต่างประเทศ (หลังรู้ช่องทาง/บัตรแล้ว)
 function billInitFee(d) { if (d.fee === null) d.fee = d.currency === 'THB' ? 0 : billAutoFee(d); return d; }
@@ -7405,11 +7447,13 @@ function billRenderDrafts() {
     const curs = ['THB', 'USD', 'EUR', 'JPY', 'KRW', 'CNY', 'TWD', 'HKD', 'SGD', 'MYR', 'VND', 'LAK', 'GBP', 'AUD', 'CHF'];
     if (!curs.includes(d.currency)) curs.push(d.currency);
     const showCard = d.payMethod === 'card' || d.category === 'cc_payment';
+    const inst = !editing && d.inst && d.type === 'expense';
     const payOpts = Object.keys(BILL_PAY).map(k => `<option value="${k}" ${k === d.payMethod ? 'selected' : ''}>${BILL_PAY[k]}</option>`).join('');
     const curOpts = curs.map(c => `<option ${c === d.currency ? 'selected' : ''}>${c}</option>`).join('');
     let warn = '';
     if (d.dup === 'ref') warn = `<div class="bill-warn" style="background:var(--red-bg);color:var(--red);">⛔ เลขอ้างอิงนี้บันทึกไปแล้ว — น่าจะเป็นสลิปซ้ำ</div>`;
     else if (d.dup) warn = `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">⚠️ วันเดียวกันมียอดเท่ากันแล้ว (${esc(d.dup.slice(6))}) — ตรวจว่าไม่ซ้ำ</div>`;
+    if (editing && d.installmentOf > 1) warn += `<div class="bill-warn" style="background:var(--accent-bg, var(--bg2));color:var(--text2);">🗓️ งวด ${d.installmentNo}/${d.installmentOf} ของรายการผ่อน — แก้ไขเฉพาะงวดนี้</div>`;
     if (d.aiRead && !(Number(d.amount) > 0)) warn += `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">AI อ่านยอดไม่ได้ — กรอกยอดเอง</div>`;
     return `<div class="bill-draft ${d.include ? '' : 'off'}">
       ${warn}
@@ -7421,7 +7465,11 @@ function billRenderDrafts() {
         </div>
       </div>
       <div class="bill-draft-grid">
-        <div class="form-group"><label class="form-label">ยอด</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.amount)}" oninput="billDraftSet(${i},'amount',this.value)" style="font-weight:600;font-size:15px;"></div>
+        ${!editing && d.type === 'expense' ? `<div class="form-group full"><label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" ${d.inst ? 'checked' : ''} onchange="billDraftSet(${i},'inst',this.checked,true)" style="width:16px;height:16px;accent-color:var(--accent);">🗓️ ผ่อนชำระรายเดือน</label></div>` : ''}
+        <div class="form-group"><label class="form-label">${inst ? 'ผ่อนเดือนละ' : 'ยอด'}</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.amount)}" oninput="billDraftSet(${i},'amount',this.value)" style="font-weight:600;font-size:15px;"></div>
+        ${inst ? `<div class="form-group"><label class="form-label">ผ่อนทั้งหมด (งวด)</label><input class="form-input" type="number" inputmode="numeric" step="1" min="2" max="120" value="${esc(d.instMonths)}" oninput="billDraftSet(${i},'instMonths',this.value)" style="font-weight:600;font-size:15px;"></div>
+        <div class="form-group full"><label class="form-label">จ่ายไปแล้วกี่งวด (แผนใหม่ใส่ 0)</label><input class="form-input" type="number" inputmode="numeric" step="1" min="0" value="${esc(d.instPaid)}" oninput="billDraftSet(${i},'instPaid',this.value)"></div>
+        <div class="form-group full"><div id="billInstPrev${i}" style="font-size:11.5px;background:var(--surface);border:0.5px dashed var(--border2);border-radius:8px;padding:7px 10px;line-height:1.6;">${billInstPreview(d)}</div></div>` : ''}
         <div class="form-group"><label class="form-label">สกุลเงิน</label><select class="form-select" onchange="billDraftCurrency(${i},this.value)">${curOpts}</select></div>
         ${d.currency !== 'THB' ? `<div class="form-group"><label class="form-label">อัตรา 1 ${esc(d.currency)} = ? บาท</label><input class="form-input" type="number" step="0.0001" min="0" value="${esc(d.fx || '')}" oninput="billDraftSet(${i},'fx',this.value)"><span style="font-size:10px;color:var(--text3);">${esc(d.fxSrc || '')}</span></div>
         <div class="form-group"><label class="form-label">ค่าธรรมเนียมแปลงสกุล %</label><input class="form-input" type="number" step="0.1" min="0" value="${esc(d.fee == null ? '' : d.fee)}" oninput="billDraftSet(${i},'fee',this.value)"><span style="font-size:10px;color:var(--text3);">${d.payMethod === 'card' ? 'ตามบัตร ' + esc(d.card || '(ค่าเริ่มต้น)') : 'ไม่ใช่บัตร = 0%'}</span></div>
@@ -7432,7 +7480,7 @@ function billRenderDrafts() {
         <div class="form-group ${showCard ? '' : 'full'}"><label class="form-label">${d.type === 'income' ? 'รับเงินทาง' : 'จ่ายด้วย'}</label><select class="form-select" onchange="billDraftSet(${i},'payMethod',this.value,true)">${payOpts}</select></div>
         ${showCard ? billCardField(d, i) : ''}
         <div class="form-group full"><label class="form-label">${d.type === 'income' ? 'จาก' : 'ร้าน / ผู้รับเงิน'}</label><input class="form-input" value="${esc(d.merchant)}" oninput="billDraftSet(${i},'merchant',this.value)"></div>
-        <div class="form-group"><label class="form-label">วันที่</label><input class="form-input" type="date" value="${esc(d.date)}" onchange="billDraftSet(${i},'date',this.value,true)"></div>
+        <div class="form-group"><label class="form-label" id="billDateLbl${i}">${inst ? (Number(d.instPaid) > 0 ? 'วันที่งวดถัดไป' : 'วันที่งวดแรก') : 'วันที่'}</label><input class="form-input" type="date" value="${esc(d.date)}" onchange="billDraftSet(${i},'date',this.value,true)"></div>
         <div class="form-group"><label class="form-label">เวลา</label><input class="form-input" type="time" value="${esc(d.time)}" onchange="billDraftSet(${i},'time',this.value)"></div>
         <div class="form-group full"><label class="form-label">เลขอ้างอิงสลิป (กันบันทึกซ้ำ)</label><input class="form-input" value="${esc(d.ref)}" placeholder="ถ้ามี" onchange="billDraftSet(${i},'ref',this.value,true)"></div>
         <div class="form-group full"><label class="form-label">โน้ต</label><input class="form-input" value="${esc(d.note)}" oninput="billDraftSet(${i},'note',this.value)"></div>
@@ -7490,10 +7538,14 @@ function billDraftSet(i, field, value, rerender) {
   if (field === 'type') d.category = d.type === 'income' ? 'other_in' : 'other';
   if (field === 'category' && value === 'cc_payment' && d.payMethod === 'unknown') d.payMethod = 'transfer';
   if (field === 'fee') d.feeManual = true;
-  if (field === 'amount' || field === 'fx' || field === 'fee' || field === 'thbActual') {
+  if (field === 'amount' || field === 'fx' || field === 'fee' || field === 'thbActual' || field === 'instMonths' || field === 'instPaid') {
     billMarkDuplicates();
     const prev = document.getElementById('billFxPrev' + i);
     if (prev) prev.innerHTML = billFxPreview(d);
+    const ip = document.getElementById('billInstPrev' + i);
+    if (ip) ip.innerHTML = billInstPreview(d);
+    const dl = document.getElementById('billDateLbl' + i);
+    if (dl && field === 'instPaid') dl.textContent = Number(d.instPaid) > 0 ? 'วันที่งวดถัดไป' : 'วันที่งวดแรก';
   }
   // ช่องทาง/บัตรเปลี่ยน → ค่าธรรมเนียมตามบัตรใหม่; วันที่เปลี่ยน → อัตราของวันใหม่
   if ((field === 'payMethod' || field === 'card') && d.currency !== 'THB' && !d.feeManual) d.fee = billAutoFee(d);
@@ -7518,6 +7570,8 @@ async function billSaveDrafts() {
     if (!(Number(d.amount) > 0)) { showToast('กรอกยอดให้ครบทุกรายการ'); return; }
     if (d.currency !== 'THB' && !(Number(d.fx) > 0) && !(Number(d.thbActual) > 0)) { showToast('ใส่อัตราแลกเปลี่ยนหรือยอดบาทจริงของ ' + d.currency); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) { showToast('วันที่ไม่ถูกต้อง'); return; }
+    if (!billState.editingId && d.inst && d.type === 'expense' && !billInstMonths(d)) { showToast('ผ่อนทั้งหมดต้องอยู่ระหว่าง 2–120 งวด'); return; }
+    if (!billState.editingId && d.inst && d.type === 'expense' && billInstPaid(d) < 0) { showToast('งวดที่จ่ายแล้วต้องน้อยกว่าจำนวนงวดทั้งหมด'); return; }
   }
   billMarkDuplicates();
   if (items.some(d => d.dup === 'ref') && !confirm('มีรายการที่เลขอ้างอิงซ้ำกับที่บันทึกไว้แล้ว — รายการนั้นจะถูกข้าม ดำเนินการต่อ?')) return;
@@ -7547,6 +7601,24 @@ async function billSaveDrafts() {
         continue;
       }
       if (d.dup === 'ref') { skipped++; continue; }
+      const n = d.inst && d.type === 'expense' ? billInstMonths(d) : 0;
+      if (n) {
+        // ผ่อน: สร้างรายการเดือนละงวด ผูกกันด้วย installmentId — เลขอ้างอิงสลิปติดไว้ที่งวดแรกเท่านั้น (กันชน id/เตือนซ้ำ)
+        const instId = 'inst_' + Date.now().toString(36) + '_' + d.uid;
+        const paid = billInstPaid(d);
+        for (let k = 0; k < n - paid; k++) {
+          const row = { ...data, date: billInstDate(d.date, k), time: k ? '' : data.time,
+            ref: k ? '' : data.ref, refKey: k ? '' : refKey,
+            installmentId: instId, installmentNo: paid + k + 1, installmentOf: n };
+          if (!window.FB) state.transactions.push({ id: 'local_' + d.uid + '_' + k, ...row });
+          else if (!k && refKey) {
+            if (await window.FB.exists('transactions', 'ref_' + refKey)) { skipped++; break; }
+            await window.FB.put('transactions', 'ref_' + refKey, row);
+          } else await window.FB.add('transactions', row);
+        }
+        saved++;
+        continue;
+      }
       if (!window.FB) { state.transactions.push({ id: 'local_' + d.uid, ...data }); saved++; continue; }
       if (refKey) {
         // id ผูกกับเลขอ้างอิง — แชร์สลิปเดิมซ้ำ (แม้จากอีกเครื่อง) จะไม่ได้เอกสารใหม่
@@ -7573,8 +7645,7 @@ async function billSaveDrafts() {
 
 function billOpenManual() {
   billState.editingId = null;
-  const d = billNewDraft({ source: 'manual' });
-  if (billState.month !== todayISO().slice(0, 7)) d.date = billState.month + '-01';
+  const d = billNewDraft({ source: 'manual' }); // วันที่เริ่มต้น = วันนี้เสมอ (ไม่ตามเดือนที่กำลังดูอยู่)
   billOpenConfirm([d], '');
 }
 function billEdit(id) {
