@@ -1351,7 +1351,7 @@ if (window._folioReady) {
 
     <div class="budget-grid" style="margin-bottom:var(--gap);">
       <div class="card">
-        <div class="card-title">แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billCatPeriod">รายจ่ายเดือนนี้</span></div>
+        <div class="card-title"><span>แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billCatPeriod">รายจ่ายเดือนนี้</span></span><button class="action" onclick="billOpenCatModal()">＋ หมวดเอง</button></div>
         <div style="position:relative;height:180px;" id="billCatChartWrap"><canvas id="billCatChart"></canvas></div>
         <div id="billCatList" style="margin-top:12px;"></div>
       </div>
@@ -1850,6 +1850,20 @@ service cloud.firestore {
 </div>
 
 <!-- ─── Add Trade Modal ─── -->
+<div class="modal-overlay" id="billCatModal">
+  <div class="modal">
+    <h3>หมวดรายจ่ายของฉัน</h3>
+    <div style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.6;">เพิ่มหมวดที่ไม่มีในรายการ เช่น "สัตว์เลี้ยง", "ของขวัญ" — ใช้ได้ทั้งตอนบันทึกบิล ตั้งงบ และให้ AI จัดหมวดจากสลิป</div>
+    <div style="display:flex;gap:6px;align-items:flex-end;">
+      <div class="form-group" style="width:64px;flex-shrink:0;"><label class="form-label">ไอคอน</label><input class="form-input" id="billCatIcon" maxlength="4" placeholder="🏷️" style="text-align:center;"></div>
+      <div class="form-group" style="flex:1;min-width:0;"><label class="form-label">ชื่อหมวด</label><input class="form-input" id="billCatName" maxlength="30" placeholder="เช่น สัตว์เลี้ยง" onkeydown="if(event.key==='Enter'&&!event.isComposing)billAddCustomCat()"></div>
+      <button class="btn-primary" onclick="billAddCustomCat()" style="flex:none;height:38px;padding:0 16px;white-space:nowrap;">+ เพิ่ม</button>
+    </div>
+    <div id="billCatCustomList" style="margin-top:14px;"></div>
+    <div class="modal-actions" style="margin-top:14px;"><button class="btn-ghost" style="flex:1;" onclick="closeModal('billCatModal')">ปิด</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="trade-modal">
   <div class="modal">
     <h3 id="trade-modal-title">บันทึกธุรกรรม</h3>
@@ -3028,9 +3042,12 @@ const BUDGET_CAT_GUESS = [
   ['housing', /เช่า|บ้าน|คอนโด|หอ|ที่พัก|ส่วนกลาง|rent|condo/i],
   ['bills', /ไฟ|น้ำ|เน็ต|อินเทอร์เน็ต|โทรศัพท์|มือถือ|บิล|internet|wifi|ais|true|dtac/i],
   ['health', /ยา|หมอ|โรงพยาบาล|สุขภาพ|ฟิตเนส|ยิม|gym|clinic/i],
-  ['entertainment', /หนัง|เกม|netflix|spotify|youtube|บันเทิง|เที่ยว|ปาร์ตี้|game/i],
+  ['travel', /เที่ยว|ทริป|ตั๋วเครื่องบิน|โรงแรม|ทัวร์|travel|trip|hotel|flight/i],
+  ['donation', /ทำบุญ|บริจาค|วัด|มูลนิธิ|donat/i],
+  ['gamble', /หวย|ลอตเตอรี่|ล็อตเตอรี่|สลาก|เสี่ยงโชค|lotto|lottery/i],
+  ['entertainment', /หนัง|เกม|netflix|spotify|youtube|บันเทิง|ปาร์ตี้|game/i],
   ['education', /เรียน|คอร์ส|หนังสือ|การศึกษา|course/i],
-  ['family', /พ่อ|แม่|ครอบครัว|ให้|ทำบุญ|บริจาค|ลูก/i],
+  ['family', /พ่อ|แม่|ครอบครัว|ให้|ลูก/i],
   ['insurance', /ประกัน|ภาษี|insurance|tax/i],
   ['business', /ธุรกิจ|กิจการ|business/i],
   ['shopping', /ช้อป|เสื้อ|ของใช้|shopping|shopee|lazada/i]
@@ -6895,6 +6912,9 @@ const BILL_CATS = {
     { key: 'entertainment', label: 'บันเทิง',             icon: '🎬', color: '#C2410C' },
     { key: 'education',     label: 'การศึกษา',            icon: '📚', color: '#0F766E' },
     { key: 'family',        label: 'ครอบครัว/ให้',        icon: '🎁', color: '#BE185D' },
+    { key: 'travel',        label: 'ท่องเที่ยว',          icon: '✈️', color: '#0EA5E9' },
+    { key: 'donation',      label: 'บริจาค/ทำบุญ',        icon: '🙏', color: '#CA8A04' },
+    { key: 'gamble',        label: 'เสี่ยงโชค',           icon: '🎰', color: '#DC2626' },
     { key: 'insurance',     label: 'ประกัน/ภาษี',         icon: '🛡️', color: '#475569' },
     { key: 'transfer',      label: 'โอนเงินทั่วไป',       icon: '🔁', color: '#94A3B8' },
     { key: 'business',      label: 'ธุรกิจส่วนตัว',        icon: '🏪', color: '#9333EA' },
@@ -6912,6 +6932,20 @@ const BILL_CATS = {
     { key: 'other_in', label: 'อื่น ๆ',           icon: '📥', color: '#AAB0BB' }
   ]
 };
+// ─── หมวดรายจ่ายที่ผู้ใช้เพิ่มเอง (key ขึ้นต้น c_) — เก็บใน settings/bill + localStorage ───
+// แทรกไว้ก่อน "ลงทุน/ออม" ให้อยู่กลุ่มเดียวกับหมวดรายจ่ายปกติ; ลบหมวดแล้วรายการเดิมจะแสดงเป็น "อื่น ๆ"
+const BILL_CUSTOM_COLORS = ['#E11D48', '#0D9488', '#7C3AED', '#EA580C', '#2563EB', '#65A30D', '#DB2777', '#0891B2'];
+function billCustomCats() {
+  try { const a = JSON.parse(localStorage.getItem('folio_bill_custom_cats') || '[]'); return Array.isArray(a) ? a.filter(c => c && c.key && c.label) : []; } catch (e) { return []; }
+}
+function billApplyCustomCats() {
+  const ex = BILL_CATS.expense;
+  for (let i = ex.length - 1; i >= 0; i--) if (String(ex[i].key).startsWith('c_')) ex.splice(i, 1);
+  const at = ex.findIndex(c => c.key === 'invest');
+  ex.splice(at < 0 ? ex.length - 1 : at, 0, ...billCustomCats().map(c => ({ key: c.key, label: c.label, icon: c.icon || '🏷️', color: c.color || '#AAB0BB', custom: true })));
+}
+billApplyCustomCats();
+
 // ไม่นับเป็นรายจ่าย/ไม่กระทบอัตราออม:
 // 'invest' = เงินที่โอนไปลงทุน/ออมเอง
 // 'cc_payment' = โอนจ่ายบิลบัตรเครดิต — ของที่รูดบัตรถูกนับเป็นรายจ่ายไปแล้วตอนรูด ถ้านับตอนจ่ายบิลอีกจะซ้ำ
@@ -8286,7 +8320,7 @@ function billRules() {
     '- currency: ISO 4217 (฿ หรือ บาท = THB, ¥/円 = JPY, ₩ = KRW ฯลฯ); ใบเสร็จต่างประเทศให้ amount เป็นยอดในสกุลนั้น',
     '- thbCharged: ถ้าเป็นรายการสกุลต่างประเทศ และเอกสาร (เช่น แจ้งเตือนบัตร/แอปธนาคาร) แสดงยอดบาทที่ถูกเรียกเก็บด้วย ให้ใส่ยอดบาทนั้น; ไม่มีให้ใส่ 0',
     '- type: expense ถ้าเงินออกจากเจ้าของ, income ถ้าเงินเข้าเจ้าของ' + (owner ? ' — ชื่อเจ้าของบัญชีคือ "' + owner + '" (ถ้าเจ้าของเป็นผู้โอน = expense, เป็นผู้รับ = income)' : '') + '; ไม่แน่ใจให้ใช้ expense',
-    '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest; โอน/ชำระยอดบัตรเครดิต = cc_payment; ต้นทุน/ค่าใช้จ่ายของกิจการตัวเอง = business',
+    '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest; โอน/ชำระยอดบัตรเครดิต = cc_payment; ต้นทุน/ค่าใช้จ่ายของกิจการตัวเอง = business; ทำบุญ/บริจาค/วัด/มูลนิธิ = donation; หวย/ลอตเตอรี่/สลาก = gamble; ตั๋วเครื่องบิน/โรงแรม/ทัวร์/ค่าใช้จ่ายระหว่างทริป = travel' + (billCustomCats().length ? '; หมวดที่ผู้ใช้ตั้งเอง: ' + billCustomCats().map(c => c.key + '=' + c.label).join(', ') + ' (ใช้เมื่อเข้ากับชื่อหมวดชัดเจน)' : '') + '',
     '- payMethod: card ถ้าจ่ายด้วยบัตรเครดิต (เห็น VISA/Mastercard/JCB/เลขบัตร ****), transfer ถ้าเป็นสลิปโอน/สแกน QR พร้อมเพย์, ewallet ถ้าจ่ายผ่าน TrueMoney/ShopeePay/LINE Pay ฯลฯ, cash ถ้าเป็นเงินสด, ไม่ทราบใช้ unknown',
     '- card: เมื่อ payMethod=card หรือ category=cc_payment ให้ใส่ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้ายถ้ามี' + (billCards().length ? ' — ถ้าตรงกับบัตรของผู้ใช้ ให้ใช้ชื่อนี้ตรงตัว: ' + billCards().join(', ') : '') + '; ไม่ใช่บัตรใช้ ""',
     '- category (income): ' + incDesc,
@@ -8506,10 +8540,49 @@ function billSaveDefaultFee(v) {
 // เก็บชื่อบัญชี/บัตร/ค่าธรรมเนียมใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
 function billSyncSettings() {
   if (window.FB) window.FB.setDoc('settings', 'bill', {
-    owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(),
+    owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(), customCats: billCustomCats(),
     fxFee: billDefaultFxFee(), cardFees: billCardFees()
   }).catch(() => {});
 }
+// ─── จัดการหมวดที่เพิ่มเอง ───
+function billOpenCatModal() { billRenderCustomCats(); openModal('billCatModal'); setTimeout(() => { const n = document.getElementById('billCatName'); if (n) n.focus(); }, 80); }
+function billRenderCustomCats() {
+  const el = document.getElementById('billCatCustomList'); if (!el) return;
+  const list = billCustomCats();
+  el.innerHTML = list.length
+    ? '<div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">หมวดที่เพิ่มไว้</div>' + list.map(c =>
+        '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px;">' +
+        '<span class="bill-ico" style="background:' + esc(c.color) + '22;width:26px;height:26px;font-size:14px;">' + esc(c.icon || '🏷️') + '</span>' +
+        '<span style="flex:1;">' + esc(c.label) + '</span>' +
+        '<button data-k="' + esc(c.key) + '" onclick="billDeleteCustomCat(this.dataset.k)" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;">✕</button></div>').join('')
+    : '<div style="font-size:12px;color:var(--text3);">ยังไม่มีหมวดที่เพิ่มเอง</div>';
+}
+function billAddCustomCat() {
+  const nameEl = document.getElementById('billCatName'), iconEl = document.getElementById('billCatIcon');
+  const label = (nameEl.value || '').trim().replace(/\s+/g, ' ');
+  if (!label) { showToast('ใส่ชื่อหมวดก่อน'); nameEl.focus(); return; }
+  if (BILL_CATS.expense.some(c => c.label.toLowerCase() === label.toLowerCase())) { showToast('มีหมวด "' + label + '" อยู่แล้ว'); return; }
+  const list = billCustomCats();
+  if (list.length >= 20) { showToast('เพิ่มได้สูงสุด 20 หมวด'); return; }
+  const icon = (iconEl.value || '').trim() || '🏷️';
+  list.push({ key: 'c_' + Date.now().toString(36), label, icon, color: BILL_CUSTOM_COLORS[list.length % BILL_CUSTOM_COLORS.length] });
+  localStorage.setItem('folio_bill_custom_cats', JSON.stringify(list));
+  billApplyCustomCats(); billSyncSettings();
+  nameEl.value = ''; iconEl.value = '';
+  billRenderCustomCats();
+  if (typeof billRender === 'function') billRender();
+  showToast('เพิ่มหมวด ' + icon + ' ' + label + ' แล้ว');
+}
+function billDeleteCustomCat(key) {
+  const c = billCustomCats().find(x => x.key === key); if (!c) return;
+  const used = (state.transactions || []).filter(t => t.category === key || t.offsetCat === key).length;
+  if (!confirm('ลบหมวด "' + c.label + '"?' + (used ? '\nมี ' + used + ' รายการที่ใช้หมวดนี้ — จะแสดงเป็น "อื่น ๆ" แทน (ข้อมูลไม่หาย ถ้าเพิ่มหมวดชื่อเดิมกลับมาจะไม่ผูกคืนอัตโนมัติ)' : ''))) return;
+  localStorage.setItem('folio_bill_custom_cats', JSON.stringify(billCustomCats().filter(x => x.key !== key)));
+  billApplyCustomCats(); billSyncSettings();
+  billRenderCustomCats();
+  if (typeof billRender === 'function') billRender();
+}
+
 async function billLoadSettings() {
   try {
     const doc = (await window.FB.getAll('settings')).find(d => d.id === 'bill');
@@ -8518,6 +8591,7 @@ async function billLoadSettings() {
     if (Array.isArray(doc.cards)) localStorage.setItem('folio_bill_cards', doc.cards.join(', '));
     if (typeof doc.fxFee === 'number') localStorage.setItem('folio_bill_fx_fee', String(doc.fxFee));
     if (doc.cardFees && typeof doc.cardFees === 'object') localStorage.setItem('folio_bill_card_fees', JSON.stringify(doc.cardFees));
+    if (Array.isArray(doc.customCats)) { localStorage.setItem('folio_bill_custom_cats', JSON.stringify(doc.customCats)); billApplyCustomCats(); }
     const page = document.getElementById('page-bills');
     if (page && page.classList.contains('active')) billRender();
   } catch (e) {}
