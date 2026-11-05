@@ -24,7 +24,7 @@ const MACRO = [
   { key: 'USDTHB', syms: ['THB=X', 'USDTHB=X'] },
   { key: 'SPX',    syms: ['^GSPC'] },
   { key: 'NDX',    syms: ['^IXIC'] },
-  { key: 'SET',    syms: ['^SET.BK', '^SETI'] },
+  { key: 'SET',    syms: ['^SET.BK', '^SETI', '^SET'] },
   { key: 'GOLD',   syms: ['GC=F'] },
   { key: 'VIX',    syms: ['^VIX'] },
   { key: 'BRENT',  syms: ['BZ=F'] },
@@ -38,7 +38,7 @@ export default {
     });
     if (req.method === 'OPTIONS') return new Response(null, { headers: h });
     const p = new URL(req.url).searchParams;
-    const SEC_KEY = env && env.SEC_KEY;
+    const SEC_KEY = env && env.SEC_KEY ? String(env.SEC_KEY).trim() : '';  // ตัดช่องว่าง/ขึ้นบรรทัดที่ติดมาตอนวาง
     const secHeaders = { accept: 'application/json', 'Ocp-Apim-Subscription-Key': SEC_KEY || '' };
 
     // ─── เดิม: ราคาล่าสุด ───
@@ -112,7 +112,12 @@ export default {
               };
             }
           }
-          return { key: m.key, error: 'no data' };
+          // บางดัชนี Yahoo ให้แค่ meta ไม่มีแท่งรายวัน → ใช้ราคาล่าสุด + ราคาปิดก่อนหน้าจาก meta
+          for (const s of m.syms) {
+            const mm = await yahooMeta(s).catch(() => null);
+            if (mm && mm.price != null) return { key: m.key, symbol: s, price: mm.price, prev: mm.prev, week: null, asOf: mm.time, currency: mm.currency, spark: [] };
+          }
+          return { key: m.key, error: 'no data (' + m.syms.join(', ') + ')' };
         }));
         return { items, fetchedAt: Math.floor(Date.now() / 1000) };
       }, j);
@@ -138,10 +143,11 @@ export default {
           for (const host of hosts) {
             try {
               const r = await fetch(host + wk, { headers: UA });
-              if (!r.ok) continue;
-              const d = await r.json();
+              const text = await r.text();
+              if (!r.ok) { notes.push(wk + ' ' + host.slice(8, -1) + ': HTTP ' + r.status); continue; }
+              let d; try { d = JSON.parse(text); } catch (e) { notes.push(wk + ' ' + host.slice(8, -1) + ': not JSON'); continue; }
               if (Array.isArray(d)) { d.forEach(e => out.push(e)); ok = true; break; }
-            } catch (e) { /* ลอง host ถัดไป */ }
+            } catch (e) { notes.push(wk + ' ' + host.slice(8, -1) + ': ' + e.message); }
           }
           if (!ok) notes.push(wk + ' unavailable');
         }
@@ -157,14 +163,17 @@ export default {
       if (!SEC_KEY) return j({ error: 'SEC_KEY secret not set' });
       const q = p.get('fund_search').trim();
       return cached(req, ctx, 86400 * 7, async () => {
+        let v2 = '';
         // V2
         try {
           const r = await fetch('https://api.sec.or.th/v2/fund/general-info/profiles?project_info=' + encodeURIComponent(q), { headers: secHeaders });
+          v2 = 'HTTP ' + r.status;
+          if (!r.ok) v2 += ' ' + (await r.text()).slice(0, 120).replace(/\s+/g, ' ');
           if (r.ok) {
             const rows = pickRows(await r.json());
             if (rows.length) return { source: 'v2', funds: rows.map(f => ({ proj_id: f.proj_id, abbr: f.proj_abbr_name, name: f.proj_name_th || f.proj_name_en, cls: f.fund_class_name || '' })) };
           }
-        } catch (e) { /* ลอง V1 */ }
+        } catch (e) { v2 = e.message; }
         // V1
         try {
           const r = await fetch('https://api.sec.or.th/FundFactsheet/fund', {
@@ -174,7 +183,7 @@ export default {
             const rows = pickRows(await r.json());
             if (rows.length) return { source: 'v1', funds: rows.map(f => ({ proj_id: f.proj_id, abbr: f.proj_abbr_name, name: f.proj_name_th || f.proj_name_en, cls: '' })) };
           }
-          return { error: 'not found', status: r.status };
+          return { error: r.status === 401 ? 'invalid key (401)' : 'not found', status: r.status, v2, v1: 'HTTP ' + r.status + ' ' + (await r.text()).slice(0, 120).replace(/\s+/g, ' ') };
         } catch (e) { return { error: e.message }; }
       }, j);
     }
@@ -252,6 +261,15 @@ async function yahooSeries(sym, range, withDiv) {
     t, c, price: m.regularMarketPrice != null ? m.regularMarketPrice : null,
     marketTime: m.regularMarketTime || null, div, hasAdj: !!adj,
   };
+}
+
+async function yahooMeta(sym) {
+  const r = await fetch(YH + encodeURIComponent(sym) + '?interval=1d&range=5d', { headers: UA });
+  if (!r.ok) return null;
+  const d = await r.json();
+  const m = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
+  if (!m || m.regularMarketPrice == null) return null;
+  return { price: m.regularMarketPrice, prev: m.previousClose || m.chartPreviousClose || null, time: m.regularMarketTime || null, currency: m.currency || '' };
 }
 
 // SEC บางเวอร์ชันส่ง array ตรง ๆ บางเวอร์ชันห่อใน data/items/result
