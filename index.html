@@ -926,7 +926,7 @@ if (window._folioReady) {
         <div class="card-title" style="margin-bottom:0;">⚖️ Rebalancing — สัดส่วนจริง vs เป้าหมาย</div>
         <div style="display:flex;gap:6px;">
           <button id="p10ModeBtn" onclick="p10ToggleMode()" style="font-family:var(--font);font-size:10.5px;background:var(--amber-bg);color:var(--amber);border:0.5px solid var(--border2);border-radius:7px;padding:5px 10px;cursor:pointer;">🏦 Fund Mode</button>
-          <button class="action" onclick="p10OpenModal()">🎯 ตั้งเป้าหมาย</button>
+          <button onclick="p10OpenModal()" style="font-family:var(--font);font-size:10.5px;background:var(--accent-light);color:var(--accent-dark);border:0.5px solid var(--border2);border-radius:7px;padding:5px 10px;cursor:pointer;">🎯 ตั้งเป้าหมาย</button>
         </div>
       </div>
       <div id="p10Alert" style="border-radius:9px;padding:9px 12px;font-size:12px;margin-bottom:12px;border:0.5px solid transparent;"></div>
@@ -8580,8 +8580,10 @@ async function sgLoadMacro() {
   const st = document.getElementById('sgMacroStatus');
   const d = await sgFetch('macro=1', 25000);
   if (d.error || !Array.isArray(d.items)) {
-    g.innerHTML = SG_MACRO_ORDER.map(k => sgMacroCard(k, { error: d.error || 'Worker ยังไม่รองรับ ?macro' })).join('');
-    if (st) st.textContent = '⚠️ โหลดไม่ได้: ' + (d.error || 'Worker ยังไม่ได้อัปเดต') ;
+    g.innerHTML = '<div class="sg-note" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;">' +
+      '<span>⚠️ โหลดข้อมูลตลาดไม่ได้ (' + esc(d.error || 'Worker ยังไม่ได้อัปเดต') + ')</span>' +
+      '<button class="sg-btn" style="white-space:nowrap;flex-shrink:0;" onclick="sgLoadMacro()">ลองใหม่</button></div>';
+    if (st) st.textContent = '';
     return;
   }
   const byKey = {}; d.items.forEach(it => { byKey[it.key] = it; });
@@ -8667,12 +8669,30 @@ async function sgLoadCalendar() {
     .filter(e => isFinite(e._t) && e._t >= now - 3 * 3600000 && e._t <= end)
     .sort((a, b) => a._t - b._t);
   window._sgCalendar = ev;
-  sgRenderCalendar(ev, note);
+  // เหตุการณ์ธนาคารกลางถัดไปที่เลย 8 วัน — โชว์ตอนช่วง 8 วันไม่มีอะไร
+  const nextCb = SG_CB_EVENTS.map(c => ({ ...c, _t: new Date(c.date).getTime() })).filter(c => c._t > end).sort((a, b) => a._t - b._t);
+  sgRenderCalendar(ev, note, nextCb);
 }
 
-function sgRenderCalendar(ev, note) {
+function sgRenderCalendar(ev, note, nextCb) {
   const box = document.getElementById('sgCalList'); if (!box) return;
-  if (!ev.length) { box.innerHTML = (note ? '<div class="sg-note">' + esc(note) + '</div>' : '') + '<div class="sg-muted" style="padding:10px 0;font-size:12px;">ไม่มีเหตุการณ์สำคัญใน 8 วันข้างหน้า</div>'; return; }
+  if (!ev.length) {
+    let nx = '';
+    if (nextCb && nextCb.length) {
+      nx = '<div class="sg-sect" style="margin-top:8px;">เหตุการณ์ถัดไป</div>' + nextCb.slice(0, 2).map(e => {
+        const dt = new Date(e._t);
+        const days = Math.ceil((e._t - Date.now()) / 86400000);
+        return '<div class="sg-cal-row" style="grid-template-columns:1fr auto;"><span class="sg-cal-title"><span class="sg-badge sg-b-high" style="margin-right:6px;">สูง</span>' + esc(e.title) +
+          '<span class="sg-cal-fp">' + esc(dt.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short' })) +
+          (e.allDay ? '' : ' ' + esc(dt.toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })) + ' น.') + '</span></span>' +
+          '<span class="sg-muted" style="font-size:11px;">อีก ' + days + ' วัน</span></div>';
+      }).join('');
+    } else {
+      nx = '<div class="sg-note">ยังไม่มีตารางประชุม Fed/กนง. รอบถัดไปในแอป — อัปเดต SG_CB_EVENTS ประจำปี</div>';
+    }
+    box.innerHTML = (note ? '<div class="sg-note">' + esc(note) + '</div>' : '') + '<div class="sg-muted" style="padding:6px 0 0;font-size:12px;">ไม่มีเหตุการณ์สำคัญใน 8 วันข้างหน้า</div>' + nx;
+    return;
+  }
   let lastDay = '';
   const rows = ev.map(e => {
     const dt = new Date(e._t);
