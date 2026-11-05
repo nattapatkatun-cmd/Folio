@@ -1,4 +1,4 @@
-const CACHE = 'folio-v6';
+const CACHE = 'folio-v8';
 const SHARE_CACHE = 'folio-share'; // ไฟล์ที่แชร์เข้ามา (Share Target) — หน้าเว็บอ่านแล้วลบทิ้งเอง
 const SHELL = ['/Folio/', '/Folio/index.html'];
 

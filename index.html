@@ -632,6 +632,34 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
   .sg-rsi-top { flex-direction: column; }
   .sg-cal-row { grid-template-columns: 40px 30px 36px 1fr; gap: 4px; }
 }
+
+/* ─── ผู้ช่วย AI (aih-*) ─── */
+.aih-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.aih-chip { font-family: var(--font); font-size: 12px; background: var(--accent-light); color: var(--accent-dark); border: 0.5px solid var(--border2); border-radius: 18px; padding: 7px 12px; cursor: pointer; text-align: left; }
+.aih-chip:hover { border-color: var(--accent); }
+.aih-chip:disabled, #aihSend:disabled { opacity: .5; cursor: default; }
+.aih-budget { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); margin: 8px 0 2px; }
+.aih-budget input { width: 110px; font-family: var(--font); font-size: 12px; padding: 5px 8px; border: 0.5px solid var(--border2); border-radius: 8px; background: var(--bg); color: var(--text); }
+.aih-thread { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; }
+.aih-thread:empty { display: none; }
+.aih-msg { display: flex; }
+.aih-user { justify-content: flex-end; }
+.aih-bubble { max-width: 92%; font-size: 12.5px; line-height: 1.75; border-radius: 14px; padding: 9px 12px; overflow-wrap: anywhere; }
+.aih-user .aih-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.aih-ai .aih-bubble { background: var(--bg); color: var(--text); border-bottom-left-radius: 4px; width: 92%; }
+.aih-err { background: var(--amber-bg) !important; color: var(--amber) !important; }
+.aih-src { font-size: 10.5px; color: var(--text3); margin-top: 8px; line-height: 1.6; }
+.aih-src a { color: var(--accent); text-decoration: none; }
+.aih-time { font-size: 10px; color: var(--text3); margin-top: 6px; border-top: 0.5px dashed var(--border); padding-top: 5px; }
+.aih-typing { color: var(--text3); font-size: 12px; }
+.aih-typing span { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: var(--accent); animation: aihDot 1.2s infinite ease-in-out; }
+.aih-typing span:nth-child(2) { animation-delay: .15s; } .aih-typing span:nth-child(3) { animation-delay: .3s; margin-right: 8px; }
+@keyframes aihDot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.aih-input { display: flex; gap: 6px; align-items: flex-end; margin-top: 12px; }
+.aih-input textarea { flex: 1; min-width: 0; font-family: var(--font); font-size: 13px; line-height: 1.5; color: var(--text); background: var(--bg); border: 0.5px solid var(--border2); border-radius: 12px; padding: 9px 12px; resize: none; outline: none; max-height: 140px; }
+.aih-input textarea:focus { border-color: var(--accent); }
+#aihSend { font-family: var(--font); font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: none; border-radius: 12px; padding: 10px 14px; cursor: pointer; white-space: nowrap; }
+@media (max-width: 430px) { .aih-chip { flex: 1 1 100%; } .aih-bubble { font-size: 12.5px; } }
 </style>
 <!-- Firebase -->
 <script type="module">
@@ -926,7 +954,7 @@ if (window._folioReady) {
         <div class="card-title" style="margin-bottom:0;">⚖️ Rebalancing — สัดส่วนจริง vs เป้าหมาย</div>
         <div style="display:flex;gap:6px;">
           <button id="p10ModeBtn" onclick="p10ToggleMode()" style="font-family:var(--font);font-size:10.5px;background:var(--amber-bg);color:var(--amber);border:0.5px solid var(--border2);border-radius:7px;padding:5px 10px;cursor:pointer;">🏦 Fund Mode</button>
-          <button class="action" onclick="p10OpenModal()">🎯 ตั้งเป้าหมาย</button>
+          <button onclick="p10OpenModal()" style="font-family:var(--font);font-size:10.5px;background:var(--accent-light);color:var(--accent-dark);border:0.5px solid var(--border2);border-radius:7px;padding:5px 10px;cursor:pointer;">🎯 ตั้งเป้าหมาย</button>
         </div>
       </div>
       <div id="p10Alert" style="border-radius:9px;padding:9px 12px;font-size:12px;margin-bottom:12px;border:0.5px solid transparent;"></div>
@@ -945,13 +973,38 @@ if (window._folioReady) {
       </div>
     </div>
 
+
+    <!-- ผู้ช่วย AI: ศูนย์รวมถาม-ตอบ -->
+    <div class="card" style="margin-bottom:14px;" id="aihCard">
+      <div class="card-title">🤖 ผู้ช่วย AI <button class="action" id="aihClearBtn" onclick="aihClear()" style="display:none;">ล้างแชต</button></div>
+      <div class="aih-chips">
+        <button class="aih-chip" onclick="aihPreset('buy')">💰 เดือนนี้ควรซื้ออะไร</button>
+        <button class="aih-chip" onclick="aihPreset('health')">📊 พอร์ตตอนนี้เป็นยังไง</button>
+        <button class="aih-chip" onclick="aihPreset('news')">📰 มีข่าวอะไรกระทบพอร์ต</button>
+      </div>
+      <div class="aih-budget">งบเดือนนี้ ฿ <input id="aihBudget" type="number" min="0" step="500" inputmode="numeric" placeholder="10000"> <span class="sg-muted">ใช้กับปุ่ม 💰</span></div>
+      <div id="aihEmpty" class="sg-msub" style="margin-top:10px;line-height:1.6;">กดปุ่มด้านบน หรือพิมพ์ถามเองได้เลย เช่น "ถ้าดอลลาร์อ่อนต่อ กองไหนในพอร์ตโดนหนักสุด", "ควรเริ่ม RMF เพิ่มก่อนสิ้นปีไหม" · AI เห็นพอร์ต แผน DCA สัญญาณตลาด และรายรับรายจ่ายของคุณ และค้นข่าวล่าสุดได้</div>
+      <div class="aih-thread" id="aihThread"></div>
+      <div class="aih-input">
+        <textarea id="aihInput" rows="1" placeholder="พิมพ์ถามเอง หรือถามต่อจากคำตอบ…" oninput="aihAutoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();aihSendTyped();}"></textarea>
+        <button id="aihSend" onclick="aihSendTyped()">ส่ง</button>
+      </div>
+      <details class="sg-howto"><summary>วิธีใช้</summary><div>
+        • ปุ่มสำเร็จรูป 3 ปุ่มครอบคลุมคำถามที่ใช้บ่อย · ถามต่อได้เรื่อย ๆ AI จำ 10 ข้อความล่าสุดของบทสนทนา<br>
+        • ทุกคำตอบเริ่มด้วย "สรุป" อ่านบรรทัดแรกก็พอ รายละเอียดอยู่ด้านล่าง · ถ้า AI ค้นข่าว จะมีลิงก์แหล่งข่าวท้ายคำตอบ<br>
+        • ปุ่ม 💰 ระบบจะเช็กว่ายอดในตารางรวมตรงกับงบไหม ถ้าไม่ตรงจะเตือน<br>
+        • AI จะไม่แนะนำขาย SSF/RMF และไม่แนะนำขายเพราะข่าวระยะสั้น · ใช้เป็นความเห็นประกอบ ตัดสินใจเองเสมอ<br>
+        • ต้องการตาราง/ตัวเลขละเอียดแบบเดิม → เปิด "เครื่องมือ AI แบบละเอียด" ด้านล่าง
+      </div></details>
+    </div>
+
     <!-- AI Tools: Portfolio Analyzer + Fund Advisor — collapsible -->
     <div class="ai-section-toggle" onclick="toggleAiSection()" id="aiSectionToggle">
       <div class="ai-section-toggle-left">
         <span class="ai-section-toggle-icon">🤖</span>
         <div>
-          <div class="ai-section-toggle-title">AI Tools — Portfolio Analyzer & Fund Advisor</div>
-          <div class="ai-section-toggle-sub">วิเคราะห์พอร์ต · แนะนำการลงทุน · วางแผนรายเดือน</div>
+          <div class="ai-section-toggle-title">เครื่องมือ AI แบบละเอียด</div>
+          <div class="ai-section-toggle-sub">วิเคราะห์พอร์ตจาก Sheet · จัดสรรงบแบบตาราง · รีวิวข่าวรายกอง</div>
         </div>
       </div>
       <span class="ai-section-toggle-chevron" id="aiSectionChevron">▾</span>
@@ -1298,7 +1351,7 @@ if (window._folioReady) {
 
     <div class="budget-grid" style="margin-bottom:var(--gap);">
       <div class="card">
-        <div class="card-title">แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billCatPeriod">รายจ่ายเดือนนี้</span></div>
+        <div class="card-title"><span>แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billCatPeriod">รายจ่ายเดือนนี้</span></span><button class="action" onclick="billOpenCatModal()">＋ หมวดเอง</button></div>
         <div style="position:relative;height:180px;" id="billCatChartWrap"><canvas id="billCatChart"></canvas></div>
         <div id="billCatList" style="margin-top:12px;"></div>
       </div>
@@ -1797,6 +1850,20 @@ service cloud.firestore {
 </div>
 
 <!-- ─── Add Trade Modal ─── -->
+<div class="modal-overlay" id="billCatModal">
+  <div class="modal">
+    <h3>หมวดรายจ่ายของฉัน</h3>
+    <div style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.6;">เพิ่มหมวดที่ไม่มีในรายการ เช่น "สัตว์เลี้ยง", "ของขวัญ" — ใช้ได้ทั้งตอนบันทึกบิล ตั้งงบ และให้ AI จัดหมวดจากสลิป</div>
+    <div style="display:flex;gap:6px;align-items:flex-end;">
+      <div class="form-group" style="width:64px;flex-shrink:0;"><label class="form-label">ไอคอน</label><input class="form-input" id="billCatIcon" maxlength="4" placeholder="🏷️" style="text-align:center;"></div>
+      <div class="form-group" style="flex:1;min-width:0;"><label class="form-label">ชื่อหมวด</label><input class="form-input" id="billCatName" maxlength="30" placeholder="เช่น สัตว์เลี้ยง" onkeydown="if(event.key==='Enter'&&!event.isComposing)billAddCustomCat()"></div>
+      <button class="btn-primary" onclick="billAddCustomCat()" style="flex:none;height:38px;padding:0 16px;white-space:nowrap;">+ เพิ่ม</button>
+    </div>
+    <div id="billCatCustomList" style="margin-top:14px;"></div>
+    <div class="modal-actions" style="margin-top:14px;"><button class="btn-ghost" style="flex:1;" onclick="closeModal('billCatModal')">ปิด</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="trade-modal">
   <div class="modal">
     <h3 id="trade-modal-title">บันทึกธุรกรรม</h3>
@@ -2975,9 +3042,12 @@ const BUDGET_CAT_GUESS = [
   ['housing', /เช่า|บ้าน|คอนโด|หอ|ที่พัก|ส่วนกลาง|rent|condo/i],
   ['bills', /ไฟ|น้ำ|เน็ต|อินเทอร์เน็ต|โทรศัพท์|มือถือ|บิล|internet|wifi|ais|true|dtac/i],
   ['health', /ยา|หมอ|โรงพยาบาล|สุขภาพ|ฟิตเนส|ยิม|gym|clinic/i],
-  ['entertainment', /หนัง|เกม|netflix|spotify|youtube|บันเทิง|เที่ยว|ปาร์ตี้|game/i],
+  ['travel', /เที่ยว|ทริป|ตั๋วเครื่องบิน|โรงแรม|ทัวร์|travel|trip|hotel|flight/i],
+  ['donation', /ทำบุญ|บริจาค|วัด|มูลนิธิ|donat/i],
+  ['gamble', /หวย|ลอตเตอรี่|ล็อตเตอรี่|สลาก|เสี่ยงโชค|lotto|lottery/i],
+  ['entertainment', /หนัง|เกม|netflix|spotify|youtube|บันเทิง|ปาร์ตี้|game/i],
   ['education', /เรียน|คอร์ส|หนังสือ|การศึกษา|course/i],
-  ['family', /พ่อ|แม่|ครอบครัว|ให้|ทำบุญ|บริจาค|ลูก/i],
+  ['family', /พ่อ|แม่|ครอบครัว|ให้|ลูก/i],
   ['insurance', /ประกัน|ภาษี|insurance|tax/i],
   ['business', /ธุรกิจ|กิจการ|business/i],
   ['shopping', /ช้อป|เสื้อ|ของใช้|shopping|shopee|lazada/i]
@@ -3696,41 +3766,111 @@ function mdLiteToHtml(text) {
 
 // --- Gemini helper: auto-rotate keys on quota exhaustion ---
 // Gemini helper: v1beta + x-goog-api-key header (works for all key formats)
+// กันปัญหา "AI สรุปไม่ครบ / error กลางคัน" ไว้ที่จุดเดียว ทุกฟีเจอร์ได้ผลเหมือนกัน:
+//  1) Gemini 2.5 Flash นับ token ที่ใช้ "คิด" รวมใน maxOutputTokens → คำตอบโดนตัด/ว่าง
+//     ถ้าผู้เรียกไม่ได้กำหนด thinkingConfig: จำกัดงบคิด แล้วบวกเพิ่มให้ maxOutputTokens เท่ากัน
+//  2) คำตอบที่ใช้ google_search มักมาหลายท่อน (parts) → รวมทุกท่อนเป็นท่อนเดียว
+//     (โค้ดเดิมหลายจุดอ่านแค่ parts[0] จึงได้ข้อความครึ่งเดียว)
+//  3) ตั้งเวลารอ 90 วิ — ไม่ให้ปุ่มหมุนค้าง
+//  4) เน็ตหลุด / 500 / 502 / 504 → ลองใหม่อัตโนมัติ
+//  5) ถูกตัดเพราะ MAX_TOKENS หรือได้คำตอบว่าง → ลองใหม่ 1 ครั้งด้วยเพดานที่สูงขึ้น
+const GEMINI_THINK_BUDGET = 1024;
+const GEMINI_TIMEOUT_MS = 90000;
+
+function geminiPrepBody(body) {
+  const b = JSON.parse(JSON.stringify(body || {}));
+  const gc = b.generationConfig = b.generationConfig || {};
+  if (!gc.thinkingConfig) {
+    gc.thinkingConfig = { thinkingBudget: GEMINI_THINK_BUDGET };
+    if (gc.maxOutputTokens) gc.maxOutputTokens += GEMINI_THINK_BUDGET;
+  }
+  return b;
+}
+// รวมข้อความทุกท่อนของคำตอบ (ข้ามท่อน "ความคิด" ถ้ามี)
+function geminiText(d) {
+  const parts = (d && d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+  return parts.filter(p => p && typeof p.text === 'string' && !p.thought).map(p => p.text).join('');
+}
+function geminiNormalize(d) {
+  const c = d && d.candidates && d.candidates[0];
+  if (c && c.content && Array.isArray(c.content.parts) && c.content.parts.length > 1) {
+    const text = geminiText(d);
+    c.content.parts = [{ text }];
+  }
+  return d;
+}
+
 async function callGemini(body) {
   const keys = getKeys('GEMINI');
   if (!keys.length) throw new Error('no_key');
-  for (let attempt = 0; attempt < keys.length * 2; attempt++) {
+  let req = geminiPrepBody(body);
+  let netRetries = 0, truncRetried = false;
+  for (let attempt = 0; attempt < keys.length * 2 + 3; attempt++) {
     const key = getActiveKey('GEMINI');
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
     const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': key };
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), GEMINI_TIMEOUT_MS);
+    let res, d;
     try {
-      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-      const d = await res.json();
-      const isRateLimit = d.error?.status === 'RESOURCE_EXHAUSTED' || res.status === 429;
-      const isOverload = res.status === 503 || d.error?.status === 'UNAVAILABLE' ||
-        (d.error?.message && (d.error.message.includes('high demand') || d.error.message.includes('overloaded')));
-      if (isRateLimit || isOverload) {
-        rotateKey('GEMINI');
-        if (attempt < keys.length * 2 - 1) {
-          const waitSec = isOverload ? 15 : 30;
-          for (let s = waitSec; s > 0; s -= 5) {
-            showToast((isOverload ? '⏳ Gemini busy -- รอ ' : '⏳ Rate limit -- รอ ') + s + 'วิ...');
-            await new Promise(r => setTimeout(r, 5000));
-          }
-          continue;
-        }
-        throw new Error('all_quota');
+      res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(req), signal: ctl.signal });
+      const raw = await res.text();
+      try { d = JSON.parse(raw); } catch (pe) { d = { error: { status: 'BAD_RESPONSE', message: 'HTTP ' + res.status } }; }
+    } catch (e) {
+      clearTimeout(timer);
+      // เน็ตหลุด / หมดเวลา → ลองใหม่สูงสุด 2 ครั้ง
+      if (netRetries < 2) {
+        netRetries++;
+        showToast('⏳ เชื่อมต่อ Gemini ไม่ได้ -- ลองใหม่ (' + netRetries + '/2)...');
+        await new Promise(r => setTimeout(r, 3000 * netRetries));
+        continue;
       }
-      if (d.error) {
-        const msg = d.error.message || d.error.status || JSON.stringify(d.error);
-        showToast('Gemini Error: ' + msg);
-        throw new Error(msg);
-      }
-      return d;
-    } catch(e) {
-      if (e.message === 'all_quota' || e.message === 'no_key') throw e;
-      throw e;
+      throw new Error(e.name === 'AbortError' ? 'Gemini ตอบช้าเกิน 90 วินาที ลองใหม่อีกครั้ง' : 'เชื่อมต่อ Gemini ไม่ได้ ตรวจสอบอินเทอร์เน็ต');
     }
+    clearTimeout(timer);
+
+    const isRateLimit = d.error?.status === 'RESOURCE_EXHAUSTED' || res.status === 429;
+    const isOverload = res.status === 503 || d.error?.status === 'UNAVAILABLE' ||
+      (d.error?.message && (d.error.message.includes('high demand') || d.error.message.includes('overloaded')));
+    if (isRateLimit || isOverload) {
+      rotateKey('GEMINI');
+      if (attempt < keys.length * 2 - 1) {
+        const waitSec = isOverload ? 15 : 30;
+        for (let s = waitSec; s > 0; s -= 5) {
+          showToast((isOverload ? '⏳ Gemini busy -- รอ ' : '⏳ Rate limit -- รอ ') + s + 'วิ...');
+          await new Promise(r => setTimeout(r, 5000));
+        }
+        continue;
+      }
+      throw new Error('all_quota');
+    }
+    // error ฝั่งเซิร์ฟเวอร์ชั่วคราว → ลองใหม่
+    if ((res.status === 500 || res.status === 502 || res.status === 504 || d.error?.status === 'INTERNAL' || d.error?.status === 'DEADLINE_EXCEEDED') && netRetries < 2) {
+      netRetries++;
+      showToast('⏳ Gemini ขัดข้องชั่วคราว -- ลองใหม่ (' + netRetries + '/2)...');
+      await new Promise(r => setTimeout(r, 4000 * netRetries));
+      continue;
+    }
+    if (d.error) {
+      const msg = d.error.message || d.error.status || JSON.stringify(d.error);
+      showToast('Gemini Error: ' + msg);
+      throw new Error(msg);
+    }
+    const cand = d.candidates && d.candidates[0];
+    const finish = cand ? cand.finishReason : '';
+    const text = geminiText(d);
+    // คำตอบโดนตัด/ว่าง → ลองใหม่ครั้งเดียวด้วยเพดานสูงขึ้น (ไม่ลองซ้ำกรณีถูกบล็อกด้วย SAFETY)
+    if (!truncRetried && (finish === 'MAX_TOKENS' || (!text.trim() && finish !== 'SAFETY' && finish !== 'RECITATION' && finish !== 'PROHIBITED_CONTENT'))) {
+      truncRetried = true;
+      const gc = req.generationConfig;
+      gc.maxOutputTokens = Math.min(Math.round((gc.maxOutputTokens || 4000) * 1.8), 16384);
+      showToast('⏳ AI ตอบไม่ครบ -- ขอคำตอบใหม่อีกครั้ง...');
+      continue;
+    }
+    if (!text.trim()) {
+      throw new Error(finish === 'SAFETY' || finish === 'PROHIBITED_CONTENT' ? 'Gemini ไม่ตอบคำถามนี้ (ถูกกรองเนื้อหา)' : 'Gemini ไม่ได้ส่งคำตอบกลับมา กดลองใหม่อีกครั้ง');
+    }
+    return geminiNormalize(d);
   }
   throw new Error('all_quota');
 }
@@ -4315,7 +4455,7 @@ promptLines.push('');
   promptLines.push('- reason ของ item ที่ source เป็น news ต้องอ้างเหตุการณ์/ข่าวจริงที่ Google Search เจอ ห้ามอ้างข่าวลอย ๆ ที่ไม่ได้ค้น');
   promptLines.push('');
   promptLines.push('ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น ห้ามใช้ ```json:');
-  promptLines.push('{"top_actions":[{"rank":1,"action":"ชื่อ action ภาษาไทย","amount":XXXX,"reason":"5 คำ","layer":1,"source":"sheet"}],"allocation":[{"asset":"ชื่อ","amount":XXXX,"reason":"5 คำ","is_new_fund":false,"source":"sheet"}],"bonus_funds":[{"asset":"ชื่อกอง","amount":XXXX,"reason":"ทำไมน่าสนใจตอนนี้ อ้างข่าวจริง","is_new_fund":true,"source":"news"}],"expected_yoy":{"conservative":"'+yoyConserv+'","base":"'+yoyBase+'","aggressive":"'+yoyAggr+'"},"risk":{"level":"High/Med/Low","note":"exposure X%"},"triggers":["asset -X% -> action"]}');
+  promptLines.push('{"top_actions":[{"rank":1,"action":"ชื่อ action ภาษาไทย","amount":XXXX,"reason":"เหตุผล 1 ประโยคภาษาไทยที่อ่านเข้าใจ","layer":1,"source":"sheet"}],"allocation":[{"asset":"ชื่อ","amount":XXXX,"reason":"เหตุผล 1 ประโยคภาษาไทยที่อ่านเข้าใจ","is_new_fund":false,"source":"sheet"}],"bonus_funds":[{"asset":"ชื่อกอง","amount":XXXX,"reason":"ทำไมน่าสนใจตอนนี้ อ้างข่าวจริง","is_new_fund":true,"source":"news"}],"expected_yoy":{"conservative":"'+yoyConserv+'","base":"'+yoyBase+'","aggressive":"'+yoyAggr+'"},"risk":{"level":"High/Med/Low","note":"exposure X%"},"triggers":["asset -X% -> action"]}');
 var prompt = promptLines.join('\n');
 
   try {
@@ -4361,7 +4501,7 @@ var prompt = promptLines.join('\n');
       if (hasNewMoneyData) {
         if (parsed.top_actions && parsed.top_actions.length) {
           html += '<div style="background:var(--accent-light);border:0.5px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px;">';
-          html += '<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.8px;margin-bottom:12px;">🔥 TOP 3 ACTIONS — สัปดาห์นี้</div>';
+          html += '<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.8px;margin-bottom:12px;">🔥 สิ่งที่ควรทำ 3 อันดับแรก — เดือนนี้</div>';
           parsed.top_actions.slice(0,3).forEach(function(a) {
             var colors = ['var(--red)','var(--accent)','var(--amber)'];
             var c = colors[a.rank-1] || 'var(--text2)';
@@ -4425,7 +4565,7 @@ var prompt = promptLines.join('\n');
         html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
         if (parsed.expected_yoy) {
           var ey = parsed.expected_yoy;
-          html += '<div style="background:var(--green-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--green);">📈 Conservative '+esc(ey.conservative)+' / Base '+esc(ey.base)+' / Aggressive '+esc(ey.aggressive)+'</div>';
+          html += '<div style="background:var(--green-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--green);">📈 ผลตอบแทนคาดคร่าว ๆ ต่อปี: ระมัดระวัง '+esc(ey.conservative)+' / สมดุล '+esc(ey.base)+' / เชิงรุก '+esc(ey.aggressive)+'<div style="font-size:9.5px;font-weight:400;color:var(--text3);">คำนวณจากสูตรคงที่ ไม่ใช่การพยากรณ์</div></div>';
         }
         if (parsed.risk) {
           html += '<div style="background:var(--orange-bg);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:500;color:var(--orange);">⚠️ Risk: '+esc(parsed.risk.level||'')+'  '+esc(parsed.risk.note||'')+'</div>';
@@ -6450,7 +6590,7 @@ async function bmFetchAiHot() {
   ].join('\n');
 
   try {
-    const _aiRaw = await callGemini({ contents: [{ parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { maxOutputTokens: 600, temperature: 0.4 } });
+    const _aiRaw = await callGemini({ contents: [{ parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { maxOutputTokens: 1500, temperature: 0.4 } });
     const _aiPart = (_aiRaw.candidates&&_aiRaw.candidates[0]&&_aiRaw.candidates[0].content&&_aiRaw.candidates[0].content.parts||[]).find(p=>p.text);
     const txt = _aiPart ? _aiPart.text : '';
     resultEl.innerHTML = txt.split('\n').filter(Boolean).map(l =>
@@ -6772,6 +6912,9 @@ const BILL_CATS = {
     { key: 'entertainment', label: 'บันเทิง',             icon: '🎬', color: '#C2410C' },
     { key: 'education',     label: 'การศึกษา',            icon: '📚', color: '#0F766E' },
     { key: 'family',        label: 'ครอบครัว/ให้',        icon: '🎁', color: '#BE185D' },
+    { key: 'travel',        label: 'ท่องเที่ยว',          icon: '✈️', color: '#0EA5E9' },
+    { key: 'donation',      label: 'บริจาค/ทำบุญ',        icon: '🙏', color: '#CA8A04' },
+    { key: 'gamble',        label: 'เสี่ยงโชค',           icon: '🎰', color: '#DC2626' },
     { key: 'insurance',     label: 'ประกัน/ภาษี',         icon: '🛡️', color: '#475569' },
     { key: 'transfer',      label: 'โอนเงินทั่วไป',       icon: '🔁', color: '#94A3B8' },
     { key: 'business',      label: 'ธุรกิจส่วนตัว',        icon: '🏪', color: '#9333EA' },
@@ -6789,6 +6932,20 @@ const BILL_CATS = {
     { key: 'other_in', label: 'อื่น ๆ',           icon: '📥', color: '#AAB0BB' }
   ]
 };
+// ─── หมวดรายจ่ายที่ผู้ใช้เพิ่มเอง (key ขึ้นต้น c_) — เก็บใน settings/bill + localStorage ───
+// แทรกไว้ก่อน "ลงทุน/ออม" ให้อยู่กลุ่มเดียวกับหมวดรายจ่ายปกติ; ลบหมวดแล้วรายการเดิมจะแสดงเป็น "อื่น ๆ"
+const BILL_CUSTOM_COLORS = ['#E11D48', '#0D9488', '#7C3AED', '#EA580C', '#2563EB', '#65A30D', '#DB2777', '#0891B2'];
+function billCustomCats() {
+  try { const a = JSON.parse(localStorage.getItem('folio_bill_custom_cats') || '[]'); return Array.isArray(a) ? a.filter(c => c && c.key && c.label) : []; } catch (e) { return []; }
+}
+function billApplyCustomCats() {
+  const ex = BILL_CATS.expense;
+  for (let i = ex.length - 1; i >= 0; i--) if (String(ex[i].key).startsWith('c_')) ex.splice(i, 1);
+  const at = ex.findIndex(c => c.key === 'invest');
+  ex.splice(at < 0 ? ex.length - 1 : at, 0, ...billCustomCats().map(c => ({ key: c.key, label: c.label, icon: c.icon || '🏷️', color: c.color || '#AAB0BB', custom: true })));
+}
+billApplyCustomCats();
+
 // ไม่นับเป็นรายจ่าย/ไม่กระทบอัตราออม:
 // 'invest' = เงินที่โอนไปลงทุน/ออมเอง
 // 'cc_payment' = โอนจ่ายบิลบัตรเครดิต — ของที่รูดบัตรถูกนับเป็นรายจ่ายไปแล้วตอนรูด ถ้านับตอนจ่ายบิลอีกจะซ้ำ
@@ -8163,7 +8320,7 @@ function billRules() {
     '- currency: ISO 4217 (฿ หรือ บาท = THB, ¥/円 = JPY, ₩ = KRW ฯลฯ); ใบเสร็จต่างประเทศให้ amount เป็นยอดในสกุลนั้น',
     '- thbCharged: ถ้าเป็นรายการสกุลต่างประเทศ และเอกสาร (เช่น แจ้งเตือนบัตร/แอปธนาคาร) แสดงยอดบาทที่ถูกเรียกเก็บด้วย ให้ใส่ยอดบาทนั้น; ไม่มีให้ใส่ 0',
     '- type: expense ถ้าเงินออกจากเจ้าของ, income ถ้าเงินเข้าเจ้าของ' + (owner ? ' — ชื่อเจ้าของบัญชีคือ "' + owner + '" (ถ้าเจ้าของเป็นผู้โอน = expense, เป็นผู้รับ = income)' : '') + '; ไม่แน่ใจให้ใช้ expense',
-    '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest; โอน/ชำระยอดบัตรเครดิต = cc_payment; ต้นทุน/ค่าใช้จ่ายของกิจการตัวเอง = business',
+    '- category (expense): ' + catDesc + ' — โอนเข้าบัญชีหลักทรัพย์/กองทุน/บัญชีออมของตัวเอง = invest; โอน/ชำระยอดบัตรเครดิต = cc_payment; ต้นทุน/ค่าใช้จ่ายของกิจการตัวเอง = business; ทำบุญ/บริจาค/วัด/มูลนิธิ = donation; หวย/ลอตเตอรี่/สลาก = gamble; ตั๋วเครื่องบิน/โรงแรม/ทัวร์/ค่าใช้จ่ายระหว่างทริป = travel' + (billCustomCats().length ? '; หมวดที่ผู้ใช้ตั้งเอง: ' + billCustomCats().map(c => c.key + '=' + c.label).join(', ') + ' (ใช้เมื่อเข้ากับชื่อหมวดชัดเจน)' : '') + '',
     '- payMethod: card ถ้าจ่ายด้วยบัตรเครดิต (เห็น VISA/Mastercard/JCB/เลขบัตร ****), transfer ถ้าเป็นสลิปโอน/สแกน QR พร้อมเพย์, ewallet ถ้าจ่ายผ่าน TrueMoney/ShopeePay/LINE Pay ฯลฯ, cash ถ้าเป็นเงินสด, ไม่ทราบใช้ unknown',
     '- card: เมื่อ payMethod=card หรือ category=cc_payment ให้ใส่ชื่อบัตร/ธนาคาร + เลข 4 ตัวท้ายถ้ามี' + (billCards().length ? ' — ถ้าตรงกับบัตรของผู้ใช้ ให้ใช้ชื่อนี้ตรงตัว: ' + billCards().join(', ') : '') + '; ไม่ใช่บัตรใช้ ""',
     '- category (income): ' + incDesc,
@@ -8383,10 +8540,49 @@ function billSaveDefaultFee(v) {
 // เก็บชื่อบัญชี/บัตร/ค่าธรรมเนียมใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
 function billSyncSettings() {
   if (window.FB) window.FB.setDoc('settings', 'bill', {
-    owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(),
+    owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(), customCats: billCustomCats(),
     fxFee: billDefaultFxFee(), cardFees: billCardFees()
   }).catch(() => {});
 }
+// ─── จัดการหมวดที่เพิ่มเอง ───
+function billOpenCatModal() { billRenderCustomCats(); openModal('billCatModal'); setTimeout(() => { const n = document.getElementById('billCatName'); if (n) n.focus(); }, 80); }
+function billRenderCustomCats() {
+  const el = document.getElementById('billCatCustomList'); if (!el) return;
+  const list = billCustomCats();
+  el.innerHTML = list.length
+    ? '<div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">หมวดที่เพิ่มไว้</div>' + list.map(c =>
+        '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px;">' +
+        '<span class="bill-ico" style="background:' + esc(c.color) + '22;width:26px;height:26px;font-size:14px;">' + esc(c.icon || '🏷️') + '</span>' +
+        '<span style="flex:1;">' + esc(c.label) + '</span>' +
+        '<button data-k="' + esc(c.key) + '" onclick="billDeleteCustomCat(this.dataset.k)" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;">✕</button></div>').join('')
+    : '<div style="font-size:12px;color:var(--text3);">ยังไม่มีหมวดที่เพิ่มเอง</div>';
+}
+function billAddCustomCat() {
+  const nameEl = document.getElementById('billCatName'), iconEl = document.getElementById('billCatIcon');
+  const label = (nameEl.value || '').trim().replace(/\s+/g, ' ');
+  if (!label) { showToast('ใส่ชื่อหมวดก่อน'); nameEl.focus(); return; }
+  if (BILL_CATS.expense.some(c => c.label.toLowerCase() === label.toLowerCase())) { showToast('มีหมวด "' + label + '" อยู่แล้ว'); return; }
+  const list = billCustomCats();
+  if (list.length >= 20) { showToast('เพิ่มได้สูงสุด 20 หมวด'); return; }
+  const icon = (iconEl.value || '').trim() || '🏷️';
+  list.push({ key: 'c_' + Date.now().toString(36), label, icon, color: BILL_CUSTOM_COLORS[list.length % BILL_CUSTOM_COLORS.length] });
+  localStorage.setItem('folio_bill_custom_cats', JSON.stringify(list));
+  billApplyCustomCats(); billSyncSettings();
+  nameEl.value = ''; iconEl.value = '';
+  billRenderCustomCats();
+  if (typeof billRender === 'function') billRender();
+  showToast('เพิ่มหมวด ' + icon + ' ' + label + ' แล้ว');
+}
+function billDeleteCustomCat(key) {
+  const c = billCustomCats().find(x => x.key === key); if (!c) return;
+  const used = (state.transactions || []).filter(t => t.category === key || t.offsetCat === key).length;
+  if (!confirm('ลบหมวด "' + c.label + '"?' + (used ? '\nมี ' + used + ' รายการที่ใช้หมวดนี้ — จะแสดงเป็น "อื่น ๆ" แทน (ข้อมูลไม่หาย ถ้าเพิ่มหมวดชื่อเดิมกลับมาจะไม่ผูกคืนอัตโนมัติ)' : ''))) return;
+  localStorage.setItem('folio_bill_custom_cats', JSON.stringify(billCustomCats().filter(x => x.key !== key)));
+  billApplyCustomCats(); billSyncSettings();
+  billRenderCustomCats();
+  if (typeof billRender === 'function') billRender();
+}
+
 async function billLoadSettings() {
   try {
     const doc = (await window.FB.getAll('settings')).find(d => d.id === 'bill');
@@ -8395,6 +8591,7 @@ async function billLoadSettings() {
     if (Array.isArray(doc.cards)) localStorage.setItem('folio_bill_cards', doc.cards.join(', '));
     if (typeof doc.fxFee === 'number') localStorage.setItem('folio_bill_fx_fee', String(doc.fxFee));
     if (doc.cardFees && typeof doc.cardFees === 'object') localStorage.setItem('folio_bill_card_fees', JSON.stringify(doc.cardFees));
+    if (Array.isArray(doc.customCats)) { localStorage.setItem('folio_bill_custom_cats', JSON.stringify(doc.customCats)); billApplyCustomCats(); }
     const page = document.getElementById('page-bills');
     if (page && page.classList.contains('active')) billRender();
   } catch (e) {}
@@ -8580,8 +8777,10 @@ async function sgLoadMacro() {
   const st = document.getElementById('sgMacroStatus');
   const d = await sgFetch('macro=1', 25000);
   if (d.error || !Array.isArray(d.items)) {
-    g.innerHTML = SG_MACRO_ORDER.map(k => sgMacroCard(k, { error: d.error || 'Worker ยังไม่รองรับ ?macro' })).join('');
-    if (st) st.textContent = '⚠️ โหลดไม่ได้: ' + (d.error || 'Worker ยังไม่ได้อัปเดต') ;
+    g.innerHTML = '<div class="sg-note" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;">' +
+      '<span>⚠️ โหลดข้อมูลตลาดไม่ได้ (' + esc(d.error || 'Worker ยังไม่ได้อัปเดต') + ')</span>' +
+      '<button class="sg-btn" style="white-space:nowrap;flex-shrink:0;" onclick="sgLoadMacro()">ลองใหม่</button></div>';
+    if (st) st.textContent = '';
     return;
   }
   const byKey = {}; d.items.forEach(it => { byKey[it.key] = it; });
@@ -8667,12 +8866,30 @@ async function sgLoadCalendar() {
     .filter(e => isFinite(e._t) && e._t >= now - 3 * 3600000 && e._t <= end)
     .sort((a, b) => a._t - b._t);
   window._sgCalendar = ev;
-  sgRenderCalendar(ev, note);
+  // เหตุการณ์ธนาคารกลางถัดไปที่เลย 8 วัน — โชว์ตอนช่วง 8 วันไม่มีอะไร
+  const nextCb = SG_CB_EVENTS.map(c => ({ ...c, _t: new Date(c.date).getTime() })).filter(c => c._t > end).sort((a, b) => a._t - b._t);
+  sgRenderCalendar(ev, note, nextCb);
 }
 
-function sgRenderCalendar(ev, note) {
+function sgRenderCalendar(ev, note, nextCb) {
   const box = document.getElementById('sgCalList'); if (!box) return;
-  if (!ev.length) { box.innerHTML = (note ? '<div class="sg-note">' + esc(note) + '</div>' : '') + '<div class="sg-muted" style="padding:10px 0;font-size:12px;">ไม่มีเหตุการณ์สำคัญใน 8 วันข้างหน้า</div>'; return; }
+  if (!ev.length) {
+    let nx = '';
+    if (nextCb && nextCb.length) {
+      nx = '<div class="sg-sect" style="margin-top:8px;">เหตุการณ์ถัดไป</div>' + nextCb.slice(0, 2).map(e => {
+        const dt = new Date(e._t);
+        const days = Math.ceil((e._t - Date.now()) / 86400000);
+        return '<div class="sg-cal-row" style="grid-template-columns:1fr auto;"><span class="sg-cal-title"><span class="sg-badge sg-b-high" style="margin-right:6px;">สูง</span>' + esc(e.title) +
+          '<span class="sg-cal-fp">' + esc(dt.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short' })) +
+          (e.allDay ? '' : ' ' + esc(dt.toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })) + ' น.') + '</span></span>' +
+          '<span class="sg-muted" style="font-size:11px;">อีก ' + days + ' วัน</span></div>';
+      }).join('');
+    } else {
+      nx = '<div class="sg-note">ยังไม่มีตารางประชุม Fed/กนง. รอบถัดไปในแอป — อัปเดต SG_CB_EVENTS ประจำปี</div>';
+    }
+    box.innerHTML = (note ? '<div class="sg-note">' + esc(note) + '</div>' : '') + '<div class="sg-muted" style="padding:6px 0 0;font-size:12px;">ไม่มีเหตุการณ์สำคัญใน 8 วันข้างหน้า</div>' + nx;
+    return;
+  }
   let lastDay = '';
   const rows = ev.map(e => {
     const dt = new Date(e._t);
@@ -9189,6 +9406,240 @@ function sgOnShowSignals() {
   while (!window._holdingsLoaded && Date.now() - t0 < 8000) await new Promise(r => setTimeout(r, 300));
   const S = sgGetSummary();
   if (!S || S.date !== todayISO()) sgOnShowSignals();
+})();
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// ผู้ช่วย AI — ศูนย์รวมถาม-ตอบ (3 คำถามสำเร็จรูป + พิมพ์ถามเอง + ถามต่อ)
+// AI เห็นข้อมูลพอร์ตจริงทั้งหมดผ่าน systemInstruction และค้น Google ได้เมื่อจำเป็น
+// ═══════════════════════════════════════════════════════════════════════
+const AIH_KEY = 'folio_aiHubThread';
+const AIH_MAX_STORE = 30;   // ข้อความที่เก็บในเครื่อง
+const AIH_MAX_SEND = 10;    // ข้อความล่าสุดที่ส่งให้ AI เป็นบริบทการคุย
+let aihThread = [];
+let aihBusy = false;
+
+function aihLoad() {
+  try { const t = JSON.parse(localStorage.getItem(AIH_KEY) || '[]'); if (Array.isArray(t)) aihThread = t; } catch (e) { aihThread = []; }
+}
+function aihSave() {
+  try { localStorage.setItem(AIH_KEY, JSON.stringify(aihThread.slice(-AIH_MAX_STORE))); } catch (e) {}
+}
+function aihFmt(n) { return '฿' + Math.round(Number(n) || 0).toLocaleString(); }
+
+// ─── ข้อมูลพอร์ตทั้งหมดที่ AI ใช้ตอบ ───
+function aihContext() {
+  const L = [];
+  const now = new Date();
+  L.push('วันนี้: ' + now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + ' (' + todayISO() + ')');
+  const risk = (typeof _p17bRiskLevel !== 'undefined') ? _p17bRiskLevel : 'base';
+  L.push('ระดับความเสี่ยงที่ผู้ใช้เลือก: ' + (risk === 'low' ? 'ระมัดระวัง' : risk === 'high' ? 'รับความเสี่ยงสูง' : 'สมดุล'));
+  L.push('สไตล์การลงทุน: DCA ระยะยาว (ซื้อสม่ำเสมอทุกเดือน) ไม่ได้เทรดระยะสั้น');
+  const total = portfolioValueThb(), cost = portfolioCostThb();
+  if (total > 0) L.push('มูลค่าพอร์ตรวม ' + aihFmt(total) + ' · ต้นทุน ' + aihFmt(cost) + ' · กำไร/ขาดทุน ' + (cost > 0 ? ((total / cost - 1) * 100).toFixed(1) + '%' : '-'));
+  if (window._p9Data) L.push('ผลตอบแทนปีนี้ ' + window._p9Data.currentYoy.toFixed(1) + '% (เป้า ' + yoyTargetPct().toFixed(0) + '% ต่อปี)');
+
+  const locked = new Set(taxLockedAssetNames().map(s => String(s).toUpperCase()));
+  if (state.holdings && state.holdings.length) {
+    L.push('', 'หลักทรัพย์ที่ถืออยู่:');
+    state.holdings.forEach(h => {
+      const v = valueThb(h), c = costThb(h);
+      const nm = h.name || h.ticker;
+      const typeTh = { set: 'หุ้นไทย', us: 'หุ้น US', crypto: 'Crypto', tech: 'หุ้น Tech', fund: 'กองทุน' }[h.type] || h.type;
+      L.push('- ' + nm + ' [' + typeTh + (h.fundRegion ? ' · ' + h.fundRegion : '') + (h.taxType ? ' · ' + h.taxType : '') + ']' +
+        ' มูลค่า ' + aihFmt(v) + ' (' + (total > 0 ? (v / total * 100).toFixed(1) : '0') + '% ของพอร์ต)' +
+        (c > 0 ? ' กำไร/ขาดทุน ' + ((v / c - 1) * 100).toFixed(1) + '%' : '') +
+        (h._navDate ? ' NAV ณ ' + h._navDate : '') +
+        (locked.has(String(nm).toUpperCase()) ? ' 🔒LOCKED' : ''));
+    });
+  } else L.push('', 'ยังไม่มีข้อมูลหลักทรัพย์ในแอป');
+
+  if (window._p10Data && window._p10Data.activeTypes) {
+    const { actual, targets, activeTypes } = window._p10Data;
+    L.push('', 'สัดส่วนจริงเทียบเป้าหมาย (ราย asset class):');
+    activeTypes.forEach(t => {
+      const a = actual[t] || 0, g = targets[t] || 0;
+      L.push('- ' + (P10_LABELS[t] || t) + ': จริง ' + a.toFixed(1) + '% เป้า ' + g + '% (' + (a - g >= 0 ? 'เกิน ' : 'ขาด ') + Math.abs(a - g).toFixed(1) + '%)');
+    });
+  }
+  if (window._p17SheetData && window._p17SheetData.holdings) {
+    L.push('', 'ข้อมูลจาก Google Sheet ของผู้ใช้ (Drift = ห่างจากเป้ากี่ %, + คือเกินเป้า · BuyScore 0–10 ยิ่งสูงยิ่งควรซื้อ · SuggestBuy = ยอดซื้อที่ Sheet แนะนำต่อเดือน):');
+    window._p17SheetData.holdings.forEach(sh => {
+      L.push('- ' + sh['Asset'] + ': Drift ' + ((Number(sh['Drift %']) || 0) * 100).toFixed(1) + '%, เป้า ' + ((Number(sh['Target Allocation %']) || 0) * 100).toFixed(0) + '%, BuyScore ' + Number(sh['Buy Priority Score'] || 0).toFixed(1));
+    });
+    (window._p17SheetData.executionPlan || []).filter(r => Number(r['Suggested Monthly Buy (THB)']) > 0).forEach(r => {
+      L.push('  SuggestBuy ' + r['Asset'] + ' ' + aihFmt(r['Suggested Monthly Buy (THB)']));
+    });
+  }
+  if (state.dcaSchedules && state.dcaSchedules.length) {
+    L.push('', 'แผน DCA (รวม ≈ ' + aihFmt(dcaMonthly()) + '/เดือน):');
+    state.dcaSchedules.forEach(d => L.push('- ' + d.ticker + ' ' + aihFmt(d.amount) + ' ' + (d.freq || '') + (d.nextISO ? ' ครั้งถัดไป ' + d.nextISO : '')));
+  }
+  if (locked.size) L.push('', '🔒 LOCKED (SSF/RMF ขายแล้วเสียสิทธิภาษี): ' + [...locked].join(', '));
+  if (typeof sgPromptLines === 'function') { const s = sgPromptLines(); if (s.length) { L.push(''); s.forEach(x => L.push(x)); } }
+  if (typeof billCashflowContext === 'function') { const b = billCashflowContext(); if (b) { L.push('', 'รายรับ-รายจ่ายจริงจากสลิป/บิล:', b); } }
+  return L.join('\n');
+}
+
+const AIH_RULES = [
+  'คุณคือผู้ช่วยการเงินส่วนตัวในแอป Folio คุยกับเจ้าของพอร์ตคนเดียว ตอบเป็นภาษาไทยที่อ่านง่าย เหมือนอธิบายให้เพื่อนฟัง',
+  'กติกาการตอบ:',
+  '1. บรรทัดแรกเป็น "สรุป:" ตอบคำถามตรง ๆ ใน 1–2 ประโยค แล้วค่อยให้รายละเอียด',
+  '2. รายละเอียดใช้หัวข้อ ## ได้ไม่เกิน 3 หัวข้อ ใช้ bullet สั้น ๆ ประโยคละ 1 ความคิด ใช้ตาราง markdown เมื่อมีตัวเลขหลายรายการ',
+  '3. ใช้ภาษาไทย หลีกเลี่ยงศัพท์อังกฤษ ถ้าจำเป็นต้องใช้ศัพท์เทคนิค (เช่น RSI, EMA200, Drift) ให้อธิบายสั้น ๆ ในวงเล็บครั้งแรก',
+  '4. ตัวเลขต้องมาจากข้อมูลพอร์ตด้านล่างหรือจากการค้น Google เท่านั้น ห้ามแต่งตัวเลข ถ้าข้อมูลไม่พอให้บอกตรง ๆ ว่าขาดอะไร',
+  '5. ห้ามแนะนำขาย/ลดกองที่ติด 🔒LOCKED (SSF/RMF) เด็ดขาด',
+  '6. ห้ามแนะนำขายเพราะข่าวหรือราคาแกว่งระยะสั้น — การลดสัดส่วนทำได้เฉพาะตอนปรับพอร์ตให้กลับเข้าเป้าหมาย',
+  '7. ถ้าอ้างข่าว ให้บอกว่าข่าวเมื่อไหร่ และใช้เฉพาะข่าวที่ค้นเจอจริง',
+  '8. สัญญาณเทคนิค (RSI/EMA) ใช้แค่ปรับจังหวะ DCA ไม่ใช่เหตุผลหลัก',
+  '9. ไม่ต้องเขียนคำเตือนยาว ๆ ว่าไม่ใช่คำแนะนำการลงทุน (แอปแสดงไว้แล้ว)',
+  '10. ถ้าคำถามกำกวม ตอบตามการตีความที่สมเหตุสมผลที่สุด แล้วถามกลับ 1 คำถามท้ายคำตอบ',
+].join('\n');
+
+// ─── คำถามสำเร็จรูป ───
+function aihPreset(kind) {
+  if (aihBusy) return;
+  if (kind === 'buy') {
+    const el = document.getElementById('aihBudget');
+    const budget = Math.round(Number(el && el.value) || 0);
+    if (!budget || budget < 500) { showToast('ใส่งบเดือนนี้ก่อน (ขั้นต่ำ ฿500)'); if (el) el.focus(); return; }
+    aihAsk('💰 เดือนนี้มีงบ ' + aihFmt(budget) + ' ควรซื้ออะไรบ้าง', [
+      'งาน: จัดสรรงบ ' + aihFmt(budget) + ' สำหรับเดือนนี้',
+      '- ทำตาราง | สินทรัพย์ | จำนวนเงิน | เหตุผล (1 ประโยค) | ยอดรวมทุกแถวต้องเท่ากับ ' + budget + ' บาทพอดี ปัดเป็นหลักร้อย',
+      '- เน้นตัวที่ต่ำกว่าเป้าหมาย/BuyScore สูง/มีสัญญาณ "ซื้อเพิ่ม" · ไม่ซื้อตัวที่เกินเป้ามาก',
+      '- อิงแผน DCA เดิมเป็นฐาน ถ้าไม่เปลี่ยนจากแผนเดิมให้บอกว่า "ตามแผนเดิม"',
+      '- เสนอกองใหม่ที่ไม่มีในพอร์ตได้ไม่เกิน 1 กอง และต้องเขียนว่า (กองใหม่) พร้อมเหตุผลจากข่าวที่ค้นเจอ',
+      '- ท้ายตารางบอก 1 ประโยคว่าหลังซื้อแล้วสัดส่วนพอร์ตเข้าใกล้เป้าขึ้นอย่างไร',
+    ].join('\n'), { budget });
+  } else if (kind === 'health') {
+    aihAsk('📊 พอร์ตตอนนี้เป็นยังไงบ้าง', [
+      'งาน: ตรวจสุขภาพพอร์ต',
+      '## ภาพรวม — ผลตอบแทนเทียบเป้า และสัดส่วนเทียบเป้าหมาย',
+      '## จุดที่ดี — 2 ข้อ',
+      '## จุดที่ต้องระวัง — 2–3 ข้อ (เช่น กระจุกตัวในตัวเดียว/ประเทศเดียว ค่าเงิน สัดส่วนหลุดเป้า เงินสำรอง)',
+      'ปิดท้ายด้วย "สิ่งที่ควรทำเดือนนี้" 1–3 ข้อ ที่ทำได้จริง',
+    ].join('\n'));
+  } else if (kind === 'news') {
+    aihAsk('📰 ช่วงนี้มีข่าวอะไรกระทบพอร์ตบ้าง', [
+      'งาน: ใช้ Google Search หาข่าว 7 วันล่าสุดที่กระทบสินทรัพย์ในพอร์ตจริง (รวมตลาด/ปัจจัยที่กองเหล่านี้ลงทุน เช่น หุ้นสหรัฐ ทอง ดอกเบี้ย ค่าเงิน)',
+      '- ไม่เกิน 5 ข่าว เรียงจากกระทบมากไปน้อย',
+      '- แต่ละข่าว: **หัวข่าวสั้น** (วันที่) → กระทบตัวไหน · ดีหรือไม่ดี · ควรทำอะไร',
+      '- ส่วนใหญ่คำตอบที่ถูกคือ "DCA ต่อตามแผน ไม่ต้องทำอะไร" — บอกตรง ๆ ได้ ห้ามแนะนำขายจากข่าว',
+    ].join('\n'));
+  }
+}
+
+function aihSendTyped() {
+  const ta = document.getElementById('aihInput');
+  const q = (ta && ta.value || '').trim();
+  if (!q || aihBusy) return;
+  ta.value = '';
+  aihAutoGrow(ta);
+  aihAsk(q, '');
+}
+function aihAutoGrow(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
+
+async function aihAsk(display, extra, meta) {
+  if (aihBusy) return;
+  aihBusy = true;
+  aihThread.push({ role: 'user', text: display, send: extra ? display + '\n\n' + extra : display, t: Date.now() });
+  aihSave();
+  aihRender(true);
+  const history = aihThread.slice(-AIH_MAX_SEND).filter(m => m.role === 'user' || (m.role === 'model' && !m.error));
+  // ข้อความแรกที่ส่งต้องเป็นของผู้ใช้
+  while (history.length && history[0].role !== 'user') history.shift();
+  const contents = history.map(m => ({ role: m.role, parts: [{ text: m.role === 'user' ? (m.send || m.text) : m.text }] }));
+  try {
+    const d = await callGemini({
+      systemInstruction: { parts: [{ text: AIH_RULES + '\n\n===== ข้อมูลพอร์ตของผู้ใช้ (อัปเดตล่าสุด) =====\n' + aihContext() }] },
+      contents,
+      tools: [{ google_search: {} }],
+      generationConfig: { maxOutputTokens: 3000, temperature: 0.4 },
+    });
+    const text = geminiText(d).trim();
+    const gm = d.candidates && d.candidates[0] && d.candidates[0].groundingMetadata;
+    const sources = ((gm && gm.groundingChunks) || []).map(c => c.web).filter(Boolean).slice(0, 5).map(w => ({ uri: w.uri, title: w.title || w.uri }));
+    const msg = { role: 'model', text, sources, t: Date.now() };
+    if (meta && meta.budget) msg.check = aihCheckBudget(text, meta.budget);
+    aihThread.push(msg);
+  } catch (e) {
+    const m = e.message === 'no_key' ? 'ยังไม่ได้ใส่ Gemini Key — ไปที่ ⚙️ ตั้งค่า' : e.message === 'all_quota' ? 'Gemini ทุก key หมดโควตาวันนี้ ลองใหม่พรุ่งนี้หรือเพิ่ม key ในตั้งค่า' : e.message;
+    aihThread.push({ role: 'model', text: m, error: true, t: Date.now() });
+  }
+  aihBusy = false;
+  aihSave();
+  aihRender(true);
+}
+
+// ตรวจว่ายอดรวมในตารางตรงกับงบ — AI คิดเลขพลาดได้ บอกผู้ใช้ตรง ๆ
+function aihCheckBudget(text, budget) {
+  let sum = 0, rows = 0;
+  String(text).split('\n').forEach(line => {
+    if (!/^\s*\|.*\|\s*$/.test(line) || /^\s*\|?[\s:|-]+\|?\s*$/.test(line)) return;
+    const cells = line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
+    if (/รวม|total/i.test(cells[0])) return;
+    for (let i = 1; i < cells.length; i++) {
+      const m = cells[i].replace(/,/g, '').match(/^฿?\s*(\d+(?:\.\d+)?)\s*(บาท)?$/);
+      if (m) { sum += Number(m[1]); rows++; break; }
+    }
+  });
+  if (!rows) return null;
+  return Math.abs(sum - budget) <= 1 ? { ok: true, sum } : { ok: false, sum };
+}
+
+function aihRetry() {
+  if (aihBusy) return;
+  // เอาคำถามล่าสุดที่ error ออกแล้วถามใหม่
+  const last = aihThread[aihThread.length - 1];
+  if (!last || !last.error) return;
+  aihThread.pop();
+  const q = aihThread.pop();
+  if (!q || q.role !== 'user') { aihRender(); return; }
+  const extra = q.send && q.send !== q.text ? q.send.slice(q.text.length + 2) : '';
+  const bm = q.text.match(/งบ ฿([\d,]+)/);
+  aihAsk(q.text, extra, bm ? { budget: Number(bm[1].replace(/,/g, '')) } : null);
+}
+function aihClear() {
+  if (aihBusy) return;
+  if (aihThread.length && !confirm('ล้างบทสนทนาทั้งหมด?')) return;
+  aihThread = []; aihSave(); aihRender();
+}
+
+function aihRender(scroll) {
+  const box = document.getElementById('aihThread'); if (!box) return;
+  const empty = document.getElementById('aihEmpty');
+  if (empty) empty.style.display = aihThread.length || aihBusy ? 'none' : '';
+  const clr = document.getElementById('aihClearBtn'); if (clr) clr.style.display = aihThread.length ? '' : 'none';
+  let html = aihThread.map((m, i) => {
+    const time = new Date(m.t).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    if (m.role === 'user') return '<div class="aih-msg aih-user"><div class="aih-bubble">' + esc(m.text) + '</div></div>';
+    if (m.error) {
+      const isLast = i === aihThread.length - 1;
+      return '<div class="aih-msg aih-ai"><div class="aih-bubble aih-err">⚠️ ' + esc(m.text) + (isLast ? '<div><button class="sg-btn" style="margin-top:6px;" onclick="aihRetry()">ลองใหม่</button></div>' : '') + '</div></div>';
+    }
+    let foot = '';
+    if (m.check && !m.check.ok) foot += '<div class="sg-note">⚠️ ยอดรวมในตาราง ' + aihFmt(m.check.sum) + ' ไม่ตรงกับงบ — ตรวจตัวเลขก่อนซื้อ หรือพิมพ์ "ช่วยปรับยอดให้ตรงงบ"</div>';
+    if (m.sources && m.sources.length) foot += '<div class="aih-src">แหล่งข่าว: ' + m.sources.map(s => '<a href="' + esc(s.uri) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>').join(' · ') + '</div>';
+    foot += '<div class="aih-time">' + esc(time) + ' · ความเห็นประกอบ ไม่ใช่คำแนะนำการลงทุน</div>';
+    return '<div class="aih-msg aih-ai"><div class="aih-bubble">' + mdLiteToHtml(m.text) + foot + '</div></div>';
+  }).join('');
+  if (aihBusy) html += '<div class="aih-msg aih-ai"><div class="aih-bubble aih-typing"><span></span><span></span><span></span> กำลังคิด… (ถ้าต้องค้นข่าวอาจใช้ 20–40 วินาที)</div></div>';
+  box.innerHTML = html;
+  document.querySelectorAll('.aih-chip, #aihSend').forEach(b => { b.disabled = aihBusy; });
+  if (scroll) {
+    const msgs = box.querySelectorAll('.aih-msg');
+    const target = aihBusy ? msgs[msgs.length - 1] : msgs[msgs.length - 1];
+    // เลื่อนไปที่ต้นคำตอบล่าสุด ไม่ใช่ท้ายสุด จะได้อ่านจาก "สรุป" ก่อน
+    if (target) setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30);
+  }
+}
+
+(function aihInit() {
+  aihLoad();
+  const b = document.getElementById('aihBudget');
+  const fill = () => { if (b && !b.value) { const m = Math.round(dcaMonthly() / 100) * 100; if (m > 0) b.value = m; } };
+  fill(); setTimeout(fill, 4000);
+  aihRender(false);
 })();
 </script>
 </body>
