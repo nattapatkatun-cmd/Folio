@@ -3696,41 +3696,111 @@ function mdLiteToHtml(text) {
 
 // --- Gemini helper: auto-rotate keys on quota exhaustion ---
 // Gemini helper: v1beta + x-goog-api-key header (works for all key formats)
+// กันปัญหา "AI สรุปไม่ครบ / error กลางคัน" ไว้ที่จุดเดียว ทุกฟีเจอร์ได้ผลเหมือนกัน:
+//  1) Gemini 2.5 Flash นับ token ที่ใช้ "คิด" รวมใน maxOutputTokens → คำตอบโดนตัด/ว่าง
+//     ถ้าผู้เรียกไม่ได้กำหนด thinkingConfig: จำกัดงบคิด แล้วบวกเพิ่มให้ maxOutputTokens เท่ากัน
+//  2) คำตอบที่ใช้ google_search มักมาหลายท่อน (parts) → รวมทุกท่อนเป็นท่อนเดียว
+//     (โค้ดเดิมหลายจุดอ่านแค่ parts[0] จึงได้ข้อความครึ่งเดียว)
+//  3) ตั้งเวลารอ 90 วิ — ไม่ให้ปุ่มหมุนค้าง
+//  4) เน็ตหลุด / 500 / 502 / 504 → ลองใหม่อัตโนมัติ
+//  5) ถูกตัดเพราะ MAX_TOKENS หรือได้คำตอบว่าง → ลองใหม่ 1 ครั้งด้วยเพดานที่สูงขึ้น
+const GEMINI_THINK_BUDGET = 1024;
+const GEMINI_TIMEOUT_MS = 90000;
+
+function geminiPrepBody(body) {
+  const b = JSON.parse(JSON.stringify(body || {}));
+  const gc = b.generationConfig = b.generationConfig || {};
+  if (!gc.thinkingConfig) {
+    gc.thinkingConfig = { thinkingBudget: GEMINI_THINK_BUDGET };
+    if (gc.maxOutputTokens) gc.maxOutputTokens += GEMINI_THINK_BUDGET;
+  }
+  return b;
+}
+// รวมข้อความทุกท่อนของคำตอบ (ข้ามท่อน "ความคิด" ถ้ามี)
+function geminiText(d) {
+  const parts = (d && d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+  return parts.filter(p => p && typeof p.text === 'string' && !p.thought).map(p => p.text).join('');
+}
+function geminiNormalize(d) {
+  const c = d && d.candidates && d.candidates[0];
+  if (c && c.content && Array.isArray(c.content.parts) && c.content.parts.length > 1) {
+    const text = geminiText(d);
+    c.content.parts = [{ text }];
+  }
+  return d;
+}
+
 async function callGemini(body) {
   const keys = getKeys('GEMINI');
   if (!keys.length) throw new Error('no_key');
-  for (let attempt = 0; attempt < keys.length * 2; attempt++) {
+  let req = geminiPrepBody(body);
+  let netRetries = 0, truncRetried = false;
+  for (let attempt = 0; attempt < keys.length * 2 + 3; attempt++) {
     const key = getActiveKey('GEMINI');
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
     const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': key };
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), GEMINI_TIMEOUT_MS);
+    let res, d;
     try {
-      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-      const d = await res.json();
-      const isRateLimit = d.error?.status === 'RESOURCE_EXHAUSTED' || res.status === 429;
-      const isOverload = res.status === 503 || d.error?.status === 'UNAVAILABLE' ||
-        (d.error?.message && (d.error.message.includes('high demand') || d.error.message.includes('overloaded')));
-      if (isRateLimit || isOverload) {
-        rotateKey('GEMINI');
-        if (attempt < keys.length * 2 - 1) {
-          const waitSec = isOverload ? 15 : 30;
-          for (let s = waitSec; s > 0; s -= 5) {
-            showToast((isOverload ? '⏳ Gemini busy -- รอ ' : '⏳ Rate limit -- รอ ') + s + 'วิ...');
-            await new Promise(r => setTimeout(r, 5000));
-          }
-          continue;
-        }
-        throw new Error('all_quota');
+      res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(req), signal: ctl.signal });
+      const raw = await res.text();
+      try { d = JSON.parse(raw); } catch (pe) { d = { error: { status: 'BAD_RESPONSE', message: 'HTTP ' + res.status } }; }
+    } catch (e) {
+      clearTimeout(timer);
+      // เน็ตหลุด / หมดเวลา → ลองใหม่สูงสุด 2 ครั้ง
+      if (netRetries < 2) {
+        netRetries++;
+        showToast('⏳ เชื่อมต่อ Gemini ไม่ได้ -- ลองใหม่ (' + netRetries + '/2)...');
+        await new Promise(r => setTimeout(r, 3000 * netRetries));
+        continue;
       }
-      if (d.error) {
-        const msg = d.error.message || d.error.status || JSON.stringify(d.error);
-        showToast('Gemini Error: ' + msg);
-        throw new Error(msg);
-      }
-      return d;
-    } catch(e) {
-      if (e.message === 'all_quota' || e.message === 'no_key') throw e;
-      throw e;
+      throw new Error(e.name === 'AbortError' ? 'Gemini ตอบช้าเกิน 90 วินาที ลองใหม่อีกครั้ง' : 'เชื่อมต่อ Gemini ไม่ได้ ตรวจสอบอินเทอร์เน็ต');
     }
+    clearTimeout(timer);
+
+    const isRateLimit = d.error?.status === 'RESOURCE_EXHAUSTED' || res.status === 429;
+    const isOverload = res.status === 503 || d.error?.status === 'UNAVAILABLE' ||
+      (d.error?.message && (d.error.message.includes('high demand') || d.error.message.includes('overloaded')));
+    if (isRateLimit || isOverload) {
+      rotateKey('GEMINI');
+      if (attempt < keys.length * 2 - 1) {
+        const waitSec = isOverload ? 15 : 30;
+        for (let s = waitSec; s > 0; s -= 5) {
+          showToast((isOverload ? '⏳ Gemini busy -- รอ ' : '⏳ Rate limit -- รอ ') + s + 'วิ...');
+          await new Promise(r => setTimeout(r, 5000));
+        }
+        continue;
+      }
+      throw new Error('all_quota');
+    }
+    // error ฝั่งเซิร์ฟเวอร์ชั่วคราว → ลองใหม่
+    if ((res.status === 500 || res.status === 502 || res.status === 504 || d.error?.status === 'INTERNAL' || d.error?.status === 'DEADLINE_EXCEEDED') && netRetries < 2) {
+      netRetries++;
+      showToast('⏳ Gemini ขัดข้องชั่วคราว -- ลองใหม่ (' + netRetries + '/2)...');
+      await new Promise(r => setTimeout(r, 4000 * netRetries));
+      continue;
+    }
+    if (d.error) {
+      const msg = d.error.message || d.error.status || JSON.stringify(d.error);
+      showToast('Gemini Error: ' + msg);
+      throw new Error(msg);
+    }
+    const cand = d.candidates && d.candidates[0];
+    const finish = cand ? cand.finishReason : '';
+    const text = geminiText(d);
+    // คำตอบโดนตัด/ว่าง → ลองใหม่ครั้งเดียวด้วยเพดานสูงขึ้น (ไม่ลองซ้ำกรณีถูกบล็อกด้วย SAFETY)
+    if (!truncRetried && (finish === 'MAX_TOKENS' || (!text.trim() && finish !== 'SAFETY' && finish !== 'RECITATION' && finish !== 'PROHIBITED_CONTENT'))) {
+      truncRetried = true;
+      const gc = req.generationConfig;
+      gc.maxOutputTokens = Math.min(Math.round((gc.maxOutputTokens || 4000) * 1.8), 16384);
+      showToast('⏳ AI ตอบไม่ครบ -- ขอคำตอบใหม่อีกครั้ง...');
+      continue;
+    }
+    if (!text.trim()) {
+      throw new Error(finish === 'SAFETY' || finish === 'PROHIBITED_CONTENT' ? 'Gemini ไม่ตอบคำถามนี้ (ถูกกรองเนื้อหา)' : 'Gemini ไม่ได้ส่งคำตอบกลับมา กดลองใหม่อีกครั้ง');
+    }
+    return geminiNormalize(d);
   }
   throw new Error('all_quota');
 }
@@ -6450,7 +6520,7 @@ async function bmFetchAiHot() {
   ].join('\n');
 
   try {
-    const _aiRaw = await callGemini({ contents: [{ parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { maxOutputTokens: 600, temperature: 0.4 } });
+    const _aiRaw = await callGemini({ contents: [{ parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { maxOutputTokens: 1500, temperature: 0.4 } });
     const _aiPart = (_aiRaw.candidates&&_aiRaw.candidates[0]&&_aiRaw.candidates[0].content&&_aiRaw.candidates[0].content.parts||[]).find(p=>p.text);
     const txt = _aiPart ? _aiPart.text : '';
     resultEl.innerHTML = txt.split('\n').filter(Boolean).map(l =>
