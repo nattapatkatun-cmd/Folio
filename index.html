@@ -529,6 +529,11 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-merchant { font-size: 12.5px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bill-sub { font-size: 10.5px; color: var(--text3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bill-amt { font-size: 13px; font-weight: 600; white-space: nowrap; text-align: right; }
+.bill-progress { height: 4px; background: var(--bg2); border-radius: 99px; overflow: hidden; margin-top: 4px; }
+.bill-progress > div { height: 100%; background: var(--accent); border-radius: 99px; }
+.bill-recur-sum { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11.5px; color: var(--text2); background: var(--bg); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+.bill-recur-head { font-size: 11px; font-weight: 600; color: var(--text2); margin: 10px 0 2px; }
+#billRecur details summary { font-size: 11px; color: var(--text3); cursor: pointer; margin-top: 8px; }
 .bill-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 12px; padding: 4px; }
 .bill-draft { border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: var(--bg); }
 .bill-draft.off { opacity: 0.5; }
@@ -674,6 +679,11 @@ function attachFirebaseListeners() {
   FB.listen('transactions', docs => {
     state.transactions = docs;
     if (typeof window.billOnData === 'function') window.billOnData();
+  });
+  FB.listen('subscriptions', docs => {
+    state.subscriptions = docs;
+    if (typeof window.billOnData === 'function') window.billOnData();
+    if (typeof window.billSubSync === 'function') window.billSubSync();
   });
 }
 
@@ -1192,6 +1202,12 @@ if (window._folioReady) {
       </div>
     </div>
 
+    <!-- Subscription & ผ่อน ที่จ่ายอยู่ -->
+    <div class="card" style="margin-bottom:var(--gap);" id="billRecurCard">
+      <div class="card-title">🔁 Subscription & ผ่อนชำระ <button class="bill-chip" onclick="billOpenManualSub()">+ เพิ่ม Subscription</button></div>
+      <div id="billRecur"></div>
+    </div>
+
     <!-- แยกตามช่องทางจ่าย -->
     <div class="card" style="margin-bottom:var(--gap);display:none;" id="billPayCard">
       <div class="card-title">🧾 แยกตามช่องทางจ่าย <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billPayPeriod">รายจ่ายเดือนนี้</span></div>
@@ -1416,6 +1432,18 @@ service cloud.firestore {
     <div class="modal-actions">
       <button class="btn-ghost" onclick="billCloseConfirm()">ยกเลิก</button>
       <button class="btn-primary" id="billSaveBtn" onclick="billSaveDrafts()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Bill: แก้ไข Subscription ─── -->
+<div class="modal-overlay" id="bill-sub-modal">
+  <div class="modal" style="width:440px;">
+    <h3 id="billSubTitle">Subscription</h3>
+    <div id="billSubForm"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('bill-sub-modal')">ปิด</button>
+      <button class="btn-primary" id="billSubSaveBtn" onclick="billSubSave()">บันทึก</button>
     </div>
   </div>
 </div>
@@ -1804,6 +1832,7 @@ const state = {
   budgetExpenses: [],
   budgetSavings: [],
   transactions: [],     // Bill Manager — users/nattapat/transactions
+  subscriptions: [],    // Bill Manager — users/nattapat/subscriptions (รายจ่ายที่หักอัตโนมัติทุกรอบ)
   sheetInputs: {},
 };
 
@@ -6646,7 +6675,7 @@ const BILL_PAY = { unknown: 'ไม่ระบุ', cash: '💵 เงินส
 function billCards() {
   return (localStorage.getItem('folio_bill_cards') || '').split(',').map(x => x.trim()).filter(Boolean);
 }
-const BILL_SOURCES = { camera: '📷 ถ่ายรูป', upload: '🖼️ อัปโหลด', share: '📲 แชร์', text: '⌨️ พิมพ์', voice: '🎙️ พูด', manual: '✍️ กรอกเอง' };
+const BILL_SOURCES = { camera: '📷 ถ่ายรูป', upload: '🖼️ อัปโหลด', share: '📲 แชร์', text: '⌨️ พิมพ์', voice: '🎙️ พูด', manual: '✍️ กรอกเอง', subscription: '🔁 หักอัตโนมัติ' };
 
 const billState = {
   month: todayISO().slice(0, 7),
@@ -6899,6 +6928,7 @@ function billRender() {
     <div class="metric bill-invest-tile" title="แตะเพื่อดูรายการลงทุน/ออม" onclick="billDrill('cat','invest')"><div class="metric-label">📈 ลงทุน/ออม <span style="color:var(--accent);">›</span></div><div class="metric-value" style="color:var(--green);">${billFmt0(t.invest)}</div><div class="metric-sub">${t.income > 0 ? 'อัตราการลงทุน ' + (t.invest / t.income * 100).toFixed(0) + '% ของรายรับ' : (isYear && t.invest ? avgSub(t.invest) : 'โอนเข้าพอร์ต/บัญชีออมจริง')}</div></div>`;
   // การ์ดเงินเหลือ↔DCA เป็นมุมมอง "ตอนนี้" เสมอ — มุมมองปีใช้ยอดเดือนปัจจุบันแทนยอดทั้งปี
   billRenderCashflow(isYear ? billMonthTotals(todayISO().slice(0, 7)) : t);
+  billRenderRecur();
   billRenderCategories(t);
   billRenderPay(t);
   billRenderCards(t);
@@ -7191,7 +7221,7 @@ function billRenderList() {
     const foreign = t.currency && t.currency !== 'THB';
     const pay = t.payMethod === 'card' || t.category === 'cc_payment' ? '💳 ' + esc(t.card || 'บัตร') : (t.payMethod && t.payMethod !== 'unknown' ? esc(BILL_PAY[t.payMethod] || '') : '');
     const offLabel = t.category === 'refund' ? 'หักจาก ' + billCat(billOffsetCat(t), 'expense').label : '';
-    const sub = [esc(offLabel || c.label), t.installmentOf > 1 ? '🗓️ ผ่อน ' + t.installmentNo + '/' + t.installmentOf : '', t.time ? esc(t.time) : '', pay, esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
+    const sub = [esc(offLabel || c.label), t.installmentOf > 1 ? '🗓️ ผ่อน ' + t.installmentNo + '/' + t.installmentOf : '', t.subscriptionId ? '🔁 Subscription' : '', t.time ? esc(t.time) : '', pay, t.subscriptionId ? '' : esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
     html += `<div class="bill-row" onclick="billEdit('${esc(t.id)}')">
       <div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>
       <div class="bill-main"><div class="bill-merchant">${esc(t.merchant || c.label)}${t.note ? ' <span style="color:var(--text3);font-weight:400;">· ' + esc(t.note) + '</span>' : ''}</div><div class="bill-sub">${sub}</div></div>
@@ -7235,7 +7265,8 @@ function billOpenMonth(ym) {
 async function billDelete(id) {
   const t = (state.transactions || []).find(x => x.id === id);
   if (!t) return;
-  if (!confirm('ลบรายการ ' + (t.merchant || billCat(t.category, t.type).label) + ' ' + billFmt(billAmtThb(t)) + ' ?')) return;
+  if (!confirm('ลบรายการ ' + (t.merchant || billCat(t.category, t.type).label) + ' ' + billFmt(billAmtThb(t)) + ' ?' +
+    (t.subscriptionId ? '\n\n(รอบนี้ของ Subscription จะไม่ถูกสร้างซ้ำ — ถ้าเลิกใช้แล้ว ให้กดยกเลิกที่การ์ด 🔁 Subscription ด้วย)' : ''))) return;
   const series = t.installmentId ? (state.transactions || []).filter(x => x.installmentId === t.installmentId) : [];
   if (series.length > 1 && confirm('รายการนี้เป็นงวด ' + t.installmentNo + '/' + t.installmentOf + ' ของรายการผ่อน\n\nลบทั้งชุด ' + series.length + ' งวดด้วยไหม?\nตกลง = ลบทั้งชุด · ยกเลิก = ลบเฉพาะงวดนี้')) {
     try {
@@ -7272,9 +7303,12 @@ function billNewDraft(p) {
     card: billMatchCard(p.card),
     // รายการเงินคืนเก่า (มี id แต่ไม่มี offsetCat) คงหมวด "อื่น ๆ" ไว้เหมือนที่เคยคำนวณ; รายการใหม่เริ่มที่อาหาร
     offsetCat: billOffsetCats().some(c => c.key === p.offsetCat) ? p.offsetCat : (p.id && p.category === 'refund' ? 'other' : 'food'),
-    // ผ่อนชำระ: inst = เปิดผ่อน (เฉพาะรายการใหม่), amount = ยอดต่อเดือน, instMonths = จำนวนงวดทั้งหมด, instPaid = จ่ายไปแล้วกี่งวด
-    inst: false, instMonths: 10, instPaid: 0,
-    installmentId: p.installmentId || '', installmentNo: Number(p.installmentNo) || 0, installmentOf: Number(p.installmentOf) || 0
+    // รูปแบบ (เฉพาะรายจ่ายใหม่): plan = 'once' | 'inst' (ผ่อน) | 'sub' (Subscription)
+    // ผ่อน: amount = ยอดต่อเดือน, instMonths = จำนวนงวดทั้งหมด, instPaid = จ่ายไปแล้วกี่งวด
+    // Subscription: amount = ค่าสมาชิกต่อรอบ, subCycle = 'monthly' | 'yearly', date = วันตัดรอบแรก
+    plan: 'once', instMonths: 10, instPaid: 0, subCycle: 'monthly',
+    installmentId: p.installmentId || '', installmentNo: Number(p.installmentNo) || 0, installmentOf: Number(p.installmentOf) || 0,
+    subscriptionId: p.subscriptionId || '', subscriptionNo: Number(p.subscriptionNo) || 0
   };
 }
 // วันที่ของงวดที่ k (0 = งวดแรก): เดือนถัดไปทีละเดือน วันเดียวกัน — ถ้าเดือนนั้นไม่มีวันนั้น (เช่น 31) ใช้วันสุดท้ายของเดือน
@@ -7307,6 +7341,290 @@ function billInstPreview(d) {
     : `${billFmt(per)} × ${n} เดือน = <strong>${billFmt(per * n)}</strong><br>`) +
     `<span style="color:var(--text3);">งวด ${paid + 1}/${n} ${fmt(d.date)} → งวด ${n}/${n} ${fmt(billInstDate(d.date, left - 1))} · บันทึก ${left} รายการ เดือนละรายการ${paid ? ' (งวดที่จ่ายแล้วไม่บันทึกซ้ำ)' : ''}</span>`;
 }
+// ═══ Subscription (หักอัตโนมัติทุกรอบ ไม่มีวันจบ) ═══
+// เก็บที่ users/<uid>/subscriptions: { name, amount, currency, fxToThb, fxFeePct, amountThb, category, payMethod, card, note, time,
+//   cycle: 'monthly'|'yearly', startDate (วันตัดรอบแรก), active, cancelledAt, lastNo (รอบล่าสุดที่ลงรายการแล้ว) }
+// เปิดแอปเมื่อไหร่ → billSubSync() ลงรายจ่ายของทุกรอบที่ถึงวันแล้วแต่ยังไม่ได้ลง (id = <subId>_<รอบ> กันซ้ำข้ามเครื่อง)
+// ลบรายการของรอบไหนทิ้ง → ไม่สร้างซ้ำ เพราะ lastNo เดินไปแล้ว
+function billSubStep(cycle) { return cycle === 'yearly' ? 12 : 1; }
+// วันตัดรอบของรอบที่ idx+1 (idx 0 = รอบแรก) — วันที่ไม่มีในเดือนนั้น (เช่น 31, 29 ก.พ.) ใช้วันสุดท้ายของเดือน
+function billSubDate(s, idx) { return billInstDate(s.startDate, billSubStep(s.cycle) * idx); }
+// จำนวนรอบที่ถึงวันแล้ว (วันตัดรอบ ≤ วันนี้)
+function billSubDueCount(s, today) {
+  let n = 0;
+  while (n < 600 && billSubDate(s, n) <= today) n++;
+  return n;
+}
+function billSubMonthly(s) { return (Number(s.amountThb) || 0) / billSubStep(s.cycle); }
+function billFmtDate(iso) { return iso ? new Date(iso + 'T00:00:00').toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : ''; }
+function billSubPreview(d) {
+  const per = billDraftThb(d);
+  if (!(per > 0)) return '<span style="color:var(--amber);">ใส่ค่าสมาชิกต่อรอบ</span>';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date || '')) return '<span style="color:var(--amber);">เลือกวันตัดรอบแรก</span>';
+  const s = { startDate: d.date, cycle: d.subCycle };
+  const yearly = d.subCycle === 'yearly';
+  const due = billSubDueCount(s, todayISO());
+  const day = +d.date.slice(8, 10);
+  const when = yearly ? 'ทุกปี วันที่ ' + new Date(d.date + 'T00:00:00').toLocaleDateString('th-TH', { day: 'numeric', month: 'long' }) : 'ทุกวันที่ ' + day + (day > 28 ? ' (เดือนที่ไม่มีวันนี้ใช้วันสิ้นเดือน)' : '');
+  return `${billFmt(per)} / ${yearly ? 'ปี' : 'เดือน'}${yearly ? ` <span style="color:var(--text3);">(≈ ${billFmt(per / 12)}/เดือน)</span>` : ''} · ตัดรอบ${when}<br>` +
+    (due ? `ตอนบันทึกจะลงรายการรอบที่ถึงแล้ว <strong>${due} รอบ</strong> (${billFmtDate(d.date)}${due > 1 ? ' → ' + billFmtDate(billSubDate(s, due - 1)) : ''})` +
+        (due > 1 ? `<br><span style="color:var(--amber);">ถ้าไม่ต้องการลงย้อนหลัง ให้ตั้งวันตัดรอบแรกเป็นรอบล่าสุดหรือรอบถัดไป</span>` : '') + '<br>'
+      : `รอบแรก ${billFmtDate(d.date)}<br>`) +
+    `<span style="color:var(--text3);">รอบต่อไปลงรายจ่ายให้อัตโนมัติเมื่อถึงวัน (ถ้าไม่ได้เปิดแอป จะเติมรอบที่ค้างให้ตอนเปิด) · ยกเลิก/แก้ราคาได้ที่การ์ด 🔁 Subscription</span>`;
+}
+function billSubNewId() { return 'sub_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+// สร้าง Subscription จากฟอร์ม — รอบแรก (ถ้าถึงวันแล้ว) ใช้ข้อมูลในฟอร์มตรง ๆ (ยอดบาทจริง/เลขอ้างอิงที่กรอกไว้) รอบที่เหลือให้ billSubSync ลง
+async function billSubCreate(d, data) {
+  const id = billSubNewId();
+  const first = d.date <= todayISO();
+  const sub = {
+    name: data.merchant || billCat(data.category, 'expense').label, amount: data.amount, currency: data.currency,
+    fxToThb: data.fxToThb, fxFeePct: data.fxFeePct, amountThb: data.amountThb,
+    category: data.category, payMethod: data.payMethod, card: data.card, note: data.note, time: data.time,
+    cycle: d.subCycle === 'yearly' ? 'yearly' : 'monthly', startDate: d.date,
+    active: true, cancelledAt: '', lastNo: first ? 1 : 0
+  };
+  const row = { ...data, merchant: sub.name, subscriptionId: id, subscriptionNo: 1 };
+  if (!window.FB) {
+    state.subscriptions.push({ id, ...sub });
+    if (first) state.transactions.push({ id: id + '_1', ...row });
+    return;
+  }
+  await window.FB.put('subscriptions', id, sub);
+  if (first) await window.FB.put('transactions', id + '_1', row);
+}
+// รายการของรอบที่ no — สกุลต่างประเทศใช้อัตราของวันตัดรอบ (เป็นยอดประมาณ แก้เป็นยอดจริงทีหลังได้)
+async function billSubCharge(s, no, date) {
+  const cur = s.currency || 'THB';
+  const fee = cur === 'THB' ? 0 : (Number(s.fxFeePct) || 0);
+  let fx = 1;
+  if (cur !== 'THB') fx = (await billFxRate(cur, date)).rate || Number(s.fxToThb) || 0;
+  const amount = Number(s.amount) || 0;
+  return {
+    date, time: s.time || '', type: 'expense', category: s.category || 'other',
+    amount, currency: cur, fxToThb: fx, fxFeePct: fee, thbActual: false,
+    amountThb: Math.round(amount * fx * (1 + fee / 100) * 100) / 100,
+    merchant: s.name || '', note: s.note || '', ref: '', refKey: '', source: 'subscription', aiRead: false,
+    payMethod: s.payMethod || 'unknown', card: s.card || '', offsetCat: '',
+    subscriptionId: s.id, subscriptionNo: no
+  };
+}
+let _billSubBusy = false, _billSubAgain = false;
+async function billSubSync() {
+  if (_billSubBusy) { _billSubAgain = true; return; }
+  _billSubBusy = true;
+  let added = 0;
+  try {
+    const today = todayISO();
+    for (const s of (state.subscriptions || []).slice()) {
+      if (!s.active || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate || '')) continue;
+      const from = Number(s.lastNo) || 0;
+      let no = from, last = null;
+      while (no < 600 && billSubDate(s, no) <= today) {
+        const date = billSubDate(s, no);
+        no++;
+        const id = s.id + '_' + no;
+        if ((state.transactions || []).some(t => t.id === id)) continue;
+        const row = await billSubCharge(s, no, date);
+        if (window.FB) {
+          if (await window.FB.exists('transactions', id)) continue; // อีกเครื่องลงไปแล้ว — ไม่เขียนทับ (อาจแก้ยอดไว้)
+          await window.FB.put('transactions', id, row);
+        } else state.transactions.push({ id, ...row });
+        last = row;
+        added++;
+      }
+      if (no !== from) {
+        const upd = { lastNo: no };
+        if (last) upd.amountThb = last.amountThb; // ยอดบาทล่าสุด (สกุลต่างประเทศเปลี่ยนตามอัตรา) ใช้คำนวณภาระต่อเดือน
+        if (window.FB) await window.FB.update('subscriptions', s.id, upd);
+        else Object.assign(s, upd);
+      }
+    }
+  } catch (e) {
+    console.warn('subscription sync', e);
+  } finally {
+    _billSubBusy = false;
+    if (added) {
+      showToast('🔁 ลงรายจ่าย Subscription ตามรอบแล้ว ' + added + ' รายการ');
+      if (!window.FB) billRender();
+    }
+    if (_billSubAgain) { _billSubAgain = false; billSubSync(); }
+  }
+}
+window.billSubSync = billSubSync;
+
+// ─── การ์ดสรุป: Subscription ที่สมัครอยู่ + รายการผ่อนที่ยังไม่ครบ ───
+function billInstGroups() {
+  const today = todayISO();
+  const map = {};
+  (state.transactions || []).forEach(t => { if (t.installmentId) (map[t.installmentId] = map[t.installmentId] || []).push(t); });
+  return Object.values(map).map(rows => {
+    rows.sort((a, b) => (a.installmentNo || 0) - (b.installmentNo || 0));
+    const paid = rows.filter(t => t.date <= today), left = rows.filter(t => t.date > today);
+    const of = Math.max(...rows.map(t => Number(t.installmentOf) || 0));
+    // งวดที่จ่ายถึงแล้ว = งวดล่าสุดที่ถึงวัน (ถ้ายังไม่ถึงงวดไหนเลย = งวดก่อนงวดแรกที่บันทึกไว้ เช่น แผนที่จ่ายมาบ้างแล้ว)
+    const paidNo = paid.length ? Number(paid[paid.length - 1].installmentNo) || 0 : (Number(rows[0].installmentNo) || 1) - 1;
+    const next = left[0] || null, ref = next || rows[rows.length - 1];
+    return {
+      name: ref.merchant || billCat(ref.category, 'expense').label, cat: ref.category, of, paidNo,
+      leftCount: left.length, leftAmt: left.reduce((s, t) => s + billAmtThb(t), 0),
+      per: billAmtThb(ref), next, end: rows[rows.length - 1].date, pay: ref
+    };
+  });
+}
+function billPayLabel(t) {
+  return t.payMethod === 'card' ? '💳 ' + esc(t.card || 'บัตร') : (t.payMethod && t.payMethod !== 'unknown' ? esc(BILL_PAY[t.payMethod] || '') : '');
+}
+function billRenderRecur() {
+  const el = document.getElementById('billRecur');
+  if (!el) return;
+  const today = todayISO();
+  const subs = (state.subscriptions || []).slice();
+  const active = subs.filter(s => s.active).map(s => ({ s, next: billSubDate(s, Number(s.lastNo) || 0) })).sort((a, b) => a.next.localeCompare(b.next));
+  const stopped = subs.filter(s => !s.active).sort((a, b) => String(b.cancelledAt || '').localeCompare(String(a.cancelledAt || '')));
+  const groups = billInstGroups();
+  const ongoing = groups.filter(g => g.leftCount).sort((a, b) => a.next.date.localeCompare(b.next.date));
+  const done = groups.filter(g => !g.leftCount).sort((a, b) => b.end.localeCompare(a.end));
+  if (!subs.length && !groups.length) {
+    el.innerHTML = '<div class="empty">ยังไม่มี Subscription หรือรายการผ่อน — กด + เพิ่ม Subscription หรือเลือก "รูปแบบการจ่าย" ตอนกรอกรายจ่าย</div>';
+    return;
+  }
+  const subM = active.reduce((s, x) => s + billSubMonthly(x.s), 0);
+  const instM = ongoing.reduce((s, g) => s + g.per, 0);
+  const instLeft = ongoing.reduce((s, g) => s + g.leftAmt, 0);
+  let html = `<div class="bill-recur-sum">
+    <span>ภาระต่อเดือน <strong style="color:var(--text);">${billFmt0(subM + instM)}</strong></span>
+    <span>🔁 Subscription ${active.length} รายการ ${billFmt0(subM)}/เดือน${active.length ? ' · ' + billFmt0(subM * 12) + '/ปี' : ''}</span>
+    <span>🗓️ ผ่อน ${ongoing.length} รายการ ${billFmt0(instM)}/เดือน${instLeft ? ' · คงเหลือ ' + billFmt0(instLeft) : ''}</span></div>`;
+  const icon = key => { const c = billCat(key, 'expense'); return `<div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>`; };
+  if (active.length) {
+    html += '<div class="bill-recur-head">🔁 Subscription ที่สมัครอยู่</div>';
+    active.forEach(({ s, next }) => {
+      const yearly = s.cycle === 'yearly';
+      const foreign = s.currency && s.currency !== 'THB';
+      const sub = [(yearly ? 'รายปี' : 'รายเดือน') + (foreign ? ' · ' + esc(s.currency) + ' ' + Number(s.amount).toLocaleString() : ''),
+        (next <= today ? '<span style="color:var(--amber);">ถึงรอบ ' + billFmtDate(next) + '</span>' : 'รอบถัดไป ' + billFmtDate(next)), billPayLabel(s)].filter(Boolean).join(' · ');
+      html += `<div class="bill-row" onclick="billSubOpen('${esc(s.id)}')">${icon(s.category)}
+        <div class="bill-main"><div class="bill-merchant">${esc(s.name)}</div><div class="bill-sub">${sub}</div></div>
+        <div><div class="bill-amt">${foreign ? '≈' : ''}${billFmt(s.amountThb)}<span style="font-size:10px;color:var(--text3);font-weight:400;">/${yearly ? 'ปี' : 'เดือน'}</span></div>
+        ${yearly ? `<div style="font-size:10px;color:var(--text3);text-align:right;">≈ ${billFmt0(billSubMonthly(s))}/เดือน</div>` : ''}</div></div>`;
+    });
+  }
+  if (ongoing.length) {
+    html += '<div class="bill-recur-head">🗓️ กำลังผ่อน</div>';
+    ongoing.forEach(g => {
+      const pct = g.of ? Math.min(100, g.paidNo / g.of * 100) : 0;
+      const sub = [`จ่ายแล้ว ${g.paidNo}/${g.of} งวด`, `เหลือ ${g.leftCount} งวด`, 'งวดถัดไป ' + billFmtDate(g.next.date), 'ครบ ' + billFmtDate(g.end), billPayLabel(g.pay)].filter(Boolean).join(' · ');
+      html += `<div class="bill-row" onclick="billEdit('${esc(g.next.id)}')" title="แตะเพื่อแก้งวดถัดไป">${icon(g.cat)}
+        <div class="bill-main"><div class="bill-merchant">${esc(g.name)}</div><div class="bill-sub">${sub}</div><div class="bill-progress"><div style="width:${pct.toFixed(1)}%;"></div></div></div>
+        <div><div class="bill-amt">${billFmt(g.per)}<span style="font-size:10px;color:var(--text3);font-weight:400;">/เดือน</span></div>
+        <div style="font-size:10px;color:var(--text3);text-align:right;">คงเหลือ ${billFmt0(g.leftAmt)}</div></div></div>`;
+    });
+  }
+  if (stopped.length) {
+    html += `<details><summary>Subscription ที่ยกเลิกแล้ว (${stopped.length})</summary>` + stopped.map(s =>
+      `<div class="bill-row" onclick="billSubOpen('${esc(s.id)}')" style="opacity:.65;">${icon(s.category)}
+        <div class="bill-main"><div class="bill-merchant">${esc(s.name)}</div><div class="bill-sub">ยกเลิกเมื่อ ${billFmtDate(s.cancelledAt) || '—'} · ลงไปแล้ว ${Number(s.lastNo) || 0} รอบ</div></div>
+        <div class="bill-amt" style="color:var(--text3);">${billFmt(s.amountThb)}/${s.cycle === 'yearly' ? 'ปี' : 'เดือน'}</div></div>`).join('') + '</details>';
+  }
+  if (done.length) {
+    html += `<details><summary>ผ่อนครบแล้ว (${done.length})</summary>` + done.map(g =>
+      `<div class="bill-row" style="opacity:.65;cursor:default;">${icon(g.cat)}
+        <div class="bill-main"><div class="bill-merchant">${esc(g.name)}</div><div class="bill-sub">ครบ ${g.of} งวด · งวดสุดท้าย ${billFmtDate(g.end)}</div></div>
+        <div class="bill-amt" style="color:var(--text3);">${billFmt(g.per)}/เดือน</div></div>`).join('') + '</details>';
+  }
+  el.innerHTML = html;
+}
+
+// ─── แก้ไข / ยกเลิก / ลบ Subscription ───
+let _billSubEditing = null;
+function billSubOpen(id) {
+  const s = (state.subscriptions || []).find(x => x.id === id);
+  if (!s) return;
+  _billSubEditing = id;
+  const opt = (v, l, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`;
+  const cards = billCards().slice();
+  if (s.card && !cards.includes(s.card)) cards.push(s.card);
+  const next = billSubDate(s, Number(s.lastNo) || 0);
+  const yearly = s.cycle === 'yearly';
+  document.getElementById('billSubTitle').textContent = (s.active ? '🔁 ' : '⏸ ') + (s.name || 'Subscription');
+  document.getElementById('billSubForm').innerHTML = `
+    <div style="font-size:11.5px;color:var(--text2);background:var(--bg);border-radius:8px;padding:7px 10px;margin-bottom:10px;line-height:1.6;">
+      ${yearly ? 'รายปี' : 'รายเดือน'} · เริ่ม ${billFmtDate(s.startDate)} · ลงรายการไปแล้ว ${Number(s.lastNo) || 0} รอบ<br>
+      ${s.active ? 'รอบถัดไป <strong>' + billFmtDate(next) + '</strong>' : '<span style="color:var(--amber);">ยกเลิกแล้วเมื่อ ' + (billFmtDate(s.cancelledAt) || '—') + '</span>'}
+      <br><span style="color:var(--text3);">แก้ไขที่นี่มีผลกับรอบถัดไปเท่านั้น — รายการที่ลงไปแล้วแก้ในรายการได้เลย</span></div>
+    <div class="bill-draft-grid">
+      <div class="form-group full"><label class="form-label">ชื่อ</label><input class="form-input" id="billSubName" value="${esc(s.name)}"></div>
+      <div class="form-group"><label class="form-label">ค่าสมาชิกต่อ${yearly ? 'ปี' : 'เดือน'} (${esc(s.currency || 'THB')})</label><input class="form-input" id="billSubAmt" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(s.amount)}" style="font-weight:600;"></div>
+      <div class="form-group"><label class="form-label">หมวด</label><select class="form-select" id="billSubCat">${BILL_CATS.expense.map(c => opt(c.key, c.icon + ' ' + c.label, s.category)).join('')}</select></div>
+      <div class="form-group"><label class="form-label">จ่ายด้วย</label><select class="form-select" id="billSubPay">${Object.keys(BILL_PAY).map(k => opt(k, BILL_PAY[k], s.payMethod)).join('')}</select></div>
+      <div class="form-group"><label class="form-label">บัตร (ถ้าจ่ายด้วยบัตร)</label><select class="form-select" id="billSubCard">${opt('', '— ไม่ระบุ —', s.card || '')}${cards.map(c => opt(c, '💳 ' + c, s.card)).join('')}</select></div>
+      <div class="form-group full"><label class="form-label">โน้ต</label><input class="form-input" id="billSubNote" value="${esc(s.note || '')}"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      ${s.active ? `<button class="btn-ghost" style="color:var(--amber);" onclick="billSubCancel()">⏸ ยกเลิก Subscription</button>`
+        : `<button class="btn-ghost" style="color:var(--green);" onclick="billSubResume()">▶️ กลับมาสมัครต่อ</button>`}
+      <button class="btn-ghost" style="color:var(--red);" onclick="billSubDelete()">🗑️ ลบ</button>
+    </div>`;
+  openModal('bill-sub-modal');
+}
+async function billSubWrite(id, data) {
+  if (window.FB) await window.FB.update('subscriptions', id, data);
+  else { Object.assign((state.subscriptions || []).find(x => x.id === id) || {}, data); billRender(); }
+}
+async function billSubSave() {
+  const s = (state.subscriptions || []).find(x => x.id === _billSubEditing);
+  if (!s) return;
+  const amount = Math.round(Number(document.getElementById('billSubAmt').value) * 100) / 100;
+  if (!(amount > 0)) { showToast('ใส่ค่าสมาชิกให้ถูกต้อง'); return; }
+  const payMethod = document.getElementById('billSubPay').value;
+  const card = payMethod === 'card' ? document.getElementById('billSubCard').value : '';
+  const cur = s.currency || 'THB';
+  const fee = cur === 'THB' ? 0 : (payMethod === 'card' ? billCardFee(card) : 0);
+  const data = {
+    name: document.getElementById('billSubName').value.trim() || s.name, amount,
+    category: document.getElementById('billSubCat').value, payMethod, card,
+    note: document.getElementById('billSubNote').value.trim(), fxFeePct: fee,
+    amountThb: Math.round(amount * (cur === 'THB' ? 1 : (Number(s.fxToThb) || 0) * (1 + fee / 100)) * 100) / 100
+  };
+  const btn = document.getElementById('billSubSaveBtn');
+  btn.disabled = true;
+  try { await billSubWrite(s.id, data); closeModal('bill-sub-modal'); showToast('บันทึกแล้ว — มีผลตั้งแต่รอบถัดไป'); }
+  catch (e) { showToast('บันทึกไม่สำเร็จ: ' + e.message); }
+  btn.disabled = false;
+}
+async function billSubCancel() {
+  const s = (state.subscriptions || []).find(x => x.id === _billSubEditing);
+  if (!s || !confirm('ยกเลิก ' + s.name + ' ?\n\nรายการที่ลงไปแล้วยังอยู่ครบ · จะไม่ลงรายจ่ายรอบถัดไปอีก')) return;
+  try { await billSubWrite(s.id, { active: false, cancelledAt: todayISO() }); closeModal('bill-sub-modal'); showToast('ยกเลิก ' + s.name + ' แล้ว'); }
+  catch (e) { showToast('ไม่สำเร็จ: ' + e.message); }
+}
+async function billSubResume() {
+  const s = (state.subscriptions || []).find(x => x.id === _billSubEditing);
+  if (!s) return;
+  // เริ่มนับต่อจากรอบที่วันตัดรอบ ≥ วันนี้ — รอบช่วงที่ยกเลิกไปไม่ลงย้อนหลัง
+  const today = todayISO();
+  let idx = Number(s.lastNo) || 0;
+  while (idx < 600 && billSubDate(s, idx) < today) idx++;
+  if (!confirm('สมัคร ' + s.name + ' ต่อ?\n\nรอบถัดไป ' + billFmtDate(billSubDate(s, idx)) + ' (ช่วงที่ยกเลิกไปจะไม่ลงย้อนหลัง)')) return;
+  try {
+    await billSubWrite(s.id, { active: true, cancelledAt: '', lastNo: idx });
+    closeModal('bill-sub-modal');
+    showToast('กลับมาสมัคร ' + s.name + ' แล้ว');
+    billSubSync();
+  } catch (e) { showToast('ไม่สำเร็จ: ' + e.message); }
+}
+async function billSubDelete() {
+  const s = (state.subscriptions || []).find(x => x.id === _billSubEditing);
+  if (!s || !confirm('ลบ ' + s.name + ' ออกจากรายการ Subscription?\n\nรายจ่ายที่ลงไปแล้ว ' + (Number(s.lastNo) || 0) + ' รอบยังอยู่ในรายการ (ลบแยกได้) · จะไม่ลงรอบถัดไปอีก')) return;
+  try {
+    if (window.FB) await window.FB.del('subscriptions', s.id);
+    else { state.subscriptions = state.subscriptions.filter(x => x.id !== s.id); billRender(); }
+    closeModal('bill-sub-modal');
+    showToast('ลบแล้ว');
+  } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); }
+}
+
 // ค่าธรรมเนียมเริ่มต้นของรายการต่างประเทศ (หลังรู้ช่องทาง/บัตรแล้ว)
 function billInitFee(d) { if (d.fee === null) d.fee = d.currency === 'THB' ? 0 : billAutoFee(d); return d; }
 // จับคู่ชื่อบัตรที่ AI อ่านได้กับรายชื่อบัตรที่ตั้งไว้ (เช่น "KTC VISA ****1234" → "KTC 1234")
@@ -7447,12 +7765,14 @@ function billRenderDrafts() {
     const curs = ['THB', 'USD', 'EUR', 'JPY', 'KRW', 'CNY', 'TWD', 'HKD', 'SGD', 'MYR', 'VND', 'LAK', 'GBP', 'AUD', 'CHF'];
     if (!curs.includes(d.currency)) curs.push(d.currency);
     const showCard = d.payMethod === 'card' || d.category === 'cc_payment';
-    const inst = !editing && d.inst && d.type === 'expense';
+    const inst = !editing && d.plan === 'inst' && d.type === 'expense';
+    const sub = !editing && d.plan === 'sub' && d.type === 'expense';
     const payOpts = Object.keys(BILL_PAY).map(k => `<option value="${k}" ${k === d.payMethod ? 'selected' : ''}>${BILL_PAY[k]}</option>`).join('');
     const curOpts = curs.map(c => `<option ${c === d.currency ? 'selected' : ''}>${c}</option>`).join('');
     let warn = '';
     if (d.dup === 'ref') warn = `<div class="bill-warn" style="background:var(--red-bg);color:var(--red);">⛔ เลขอ้างอิงนี้บันทึกไปแล้ว — น่าจะเป็นสลิปซ้ำ</div>`;
     else if (d.dup) warn = `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">⚠️ วันเดียวกันมียอดเท่ากันแล้ว (${esc(d.dup.slice(6))}) — ตรวจว่าไม่ซ้ำ</div>`;
+    if (editing && d.subscriptionId) warn += `<div class="bill-warn" style="background:var(--accent-bg, var(--bg2));color:var(--text2);">🔁 รอบที่ ${d.subscriptionNo} ของ Subscription — แก้ไขเฉพาะรอบนี้ (เปลี่ยนราคารอบถัดไปที่การ์ด 🔁 Subscription)</div>`;
     if (editing && d.installmentOf > 1) warn += `<div class="bill-warn" style="background:var(--accent-bg, var(--bg2));color:var(--text2);">🗓️ งวด ${d.installmentNo}/${d.installmentOf} ของรายการผ่อน — แก้ไขเฉพาะงวดนี้</div>`;
     if (d.aiRead && !(Number(d.amount) > 0)) warn += `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">AI อ่านยอดไม่ได้ — กรอกยอดเอง</div>`;
     return `<div class="bill-draft ${d.include ? '' : 'off'}">
@@ -7465,11 +7785,13 @@ function billRenderDrafts() {
         </div>
       </div>
       <div class="bill-draft-grid">
-        ${!editing && d.type === 'expense' ? `<div class="form-group full"><label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" ${d.inst ? 'checked' : ''} onchange="billDraftSet(${i},'inst',this.checked,true)" style="width:16px;height:16px;accent-color:var(--accent);">🗓️ ผ่อนชำระรายเดือน</label></div>` : ''}
-        <div class="form-group"><label class="form-label">${inst ? 'ผ่อนเดือนละ' : 'ยอด'}</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.amount)}" oninput="billDraftSet(${i},'amount',this.value)" style="font-weight:600;font-size:15px;"></div>
+        ${!editing && d.type === 'expense' ? `<div class="form-group full"><label class="form-label">รูปแบบการจ่าย</label><select class="form-select" onchange="billDraftSet(${i},'plan',this.value,true)">${[['once', 'จ่ายครั้งเดียว'], ['inst', '🗓️ ผ่อนชำระรายเดือน (มีจำนวนงวด)'], ['sub', '🔁 Subscription (หักอัตโนมัติทุกรอบ)']].map(([k, l]) => `<option value="${k}" ${d.plan === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}
+        <div class="form-group"><label class="form-label">${inst ? 'ผ่อนเดือนละ' : sub ? (d.subCycle === 'yearly' ? 'ค่าสมาชิกต่อปี' : 'ค่าสมาชิกต่อเดือน') : 'ยอด'}</label><input class="form-input" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(d.amount)}" oninput="billDraftSet(${i},'amount',this.value)" style="font-weight:600;font-size:15px;"></div>
         ${inst ? `<div class="form-group"><label class="form-label">ผ่อนทั้งหมด (งวด)</label><input class="form-input" type="number" inputmode="numeric" step="1" min="2" max="120" value="${esc(d.instMonths)}" oninput="billDraftSet(${i},'instMonths',this.value)" style="font-weight:600;font-size:15px;"></div>
         <div class="form-group full"><label class="form-label">จ่ายไปแล้วกี่งวด (แผนใหม่ใส่ 0)</label><input class="form-input" type="number" inputmode="numeric" step="1" min="0" value="${esc(d.instPaid)}" oninput="billDraftSet(${i},'instPaid',this.value)"></div>
         <div class="form-group full"><div id="billInstPrev${i}" style="font-size:11.5px;background:var(--surface);border:0.5px dashed var(--border2);border-radius:8px;padding:7px 10px;line-height:1.6;">${billInstPreview(d)}</div></div>` : ''}
+        ${sub ? `<div class="form-group"><label class="form-label">รอบบิล</label><select class="form-select" onchange="billDraftSet(${i},'subCycle',this.value,true)"><option value="monthly" ${d.subCycle !== 'yearly' ? 'selected' : ''}>รายเดือน</option><option value="yearly" ${d.subCycle === 'yearly' ? 'selected' : ''}>รายปี</option></select></div>
+        <div class="form-group full"><div id="billSubPrev${i}" style="font-size:11.5px;background:var(--surface);border:0.5px dashed var(--border2);border-radius:8px;padding:7px 10px;line-height:1.6;">${billSubPreview(d)}</div></div>` : ''}
         <div class="form-group"><label class="form-label">สกุลเงิน</label><select class="form-select" onchange="billDraftCurrency(${i},this.value)">${curOpts}</select></div>
         ${d.currency !== 'THB' ? `<div class="form-group"><label class="form-label">อัตรา 1 ${esc(d.currency)} = ? บาท</label><input class="form-input" type="number" step="0.0001" min="0" value="${esc(d.fx || '')}" oninput="billDraftSet(${i},'fx',this.value)"><span style="font-size:10px;color:var(--text3);">${esc(d.fxSrc || '')}</span></div>
         <div class="form-group"><label class="form-label">ค่าธรรมเนียมแปลงสกุล %</label><input class="form-input" type="number" step="0.1" min="0" value="${esc(d.fee == null ? '' : d.fee)}" oninput="billDraftSet(${i},'fee',this.value)"><span style="font-size:10px;color:var(--text3);">${d.payMethod === 'card' ? 'ตามบัตร ' + esc(d.card || '(ค่าเริ่มต้น)') : 'ไม่ใช่บัตร = 0%'}</span></div>
@@ -7480,7 +7802,7 @@ function billRenderDrafts() {
         <div class="form-group ${showCard ? '' : 'full'}"><label class="form-label">${d.type === 'income' ? 'รับเงินทาง' : 'จ่ายด้วย'}</label><select class="form-select" onchange="billDraftSet(${i},'payMethod',this.value,true)">${payOpts}</select></div>
         ${showCard ? billCardField(d, i) : ''}
         <div class="form-group full"><label class="form-label">${d.type === 'income' ? 'จาก' : 'ร้าน / ผู้รับเงิน'}</label><input class="form-input" value="${esc(d.merchant)}" oninput="billDraftSet(${i},'merchant',this.value)"></div>
-        <div class="form-group"><label class="form-label" id="billDateLbl${i}">${inst ? (Number(d.instPaid) > 0 ? 'วันที่งวดถัดไป' : 'วันที่งวดแรก') : 'วันที่'}</label><input class="form-input" type="date" value="${esc(d.date)}" onchange="billDraftSet(${i},'date',this.value,true)"></div>
+        <div class="form-group"><label class="form-label" id="billDateLbl${i}">${inst ? (Number(d.instPaid) > 0 ? 'วันที่งวดถัดไป' : 'วันที่งวดแรก') : sub ? 'วันตัดรอบแรก' : 'วันที่'}</label><input class="form-input" type="date" value="${esc(d.date)}" onchange="billDraftSet(${i},'date',this.value,true)"></div>
         <div class="form-group"><label class="form-label">เวลา</label><input class="form-input" type="time" value="${esc(d.time)}" onchange="billDraftSet(${i},'time',this.value)"></div>
         <div class="form-group full"><label class="form-label">เลขอ้างอิงสลิป (กันบันทึกซ้ำ)</label><input class="form-input" value="${esc(d.ref)}" placeholder="ถ้ามี" onchange="billDraftSet(${i},'ref',this.value,true)"></div>
         <div class="form-group full"><label class="form-label">โน้ต</label><input class="form-input" value="${esc(d.note)}" oninput="billDraftSet(${i},'note',this.value)"></div>
@@ -7536,6 +7858,7 @@ function billDraftSet(i, field, value, rerender) {
   if (!d) return;
   d[field] = value;
   if (field === 'type') d.category = d.type === 'income' ? 'other_in' : 'other';
+  if (field === 'plan' && value === 'sub' && d.category === 'other') d.category = 'entertainment';
   if (field === 'category' && value === 'cc_payment' && d.payMethod === 'unknown') d.payMethod = 'transfer';
   if (field === 'fee') d.feeManual = true;
   if (field === 'amount' || field === 'fx' || field === 'fee' || field === 'thbActual' || field === 'instMonths' || field === 'instPaid') {
@@ -7544,6 +7867,8 @@ function billDraftSet(i, field, value, rerender) {
     if (prev) prev.innerHTML = billFxPreview(d);
     const ip = document.getElementById('billInstPrev' + i);
     if (ip) ip.innerHTML = billInstPreview(d);
+    const sp = document.getElementById('billSubPrev' + i);
+    if (sp) sp.innerHTML = billSubPreview(d);
     const dl = document.getElementById('billDateLbl' + i);
     if (dl && field === 'instPaid') dl.textContent = Number(d.instPaid) > 0 ? 'วันที่งวดถัดไป' : 'วันที่งวดแรก';
   }
@@ -7570,8 +7895,8 @@ async function billSaveDrafts() {
     if (!(Number(d.amount) > 0)) { showToast('กรอกยอดให้ครบทุกรายการ'); return; }
     if (d.currency !== 'THB' && !(Number(d.fx) > 0) && !(Number(d.thbActual) > 0)) { showToast('ใส่อัตราแลกเปลี่ยนหรือยอดบาทจริงของ ' + d.currency); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) { showToast('วันที่ไม่ถูกต้อง'); return; }
-    if (!billState.editingId && d.inst && d.type === 'expense' && !billInstMonths(d)) { showToast('ผ่อนทั้งหมดต้องอยู่ระหว่าง 2–120 งวด'); return; }
-    if (!billState.editingId && d.inst && d.type === 'expense' && billInstPaid(d) < 0) { showToast('งวดที่จ่ายแล้วต้องน้อยกว่าจำนวนงวดทั้งหมด'); return; }
+    if (!billState.editingId && d.plan === 'inst' && d.type === 'expense' && !billInstMonths(d)) { showToast('ผ่อนทั้งหมดต้องอยู่ระหว่าง 2–120 งวด'); return; }
+    if (!billState.editingId && d.plan === 'inst' && d.type === 'expense' && billInstPaid(d) < 0) { showToast('งวดที่จ่ายแล้วต้องน้อยกว่าจำนวนงวดทั้งหมด'); return; }
   }
   billMarkDuplicates();
   if (items.some(d => d.dup === 'ref') && !confirm('มีรายการที่เลขอ้างอิงซ้ำกับที่บันทึกไว้แล้ว — รายการนั้นจะถูกข้าม ดำเนินการต่อ?')) return;
@@ -7601,7 +7926,8 @@ async function billSaveDrafts() {
         continue;
       }
       if (d.dup === 'ref') { skipped++; continue; }
-      const n = d.inst && d.type === 'expense' ? billInstMonths(d) : 0;
+      if (d.plan === 'sub' && d.type === 'expense') { await billSubCreate(d, data); saved++; continue; }
+      const n = d.plan === 'inst' && d.type === 'expense' ? billInstMonths(d) : 0;
       if (n) {
         // ผ่อน: สร้างรายการเดือนละงวด ผูกกันด้วย installmentId — เลขอ้างอิงสลิปติดไว้ที่งวดแรกเท่านั้น (กันชน id/เตือนซ้ำ)
         const instId = 'inst_' + Date.now().toString(36) + '_' + d.uid;
@@ -7640,6 +7966,7 @@ async function billSaveDrafts() {
   billCloseConfirm();
   if (lastDate) { billState.month = lastDate.slice(0, 7); billState.listDate = lastDate; } // ให้เห็นรายการที่เพิ่งบันทึกทุกมุมมอง
   if (!window.FB) billRender();
+  if (items.some(d => d.plan === 'sub')) billSubSync(); // ลงรอบที่ถึงแล้วที่เหลือ (รอบแรกบันทึกไปพร้อมกันแล้ว)
   showToast('✅ บันทึก ' + saved + ' รายการ' + (skipped ? ' · ข้ามรายการซ้ำ ' + skipped : ''));
 }
 
@@ -7647,6 +7974,12 @@ function billOpenManual() {
   billState.editingId = null;
   const d = billNewDraft({ source: 'manual' }); // วันที่เริ่มต้น = วันนี้เสมอ (ไม่ตามเดือนที่กำลังดูอยู่)
   billOpenConfirm([d], '');
+}
+function billOpenManualSub() {
+  billState.editingId = null;
+  const d = billNewDraft({ source: 'manual', category: 'entertainment' });
+  d.plan = 'sub';
+  billOpenConfirm([d], 'เช่น Netflix, Spotify, iCloud, ฟิตเนส — ระบบจะลงรายจ่ายให้อัตโนมัติทุกรอบจนกว่าจะกดยกเลิก');
 }
 function billEdit(id) {
   const t = (state.transactions || []).find(x => x.id === id);
