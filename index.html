@@ -7236,8 +7236,8 @@ const BILL_RW_ROP = {
   prvi: { per: 2.7, ok: true, note: '2.7 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (หลายแหล่งตรงกัน แต่บางหน้าของ UOB ยังเขียน 1.2)' },
   premier: { per: 5, ok: true, note: '5 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (ตารางจาก creditcardth)' },
   uobworld: { per: 5, ok: true, note: '5 คะแนน = 1 ไมล์ ROP (อัตราหลัง 1 ต.ค. 68 — ผู้ใช้ยืนยันจากแอป UOB แล้ว)' },
-  passion: { per: null, ok: false, note: 'THE PASSION ไม่อยู่ในโปรแกรมพิเศษ 2:1 และไม่พบอัตราปกติ — ดูใน K PLUS แล้วใส่เอง' },
-  jcb: { per: null, ok: false, note: 'ไม่พบอัตรา K Point → ROP ของ JCB Platinum — ดูใน K PLUS แล้วใส่เอง' }
+  passion: { per: 4, ok: true, note: 'K Point → ROP: 4 K Point = 1 ไมล์ · โอนขั้นต่ำ 20,000 K Point (ผู้ใช้ยืนยัน)' },
+  jcb: { per: 4, ok: true, note: 'K Point → ROP: 4 K Point = 1 ไมล์ · โอนขั้นต่ำ 20,000 K Point (ผู้ใช้ยืนยัน)' },
 };
 // โหมดเทียบความคุ้ม: 'rop' = ไมล์ ROP ที่ได้ (ค่าเริ่มต้น) · 'baht' = มูลค่าเป็นบาท
 function billRwMode() { const m = localStorage.getItem('folio_bill_rw_mode'); return m === 'baht' || m === 'raw' ? m : 'rop'; }
