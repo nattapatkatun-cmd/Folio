@@ -558,6 +558,46 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .rw-card summary::-webkit-details-marker { display: none; }
 .rw-rule { font-size: 11.5px; padding: 5px 0; border-top: 0.5px solid var(--bg2); line-height: 1.5; }
 .rw-rule.off { opacity: 0.55; }
+/* ─── หน้าบิล: หัวสรุป + แท็บ + ปุ่มลอย ─── */
+.bill-hero { background: linear-gradient(135deg, var(--accent), var(--accent-dark)); color: #fff; border-radius: 18px; padding: 16px 18px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.bill-hero .bh-l { font-size: 12px; opacity: .88; }
+.bill-hero .bh-big { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; margin: 2px 0 10px; }
+.bill-hero .bh-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.bill-hero .bh-row span { display: block; font-size: 10.5px; opacity: .85; }
+.bill-hero .bh-row b { font-size: 13.5px; font-weight: 600; }
+.bill-hero .bh-sub { font-size: 10.5px; opacity: .8; margin-top: 8px; }
+.bill-hero .bill-tap:hover { background: rgba(255,255,255,.12); }
+.bill-tabs { display: flex; background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 3px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.bill-tabs button { flex: 1; font-family: var(--font); font-size: 13px; border: none; background: none; color: var(--text2); padding: 9px 0; border-radius: 9px; cursor: pointer; }
+.bill-tabs button.on { background: var(--accent); color: #fff; font-weight: 600; }
+.bill-tab { display: none; }
+.bill-tab.on { display: block; }
+.bill-ov-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: var(--gap); }
+.bill-ov-tiles .tile { background: var(--surface); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow); }
+.bill-ov-tiles .k { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
+.bill-ov-tiles .v { font-size: 18px; font-weight: 600; color: var(--text); }
+.bill-ov-tiles .s { font-size: 11.5px; color: var(--text2); margin-top: 1px; }
+.rw-pill { display: inline-block; font-size: 10px; font-weight: 600; border-radius: 99px; padding: 2px 8px; margin-top: 6px; }
+.rw-pill.due { background: var(--amber-bg); color: var(--amber); }
+.rw-pill.ok { background: var(--green-bg); color: var(--green); }
+.bill-fab { position: fixed; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 18px; border: none; background: var(--accent); color: #fff; font-size: 28px; line-height: 1; cursor: pointer; box-shadow: 0 6px 20px rgba(217,80,112,.45); z-index: 50; display: none; }
+#page-bills.active .bill-fab { display: block; }
+#page-bills { padding-bottom: 90px; }
+.bill-icon-btn { background: var(--surface); border: 0.5px solid var(--border); border-radius: 99px; width: 36px; height: 36px; font-size: 16px; cursor: pointer; }
+.rw-pick-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
+.rw-pick-grid button { font-family: var(--font); background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; padding: 8px 2px; font-size: 10.5px; color: var(--text2); cursor: pointer; }
+.rw-pick-grid button b { display: block; font-size: 20px; font-weight: 400; margin-bottom: 2px; }
+.rw-pick-grid button.on { background: var(--accent-light); border-color: var(--accent); color: var(--accent-dark); font-weight: 600; box-shadow: 0 0 0 1px var(--accent); }
+.chips-row { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+.rw-best-box { display: flex; gap: 12px; align-items: center; background: var(--bg); border-radius: 14px; padding: 10px; }
+.rw-cc { width: 118px; height: 74px; flex-shrink: 0; border-radius: 12px; padding: 9px 10px; color: #fff; background: linear-gradient(135deg, #3B2B6B, #D95070); font-size: 10px; display: flex; flex-direction: column; justify-content: space-between; opacity: .95; }
+.rw-cc b { font-size: 12.5px; line-height: 1.25; }
+.rw-big { font-size: 24px; font-weight: 700; color: var(--accent-dark); line-height: 1.2; }
+.rw-big small { font-size: 12px; font-weight: 500; }
+.rw-rank-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 0.5px solid var(--bg2); }
+.rw-rank { width: 22px; height: 22px; border-radius: 50%; background: var(--bg2); color: var(--text2); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rw-tip { font-size: 10.5px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
+@media (max-width: 420px) { .rw-pick-grid button { font-size: 9.5px; } .rw-cc { width: 96px; } .bill-hero .bh-big { font-size: 28px; } }
 .rw-num { width: 84px; padding: 5px 7px !important; font-size: 12px !important; }
 .rw-ed { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
 .rw-ed-f { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--text2); }
@@ -1342,24 +1382,25 @@ if (window._folioReady) {
         <span id="billMonthLabel">—</span>
         <button onclick="billShiftMonth(1)" aria-label="ถัดไป">›</button>
       </div>
+      <button class="bill-icon-btn" onclick="openModal('billSettingsModal')" aria-label="ตั้งค่า">⚙️</button>
       </div>
     </div>
 
-    <!-- ช่องทางบันทึก -->
-    <div class="bill-add-row">
-      <label class="bill-add-btn">📷 ถ่ายสลิป
-        <input type="file" accept="image/*" capture="environment" hidden onchange="billOnFiles(this, 'camera')">
-      </label>
-      <label class="bill-add-btn">🖼️ อัปโหลดรูป
-        <input type="file" accept="image/*" multiple hidden onchange="billOnFiles(this, 'upload')">
-      </label>
-      <button class="bill-add-btn" onclick="billOpenText()">🎙️ พิมพ์/พูด</button>
-      <button class="bill-add-btn" onclick="billOpenManual()">✍️ กรอกเอง</button>
-    </div>
     <div id="billBusy" class="bill-busy" style="display:none;"><div class="spinner" style="display:block;"></div><span id="billBusyText">กำลังอ่านบิล...</span></div>
 
-    <div class="metric-row" id="billMetrics"></div>
+    <!-- หัวสรุป -->
+    <div class="bill-hero" id="billMetrics"></div>
 
+    <!-- แท็บ -->
+    <div class="bill-tabs" id="billTabs">
+      <button data-t="overview" onclick="billSetTab('overview')">ภาพรวม</button>
+      <button data-t="list" onclick="billSetTab('list')">รายการ</button>
+      <button data-t="cards" onclick="billSetTab('cards')">บัตร</button>
+      <button data-t="recur" onclick="billSetTab('recur')">ประจำ</button>
+    </div>
+
+    <section class="bill-tab" data-tab="overview">
+      <div class="bill-ov-tiles" id="billOvTiles"></div>
     <!-- เงินเหลือจริง ↔ DCA -->
     <div class="card" style="margin-bottom:var(--gap);" id="billCashflowCard">
       <div class="card-title">💰 เงินเหลือจริง ↔ งบ DCA</div>
@@ -1378,35 +1419,24 @@ if (window._folioReady) {
       </div>
     </div>
 
-    <!-- Subscription & ผ่อน ที่จ่ายอยู่ -->
-    <div class="card" style="margin-bottom:var(--gap);" id="billRecurCard">
-      <div class="card-title">🔁 Subscription & ผ่อนชำระ <button class="bill-chip" onclick="billOpenManualSub()">+ เพิ่ม Subscription</button></div>
-      <div id="billRecur"></div>
-    </div>
-
     <!-- แยกตามช่องทางจ่าย -->
     <div class="card" style="margin-bottom:var(--gap);display:none;" id="billPayCard">
       <div class="card-title">🧾 แยกตามช่องทางจ่าย <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billPayPeriod">รายจ่ายเดือนนี้</span></div>
       <div id="billPay"></div>
     </div>
 
-    <!-- บัตรเครดิต + ธุรกิจส่วนตัว -->
-    <div class="card" style="margin-bottom:var(--gap);display:none;" id="billCardsCard">
-      <div class="card-title">💳 บัตรเครดิต & 🏪 ธุรกิจส่วนตัว</div>
-      <div id="billCards"></div>
-    </div>
-
-    <!-- สิทธิ์บัตร: รอบบิล, เพดานโปร, ลำดับการรูด, ครบกำหนดชำระ -->
-    <div class="card" style="margin-bottom:var(--gap);display:none;" id="billRwCard">
-      <div class="card-title"><span>🎯 สิทธิ์บัตร & เพดานรอบบิล <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billRwSub"></span></span><button class="action" onclick="billRwOpen()">⚙️ ตั้งค่าบัตร</button></div>
-      <div class="bill-view-toggle" id="billRwModeToggle" style="display:inline-flex;margin-bottom:10px;">
-        <button data-m="rop" onclick="billRwSetMode('rop')">✈️ ไมล์ ROP</button>
-        <button data-m="raw" onclick="billRwSetMode('raw')">🔢 คะแนนดิบ</button>
-        <button data-m="baht" onclick="billRwSetMode('baht')">฿ มูลค่าบาท</button>
+    <!-- AI วิเคราะห์ -->
+    <div class="card" style="margin-bottom:var(--gap);">
+      <div class="card-title">🤖 AI วิเคราะห์การใช้จ่าย + การลงทุน
+        <button class="refresh-btn" id="billAiBtn" onclick="billRunAi()" style="font-size:11px;padding:6px 14px;"><div class="spinner" id="billAiSpinner"></div>วิเคราะห์</button>
       </div>
-      <div id="billRw"></div>
+      <div style="font-size:11px;color:var(--text3);">Gemini ดูรายรับ-รายจ่ายจริง 3 เดือนล่าสุด คู่กับแผน DCA และพอร์ต แล้วแนะนำว่าลงทุนเพิ่ม/ลดได้เท่าไร</div>
+      <div id="billAiResult" style="display:none;font-size:12px;line-height:1.8;margin-top:10px;"></div>
     </div>
 
+    </section>
+
+    <section class="bill-tab" data-tab="list">
     <!-- รายการ -->
     <div class="card" style="margin-bottom:var(--gap);">
       <div class="card-title">
@@ -1439,44 +1469,40 @@ if (window._folioReady) {
       <div id="billList"></div>
     </div>
 
-    <!-- AI วิเคราะห์ -->
-    <div class="card" style="margin-bottom:var(--gap);">
-      <div class="card-title">🤖 AI วิเคราะห์การใช้จ่าย + การลงทุน
-        <button class="refresh-btn" id="billAiBtn" onclick="billRunAi()" style="font-size:11px;padding:6px 14px;"><div class="spinner" id="billAiSpinner"></div>วิเคราะห์</button>
+    </section>
+
+    <section class="bill-tab" data-tab="cards">
+    <div class="card" style="margin-bottom:var(--gap);display:none;" id="billRwCard">
+      <div class="card-title"><span>💡 รูดใบไหนดี? <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billRwSub"></span></span><button class="action" onclick="billRwOpen()">⚙️ ตั้งค่าบัตร</button></div>
+      <div class="bill-view-toggle" id="billRwModeToggle" style="display:inline-flex;margin-bottom:10px;">
+        <button data-m="rop" onclick="billRwSetMode('rop')">✈️ ไมล์ ROP</button>
+        <button data-m="raw" onclick="billRwSetMode('raw')">🔢 คะแนนดิบ</button>
+        <button data-m="baht" onclick="billRwSetMode('baht')">฿ มูลค่าบาท</button>
       </div>
-      <div style="font-size:11px;color:var(--text3);">Gemini ดูรายรับ-รายจ่ายจริง 3 เดือนล่าสุด คู่กับแผน DCA และพอร์ต แล้วแนะนำว่าลงทุนเพิ่ม/ลดได้เท่าไร</div>
-      <div id="billAiResult" style="display:none;font-size:12px;line-height:1.8;margin-top:10px;"></div>
+      <div id="billRwPick"></div>
+    </div>
+    <div class="card" style="margin-bottom:var(--gap);">
+      <div id="billRw"></div>
+    </div>
+    <!-- บัตรเครดิต + ธุรกิจส่วนตัว -->
+    <div class="card" style="margin-bottom:var(--gap);display:none;" id="billCardsCard">
+      <div class="card-title">💳 บัตรเครดิต & 🏪 ธุรกิจส่วนตัว</div>
+      <div id="billCards"></div>
     </div>
 
-    <!-- สำรองข้อมูล + ตั้งค่า -->
-    <div class="card">
-      <div class="card-title">💾 สำรองข้อมูล & ตั้งค่า</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งช่วงที่ดูอยู่ไป Google Sheet</button>
-        <button class="btn-ghost" style="font-size:12px;" onclick="billExportCsv()">⬇️ ดาวน์โหลด CSV ทั้งหมด</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">ชื่อบัญชีของคุณ (ช่วย AI แยกว่าเงินเข้าหรือออก)</label>
-        <input class="form-input" id="billOwnerNames" placeholder="เช่น ณัฐพัฒน์, NATTAPAT" onchange="billSaveOwner(this.value)">
-      </div>
-      <div class="form-group" style="margin-top:10px;">
-        <label class="form-label">บัตรเครดิตของคุณ (ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
-        <div id="billCardChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px;"></div>
-        <div style="display:flex;gap:6px;">
-          <input class="form-input" id="billCardNew" placeholder="เช่น KTC 1234" style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter')billAddCardFromInput()">
-          <button class="btn-primary" style="flex:none;padding:8px 14px;font-size:12px;" onclick="billAddCardFromInput()">+ เพิ่มบัตร</button>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;">
-          ค่าธรรมเนียมแปลงสกุลเงิน (ใช้จ่ายต่างประเทศ) เริ่มต้น
-          <input class="form-input" id="billFxFeeDefault" type="number" step="0.1" min="0" max="10" style="width:70px;padding:5px 8px;" onchange="billSaveDefaultFee(this.value)"> %
-          <span style="color:var(--text3);">· แตะชื่อบัตรด้านบนเพื่อตั้งแยกรายใบ</span>
-        </div>
-      </div>
-      <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
-        🔒 รูปสลิปถูกส่งไปให้ Gemini อ่าน (ไม่ได้ประมวลผลในเครื่อง) และ<strong>ไม่ถูกเก็บ</strong> — Firestore เก็บเฉพาะข้อมูลที่อ่านได้ (วันที่ ยอด หมวด ร้าน เลขอ้างอิง)<br>
-        📲 แชร์ screenshot เข้า Folio ได้จากเมนู Share บน Android (ต้องติดตั้ง Folio เป็นแอปก่อน)
-      </div>
+    </section>
+
+    <section class="bill-tab" data-tab="recur">
+    <!-- Subscription & ผ่อน ที่จ่ายอยู่ -->
+    <div class="card" style="margin-bottom:var(--gap);" id="billRecurCard">
+      <div class="card-title">🔁 Subscription & ผ่อนชำระ <button class="bill-chip" onclick="billOpenManualSub()">+ เพิ่ม Subscription</button></div>
+      <div id="billRecur"></div>
     </div>
+
+    </section>
+
+    <!-- ปุ่มเพิ่มรายการ (ปุ่มเดียว) -->
+    <button class="bill-fab" onclick="openModal('billAddModal')" aria-label="เพิ่มรายการ">＋</button>
   </main>
 
   <!-- ─────────── SETTINGS PAGE ─────────── -->
@@ -1878,6 +1904,60 @@ service cloud.firestore {
 </div>
 
 <!-- ─── Add Trade Modal ─── -->
+<div class="modal-overlay" id="billAddModal" onclick="if(event.target===this)closeModal('billAddModal')">
+  <div class="modal">
+    <h3>＋ เพิ่มรายการ</h3>
+    <div class="bill-add-row" style="grid-template-columns:1fr 1fr;margin-bottom:0;">
+      <label class="bill-add-btn">📷 ถ่ายสลิป
+        <input type="file" accept="image/*" capture="environment" hidden onchange="closeModal('billAddModal');billOnFiles(this, 'camera')">
+      </label>
+      <label class="bill-add-btn">🖼️ อัปโหลดรูป
+        <input type="file" accept="image/*" multiple hidden onchange="closeModal('billAddModal');billOnFiles(this, 'upload')">
+      </label>
+      <button class="bill-add-btn" onclick="closeModal('billAddModal');billOpenText()">🎙️ พิมพ์/พูด</button>
+      <button class="bill-add-btn" onclick="closeModal('billAddModal');billOpenManual()">✍️ กรอกเอง</button>
+      <button class="bill-add-btn" style="grid-column:1/-1;" onclick="closeModal('billAddModal');billOpenManualSub()">🔁 Subscription / หักอัตโนมัติ</button>
+    </div>
+    <div class="modal-actions" style="margin-top:14px;"><button class="btn-ghost" style="flex:1;" onclick="closeModal('billAddModal')">ปิด</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="billSettingsModal">
+  <div class="modal" style="width:480px;">
+    <h3>⚙️ ตั้งค่าหน้าบิล</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn-ghost" style="font-size:12px;" onclick="closeModal('billSettingsModal');billRwOpen()">💳 สิทธิ์บัตร / รอบบิล</button>
+      <button class="btn-ghost" style="font-size:12px;" onclick="closeModal('billSettingsModal');billOpenCatModal()">🏷️ หมวดที่เพิ่มเอง</button>
+    </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งช่วงที่ดูอยู่ไป Google Sheet</button>
+        <button class="btn-ghost" style="font-size:12px;" onclick="billExportCsv()">⬇️ ดาวน์โหลด CSV ทั้งหมด</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ชื่อบัญชีของคุณ (ช่วย AI แยกว่าเงินเข้าหรือออก)</label>
+        <input class="form-input" id="billOwnerNames" placeholder="เช่น ณัฐพัฒน์, NATTAPAT" onchange="billSaveOwner(this.value)">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label class="form-label">บัตรเครดิตของคุณ (ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
+        <div id="billCardChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input class="form-input" id="billCardNew" placeholder="เช่น KTC 1234" style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter')billAddCardFromInput()">
+          <button class="btn-primary" style="flex:none;padding:8px 14px;font-size:12px;" onclick="billAddCardFromInput()">+ เพิ่มบัตร</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;">
+          ค่าธรรมเนียมแปลงสกุลเงิน (ใช้จ่ายต่างประเทศ) เริ่มต้น
+          <input class="form-input" id="billFxFeeDefault" type="number" step="0.1" min="0" max="10" style="width:70px;padding:5px 8px;" onchange="billSaveDefaultFee(this.value)"> %
+          <span style="color:var(--text3);">· แตะชื่อบัตรด้านบนเพื่อตั้งแยกรายใบ</span>
+        </div>
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
+        🔒 รูปสลิปถูกส่งไปให้ Gemini อ่าน (ไม่ได้ประมวลผลในเครื่อง) และ<strong>ไม่ถูกเก็บ</strong> — Firestore เก็บเฉพาะข้อมูลที่อ่านได้ (วันที่ ยอด หมวด ร้าน เลขอ้างอิง)<br>
+        📲 แชร์ screenshot เข้า Folio ได้จากเมนู Share บน Android (ต้องติดตั้ง Folio เป็นแอปก่อน)
+      </div>
+        <div class="modal-actions" style="margin-top:14px;"><button class="btn-ghost" style="flex:1;" onclick="closeModal('billSettingsModal')">ปิด</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="billRwModal">
   <div class="modal" style="width:520px;">
     <h3>💳 โปรไฟล์สิทธิ์บัตร</h3>
@@ -7144,11 +7224,6 @@ const BILL_RW_ROP = {
 function billRwMode() { const m = localStorage.getItem('folio_bill_rw_mode'); return m === 'baht' || m === 'raw' ? m : 'rop'; }
 // ใช้แปลงเงินคืน (เช่น UOB Premier ซูเปอร์ฯ 5%) เป็นไมล์ในโหมด ROP เท่านั้น
 function billRwMileBaht() { const v = parseFloat(localStorage.getItem('folio_bill_rw_milebaht')); return v > 0 ? v : 0.5; }
-// ตัวอย่างหมวดสำหรับตาราง "ลำดับการรูด"
-const BILL_RW_GUIDE = [
-  ['dining', 'THB'], ['online', 'THB'], ['dept', 'THB'], ['supermarket', 'THB'], ['central', 'THB'], ['fuel', 'THB'],
-  ['airhotel', 'THB'], ['general', 'THB'], ['fx', 'USD'], ['fx', 'JPY'], ['fx', 'SGD'], ['fx', 'EUR']
-];
 
 function billRwSaved() {
   try { const o = JSON.parse(localStorage.getItem('folio_bill_card_profiles') || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
@@ -7394,6 +7469,7 @@ function billRwRender() {
   if (!el || !box) return;
   const profs = billRwCards();
   box.style.display = '';
+  billRwRenderPick();
   if (!profs.length) {
     el.innerHTML = `<div style="font-size:12px;color:var(--text2);line-height:1.7;">ยังไม่ได้ผูกบัตรกับโปรไฟล์สิทธิ์ — กดปุ่มด้านล่างเพื่อเพิ่มบัตร ${Object.keys(BILL_RW_PRESETS).length} ใบที่ตั้งค่าไว้ (สิทธิ์ ณ พ.ย. 2569, วันตัดรอบ/ครบกำหนดตามที่คุณให้)</div>
       <button class="btn-primary" style="margin-top:8px;font-size:12px;" onclick="billRwAddAll()">➕ ตั้งค่าบัตรทั้งหมด</button>`;
@@ -7401,59 +7477,26 @@ function billRwRender() {
   }
   const ref = billRwRefDate(), today = todayISO();
   document.querySelectorAll('#billRwModeToggle button').forEach(b => b.classList.toggle('active', b.dataset.m === billRwMode()));
+  // บัตรในรายชื่อที่ยังไม่ผูกโปรไฟล์ / โปรไฟล์ที่ยังไม่มีบัตร — ไม่งั้นบัตรจะหายจากอันดับเงียบ ๆ
+  const unmapped = billCards().filter(c => !billRwProfile(c));
+  const missing = BILL_RW_ORDER.filter(k => !profs.some(x => x.key === k)).map(k => BILL_RW_PRESETS[k].name);
   document.getElementById('billRwSub').textContent = 'ณ ' + billFmtDate(ref);
   let html = '';
+  if (unmapped.length || missing.length) html += `<div class="insight" style="background:var(--amber-bg);color:var(--amber);font-size:11.5px;border-radius:10px;padding:8px 10px;margin-bottom:10px;line-height:1.6;">⚠️ ${unmapped.length ? 'บัตรที่ยังไม่ผูกโปรไฟล์ (ไม่ถูกนับ/จัดอันดับ): <b>' + unmapped.map(esc).join(', ') + '</b> — แตะ ⚙️ ตั้งค่าบัตร แล้วเลือกโปรไฟล์ให้แต่ละใบ' : ''}${unmapped.length && missing.length ? '<br>' : ''}${missing.length ? 'โปรไฟล์ที่ยังไม่มีบัตรในรายชื่อ: <b>' + missing.map(esc).join(', ') + '</b>' + (unmapped.length ? ' — ถ้าเป็นใบเดียวกับข้างบน ให้ผูกใน ⚙️ แทนการเพิ่มใหม่' : '') + ` <button class="bill-chip" onclick="billRwOpen()">⚙️ จัดการ</button>` : ''}</div>`;
   // 1) ครบกำหนดชำระของรอบที่ปิดแล้วล่าสุด
-  const dues = profs.map(prof => {
-    const cur = billRwCycle(prof.stmtDay, today);
-    const closed = billRwCycle(prof.stmtDay, billIsoAdd(cur.start, -1));
-    const due = billRwDue(closed.end, prof.dueDay);
-    const spent = billRwTxs(prof.card, closed.start, closed.end).reduce((a, t) => a + billAmtThb(t), 0);
-    const paid = (state.transactions || []).filter(t => t.category === 'cc_payment' && (t.card || '').trim() === prof.card && t.date > closed.end && t.date <= due).reduce((a, t) => a + billAmtThb(t), 0);
-    return { prof, closed, due, spent, paid, days: billRwDays(today, due) };
-  }).filter(x => x.spent > 0 && x.days >= -3).sort((a, b) => a.due.localeCompare(b.due));
+  const dues = billRwDues();
   if (dues.length) {
-    html += '<div class="bill-recur-head">📅 ครบกำหนดชำระ (ยอดรอบที่ปิดแล้ว)</div>' + dues.map(x => {
-      const done = x.paid >= x.spent - 1;
-      const col = done ? 'var(--green)' : x.days < 0 ? 'var(--red)' : x.days <= 5 ? 'var(--amber)' : 'var(--text2)';
-      return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--bg2);">
+    html += '<div class="bill-recur-head" style="margin-top:0;">📅 ครบกำหนดชำระ (ยอดรอบที่ปิดแล้ว)</div>' + dues.map(x => {
+      const col = x.done ? 'var(--green)' : x.days < 0 ? 'var(--red)' : x.days <= 5 ? 'var(--amber)' : 'var(--text2)';
+      return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--bg2);">
         <span>💳 ${esc(x.prof.card)} <span style="color:var(--text3);font-size:10.5px;">รอบ ${billRwShort(x.closed.start)}–${billRwShort(x.closed.end)}</span></span>
-        <span style="text-align:right;white-space:nowrap;"><strong>${billFmt0(x.spent)}</strong> <span style="color:${col};font-size:11px;">${done ? '✅ จ่ายแล้ว' : 'ครบ ' + billRwShort(x.due) + (x.days < 0 ? ' (เลยมา ' + -x.days + ' วัน)' : x.days === 0 ? ' (วันนี้)' : ' (อีก ' + x.days + ' วัน)')}</span></span></div>`;
-    }).join('') + '<div style="font-size:10px;color:var(--text3);margin:4px 0 8px;">ยอดคำนวณจากรายการที่บันทึกในแอป (อาจไม่ตรง statement ถ้าวันบันทึกไม่ใช่วันที่ธนาคารลงรายการ) · "จ่ายแล้ว" ดูจากรายการ 💳 จ่ายบิลบัตรเครดิตของบัตรนั้น</div>';
+        <span style="text-align:right;white-space:nowrap;"><strong>${billFmt0(x.spent)}</strong> <span style="color:${col};font-size:11px;">${x.done ? '✅ จ่ายแล้ว' : 'ครบ ' + billRwShort(x.due) + (x.days < 0 ? ' (เลยมา ' + -x.days + ' วัน)' : x.days === 0 ? ' (วันนี้)' : ' (อีก ' + x.days + ' วัน)')}</span></span></div>`;
+    }).join('') + '<div style="font-size:10px;color:var(--text3);margin:4px 0 8px;">ยอดจากรายการที่บันทึกในแอป (อาจไม่ตรง statement) · "จ่ายแล้ว" ดูจากรายการ 💳 จ่ายบิลบัตรเครดิตของบัตรนั้น</div>';
   }
-  // 2) ลำดับการรูดต่อหมวด (รอบปัจจุบัน ดูเพดานที่เหลือแล้ว)
   const rop = billRwMode() === 'rop';
   const raw = billRwMode() === 'raw';
-  const fmtM = r => raw ? `<strong>${Math.round(r.metric).toLocaleString()}</strong> ${esc(r.prof.p.unit)}${r.cash ? ' +เงินคืน ' + billFmt0(r.cash) : ''}` : rop ? `<strong>${r.metric.toFixed(1)}</strong> ไมล์${r.fee ? ' <span style="color:var(--text3);">(FX ' + r.fee + '%)</span>' : ''}` : `<strong style="color:${r.pct < 0 ? 'var(--red)' : 'inherit'};">${r.pct.toFixed(2)}%</strong>`;
-  html += '<div class="bill-recur-head">🧭 รูดใบไหนก่อน — ' + (raw ? 'คะแนนดิบต่อ ฿1,000' : rop ? 'ไมล์ ROP ต่อ ฿1,000' : 'ได้คืน % (หลังหัก FX)') + ' ในรอบนี้</div>' +
-    (raw ? '<div style="font-size:10.5px;color:var(--amber);margin-bottom:4px;">คะแนนต่างธนาคารมีมูลค่าไม่เท่ากัน — ดูคู่กับโปรแลกส่วนลดของแต่ละธนาคาร (เรียงตามจำนวนคะแนนเท่านั้น)</div>' : '') + '<div class="rw-guide">' + BILL_RW_GUIDE.map(([tag, cur]) => {
-    const t = { type: 'expense', payMethod: 'card', category: tag === 'dining' ? 'food' : 'other', merchant: '', currency: cur, rewardTag: tag === 'fx' ? 'general' : tag, date: ref };
-    const rank = billRwRank(t, 1000).filter(r => r.net > 0 || cur !== 'THB').slice(0, 3);
-    const label = tag === 'fx' ? '🌏 ต่างประเทศ ' + cur : BILL_RW_TAGS[tag];
-    const items = rank.map((r, k) => {
-      // บอกเพดานที่เหลือของกฎที่ทำให้ใบนี้ชนะ
-      const cyc = billRwCycle(r.prof.stmtDay, ref);
-      const calc = billRwCalc(r.prof, billRwTxs(r.prof.card, cyc.start, cyc.end));
-      const tags = billRwTags(t);
-      const rule = r.prof.p.rules.find(x => !r.prof.off[x.id] && billRwActive(x, ref) && billRwMatch(x, tags, cur));
-      let capTxt = '';
-      if (rule && rule.capSpend) capTxt = ` · เหลือ ${billFmt0(Math.max(0, rule.capSpend - ((calc.st[rule.id] || {}).used || 0)))}`;
-      return `<span class="${k ? 'rw-alt' : 'rw-best'}">${esc(r.prof.card)} ${fmtM(r)}${capTxt}</span>`;
-    }).join('<span style="color:var(--text3);"> › </span>');
-    // บัตรที่ให้โบนัสเป็นก้อน (เช่น ครบ ฿5,000/สลิป) — ฿1,000 ยังไม่ได้โบนัส บอกแยก
-    const blockTips = billRwCards().map(prof => {
-      const rule = prof.p.rules.find(x => x.block && !prof.off[x.id] && billRwActive(x, ref) && billRwMatch(x, billRwTags(t), cur));
-      if (!rule) return '';
-      const m = billRwMarginal(prof, t, rule.block);
-      if (m.none || !(m.metric > (rank[0] ? rank[0].metric : 0))) return '';
-      return `<div style="font-size:10.5px;color:var(--text3);">ถ้ายอดถึง ${billFmt0(rule.block)}${rule.perSlip ? '/สลิป' : ''}: ${esc(prof.card)} ได้ ${raw ? Math.round(m.metric).toLocaleString() + ' ' + esc(prof.p.unit) + '/฿1,000' : rop ? m.metric.toFixed(1) + ' ไมล์/฿1,000 (' + (m.base / m.net).toFixed(1) + ' ฿/ไมล์)' : m.pct.toFixed(2) + '%'}</div>`;
-    }).join('');
-    return `<div class="rw-guide-row"><div style="font-weight:500;">${label}</div><div>${items || '<span style="color:var(--text3);">—</span>'}</div>${blockTips}</div>`;
-  }).join('') + '</div>';
-  const noRop = billRwNoRop();
-  if (noRop.length) html += `<div style="font-size:10.5px;color:var(--amber);margin-top:4px;">ไม่ได้จัดอันดับ (ยังไม่มีอัตราแลก ROP): ${noRop.map(esc).join(', ')} — ใส่อัตราที่ ⚙️ ตั้งค่าบัตร</div>`;
   // 3) รายบัตร: รอบปัจจุบัน + เพดานโปร
-  html += '<div class="bill-recur-head" style="margin-top:12px;">💳 รอบบิลปัจจุบันของแต่ละใบ</div>';
+  html += '<div class="bill-recur-head" style="margin-top:12px;">💳 รอบบิลปัจจุบันของแต่ละใบ <span style="font-weight:400;color:var(--text3);">· แตะเพื่อดูโปร/เพดาน</span></div>';
   let totV = 0, totM = 0;
   html += profs.map(prof => {
     const cyc = billRwCycle(prof.stmtDay, ref);
@@ -7465,7 +7508,7 @@ function billRwRender() {
     const left = billRwDays(today, cyc.end);
     const p = prof.p;
     const yearSpend = p.waiver ? (state.transactions || []).filter(t => t.type === 'expense' && t.payMethod === 'card' && (t.card || '').trim() === prof.card && (t.date || '').slice(0, 4) === ref.slice(0, 4) && !BILL_NON_SPEND.includes(t.category)).reduce((a, t) => a + billAmtThb(t), 0) : 0;
-    return `<details class="rw-card"${c.spend > 0 ? ' open' : ''}><summary>
+    return `<details class="rw-card"><summary>
         <span><strong>💳 ${esc(prof.card)}</strong> <span style="color:var(--text3);font-size:10.5px;">${billRwShort(cyc.start)}–${billRwShort(cyc.end)}${ref === today && left >= 0 ? ' · ตัดรอบอีก ' + left + ' วัน' : ''}</span></span>
         <span style="white-space:nowrap;">${billFmt0(c.spend)} → <strong style="color:var(--green);">${head}</strong></span></summary>
       <div style="font-size:11px;color:var(--text2);margin:4px 0 6px;">${c.pts.toLocaleString()} ${esc(p.unit)}${c.cash ? ' + เงินคืน ' + billFmt0(c.cash) : ''} · อัตราปกติ ${p.base.pts} ต่อ ${p.base.per} บาท${billRwBadge(p.base.verified)}${rate}</div>
@@ -7478,6 +7521,121 @@ function billRwRender() {
   el.innerHTML = html;
 }
 
+// ครบกำหนดชำระของรอบที่ปิดล่าสุดของแต่ละบัตร (ใช้ทั้งแท็บบัตรและกล่องในภาพรวม)
+function billRwDues() {
+  const today = todayISO();
+  return billRwCards().map(prof => {
+    const cur = billRwCycle(prof.stmtDay, today);
+    const closed = billRwCycle(prof.stmtDay, billIsoAdd(cur.start, -1));
+    const due = billRwDue(closed.end, prof.dueDay);
+    const spent = billRwTxs(prof.card, closed.start, closed.end).reduce((a, t) => a + billAmtThb(t), 0);
+    const paid = (state.transactions || []).filter(t => t.category === 'cc_payment' && (t.card || '').trim() === prof.card && t.date > closed.end && t.date <= due).reduce((a, t) => a + billAmtThb(t), 0);
+    return { prof, closed, due, spent, paid, done: paid >= spent - 1, days: billRwDays(today, due) };
+  }).filter(x => x.spent > 0 && x.days >= -3).sort((a, b) => a.due.localeCompare(b.due));
+}
+// กฎที่รายการ t จะใช้กับบัตรนี้ (null = อัตราปกติ, '-' = ไม่ได้คะแนน)
+function billRwMatchedRule(prof, t) {
+  const p = prof.p, tags = billRwTags(t), cur = String(t.currency || 'THB').toUpperCase();
+  if ((p.exclude && p.exclude.some(x => tags.has(x))) || (p.excludeCur && p.excludeCur.includes(cur))) return '-';
+  return p.rules.find(r => !prof.off[r.id] && billRwActive(r, t.date) && billRwMatch(r, tags, cur)) || null;
+}
+// ─── แท็บบัตร: "รูดใบไหนดี" เลือกหมวดด้วยไอคอน ───
+const BILL_RW_PICK = [['dining', '🍽️', 'ร้านอาหาร'], ['online', '🛒', 'ออนไลน์'], ['dept', '🏬', 'ห้าง'], ['supermarket', '🧺', 'ซูเปอร์ฯ'], ['central', '🏷️', 'Central'],
+  ['fuel', '⛽', 'น้ำมัน'], ['airhotel', '✈️', 'ตั๋ว/โรงแรม'], ['fx', '🌏', 'ต่างประเทศ'], ['ewallet', '📱', 'e-Wallet'], ['general', '📦', 'ทั่วไป']];
+const BILL_RW_PICK_CUR = ['USD', 'JPY', 'SGD', 'EUR', 'KRW', 'CNY', 'MYR', 'VND'];
+function billRwPickSet(k, v) {
+  if (k === 'amt') { const n = parseFloat(v); if (!(n > 0)) return; billState.rwAmt = n; }
+  else billState[k] = v;
+  billRwRenderPick();
+}
+function billRwRenderPick() {
+  const el = document.getElementById('billRwPick');
+  if (!el) return;
+  document.querySelectorAll('#billRwModeToggle button').forEach(b => b.classList.toggle('active', b.dataset.m === billRwMode()));
+  if (!billRwCards().length) { el.innerHTML = ''; return; }
+  const tag = billState.rwPick || 'dining', cur = tag === 'fx' ? (billState.rwCur || 'USD') : 'THB', amt = billState.rwAmt || 1000;
+  const mode = billRwMode(), rop = mode === 'rop', raw = mode === 'raw';
+  const ref = billRwRefDate();
+  const t = { type: 'expense', payMethod: 'card', category: tag === 'dining' ? 'food' : 'other', merchant: '', currency: cur, rewardTag: tag === 'fx' ? 'general' : tag, date: ref };
+  const rank = billRwRank(t, amt);
+  const big = r => raw ? `${r.pts.toLocaleString()} <small>${esc(r.prof.p.unit)}</small>` : rop ? (r.net > 0 ? `${(amt / r.net).toFixed(1)} <small>฿/ไมล์</small>` : '—') : `${r.pct.toFixed(2)}<small>%</small>`;
+  const subOf = r => raw ? (r.cash ? 'เงินคืน ' + billFmt0(r.cash) : '') : rop ? `${r.net.toFixed(1)} ไมล์ จากยอด ${billFmt0(amt)}` : `≈ ${billFmt(Math.round(r.net * 100) / 100)} จากยอด ${billFmt0(amt)}`;
+  const ruleTxt = r => { const m = billRwMatchedRule(r.prof, t); return m === '-' ? 'ไม่ได้คะแนนหมวดนี้' : m ? m.label : 'อัตราปกติ'; };
+  let html = `<div class="rw-pick-grid">${BILL_RW_PICK.map(([k, ic, l]) => `<button class="${k === tag ? 'on' : ''}" onclick="billRwPickSet('rwPick','${k}')"><b>${ic}</b>${l}</button>`).join('')}</div>`;
+  if (tag === 'fx') html += `<div class="chips-row">${BILL_RW_PICK_CUR.map(c => `<button class="bill-chip${c === cur ? ' active' : ''}" onclick="billRwPickSet('rwCur','${c}')">${c}</button>`).join('')}</div>`;
+  html += `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text2);margin:2px 0 10px;flex-wrap:wrap;"><span style="white-space:nowrap;">ยอดต่อครั้ง ฿</span><input class="form-input" type="number" min="1" step="100" value="${amt}" style="width:96px;padding:5px 8px;font-size:12px;" onchange="billRwPickSet('amt',this.value)"><span style="color:var(--text3);">· คิดจากเพดานที่เหลือในรอบบิลนี้</span></div>`;
+  if (!rank.length) html += '<div class="empty">ยังไม่มีบัตรที่คำนวณได้ในโหมดนี้</div>';
+  else {
+    const r0 = rank[0];
+    const rule0 = billRwMatchedRule(r0.prof, t);
+    let capHtml = '';
+    if (rule0 && rule0 !== '-' && rule0.capSpend) {
+      const cyc = billRwCycle(r0.prof.stmtDay, ref);
+      const used = ((billRwCalc(r0.prof, billRwTxs(r0.prof.card, cyc.start, cyc.end)).st[rule0.id]) || {}).used || 0;
+      capHtml = `${billRwBar(used, rule0.capSpend)}<div style="font-size:10.5px;color:var(--text3);margin-top:3px;">เพดานรอบนี้ ใช้ ${billFmt0(used)} / ${billFmt0(rule0.capSpend)} — เต็มแล้วอันดับจะสลับไปใบถัดไปเอง</div>`;
+    }
+    html += `<div class="rw-best-box">
+      <div class="rw-cc">${esc(r0.prof.p.bank || '')}<b>${esc(r0.prof.card)}</b></div>
+      <div style="flex:1;min-width:0;"><div class="rw-big">${big(r0)}</div><div style="font-size:11.5px;">${subOf(r0)}</div><div style="font-size:10.5px;color:var(--text3);">${esc(ruleTxt(r0))}${r0.fee ? ' · FX ' + r0.fee + '%' : ''}</div></div></div>${capHtml}`;
+    html += '<div style="margin-top:8px;">' + rank.slice(1, 6).map((r, k) => `<div class="rw-rank-row"><span class="rw-rank">${k + 2}</span><div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:500;">${esc(r.prof.card)}</div><div style="font-size:10.5px;color:var(--text3);">${esc(ruleTxt(r))}${r.fee ? ' · FX ' + r.fee + '%' : ''}</div></div><b style="font-size:13px;white-space:nowrap;">${big(r)}</b></div>`).join('') + '</div>';
+    // บัตรที่ให้โบนัสเป็นก้อน — ถ้ายอดต่อครั้งยังไม่ถึง บอกว่าถึงแล้วจะได้เท่าไร
+    billRwCards().forEach(prof => {
+      const rule = billRwMatchedRule(prof, t);
+      if (!rule || rule === '-' || !rule.block || amt >= rule.block) return;
+      const m = billRwMarginal(prof, t, rule.block);
+      if (m.none || !(m.metric > r0.metric)) return;
+      html += `<div class="rw-tip">💡 ถ้ายอดถึง ${billFmt0(rule.block)}${rule.perSlip ? ' ในสลิปเดียว' : ''}: <b>${esc(prof.card)}</b> ได้ ${raw ? Math.round(m.metric).toLocaleString() + ' ' + esc(prof.p.unit) + '/฿1,000' : rop ? (rule.block / m.net).toFixed(1) + ' ฿/ไมล์' : m.pct.toFixed(2) + '%'}</div>`;
+    });
+  }
+  if (raw) html += '<div class="rw-tip" style="color:var(--amber);">คะแนนต่างธนาคารมีมูลค่าไม่เท่ากัน — เรียงตามจำนวนคะแนนเท่านั้น</div>';
+  const noRop = billRwNoRop();
+  if (noRop.length) html += `<div class="rw-tip">ไม่ได้จัดอันดับ (ยังไม่มีอัตรา ROP): ${noRop.map(esc).join(', ')}</div>`;
+  el.innerHTML = html;
+}
+// ─── แท็บภาพรวม: กล่อง "บิลถัดไป" + "คะแนน/ไมล์รอบนี้" ───
+function billRenderOvTiles() {
+  const el = document.getElementById('billOvTiles');
+  if (!el) return;
+  const profs = billRwCards();
+  if (!profs.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  const dues = billRwDues().filter(x => !x.done && x.days >= 0);
+  let due;
+  if (dues.length) {
+    const d0 = dues[0], g = dues.filter(x => x.due === d0.due);
+    const banks = [...new Set(g.map(x => x.prof.p.bank))];
+    const name = g.length === 1 ? g[0].prof.card : banks.length === 1 ? banks[0] + ' ×' + g.length : g.length + ' ใบ';
+    const sum = g.reduce((a, x) => a + Math.max(0, x.spent - x.paid), 0);
+    due = `<div class="k">⏰ บิลถัดไป</div><div class="v">${esc(name)}</div><div class="s">${billFmt0(sum)}</div><span class="rw-pill ${d0.days <= 3 ? 'due' : 'ok'}">${billRwShort(d0.due)} · ${d0.days === 0 ? 'วันนี้' : 'อีก ' + d0.days + ' วัน'}</span>`;
+  } else due = '<div class="k">⏰ บิลถัดไป</div><div class="v" style="font-size:15px;">ไม่มีบิลค้าง</div><div class="s" style="color:var(--text3);">ยอดรอบที่ปิดแล้วจ่ายครบ</div>';
+  const mode = billRwMode(), today = todayISO();
+  let tot = 0, used = 0;
+  profs.forEach(prof => {
+    const cyc = billRwCycle(prof.stmtDay, today);
+    const c = billRwCalc(prof, billRwTxs(prof.card, cyc.start, cyc.end));
+    if (c.spend > 0) used++;
+    tot += mode === 'rop' ? (c.miles || 0) : mode === 'baht' ? c.value : c.pts;
+  });
+  const earn = mode === 'rop' ? `<div class="k">✈️ ไมล์ ROP รอบนี้</div><div class="v">${Math.floor(tot).toLocaleString()}</div>`
+    : mode === 'baht' ? `<div class="k">🎁 มูลค่าคะแนนรอบนี้</div><div class="v">≈ ${billFmt0(tot)}</div>`
+    : `<div class="k">🔢 คะแนนรอบนี้</div><div class="v" style="font-size:15px;">ดูรายบัตร ›</div>`;
+  el.innerHTML = `<div class="tile bill-tap" onclick="billSetTab('cards')">${due}</div>
+    <div class="tile bill-tap" onclick="billSetTab('cards')">${earn}<div class="s" style="color:var(--text3);">ใช้ ${used} จาก ${profs.length} บัตร · แตะดูว่ารูดใบไหนดี</div></div>`;
+}
+// ─── แท็บของหน้าบิล ───
+function billSetTab(tab) {
+  billState.tab = tab;
+  localStorage.setItem('folio_bill_tab', tab);
+  billRender();
+  const tabs = document.getElementById('billTabs');
+  if (tabs && tabs.getBoundingClientRect().top < 0) tabs.scrollIntoView({ block: 'start' });
+}
+function billApplyTab() {
+  const tab = billState.tab || localStorage.getItem('folio_bill_tab') || 'overview';
+  billState.tab = tab;
+  document.querySelectorAll('#billTabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
+  document.querySelectorAll('#page-bills .bill-tab').forEach(sct => sct.classList.toggle('on', sct.dataset.tab === tab));
+}
 // ─── ตั้งค่าโปรไฟล์บัตร ───
 function billRwSaveAll(o) {
   localStorage.setItem('folio_bill_card_profiles', JSON.stringify(o));
@@ -7834,8 +7992,10 @@ function billDrill(kind, value) {
   document.querySelectorAll('#billFilterChips .bill-chip').forEach(b => b.classList.toggle('active', b.dataset.f === 'all'));
   document.getElementById('billSearch').value = '';
   if (billState.view === 'month') billState.listMode = 'month'; // ให้ช่วงของรายการตรงกับยอดบน dashboard
+  billState.tab = 'list';
+  billApplyTab();
   billRenderList();
-  document.getElementById('billListTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('billTabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function billFilterLabel(kind, v) {
   if (kind === 'cat') { const c = billCat(v); return c.icon + ' ' + c.label; }
@@ -7870,6 +8030,7 @@ function billSetFilter(f) {
 }
 
 function billRender() {
+  billApplyTab();
   const ym = billPeriod();
   const isYear = ym.length === 4;
   const unit = isYear ? 'ทั้งปี' : 'เดือนนี้';
@@ -7894,12 +8055,20 @@ function billRender() {
     const yoy = billYearOverYear(ym, t);
     if (yoy) expSub += ` · <span style="color:${yoy.pct > 0 ? 'var(--red)' : 'var(--green)'};">${yoy.pct > 0 ? '▲' : '▼'} ${Math.abs(yoy.pct).toFixed(0)}% vs ปีก่อน</span>`;
   }
+  // หัวสรุป: เงินเหลือเป็นตัวเลขหลัก + รับ/จ่าย/ออม/ลงทุน
+  let heroSub = isYear ? avgSub(t.consumption) + ' (รายจ่าย)' : (t.refund ? 'รายจ่ายหักเงินคืนแล้ว ' + billFmt0(t.refund) : 'รายจ่ายไม่รวมเงินลงทุน/ออม');
+  if (isYear) { const yoy = billYearOverYear(ym, t); if (yoy) heroSub += ` · รายจ่าย ${yoy.pct > 0 ? '▲' : '▼'} ${Math.abs(yoy.pct).toFixed(0)}% vs ปีก่อน`; }
+  if (t.invest) heroSub += ' · เหลือในบัญชีหลังลงทุน ' + billFmt0(t.surplus - t.invest);
   document.getElementById('billMetrics').innerHTML = `
-    <div class="metric"><div class="metric-label">รายรับ</div><div class="metric-value pos">${billFmt0(t.income)}</div><div class="metric-sub">${isYear ? avgSub(t.income) : billPeriodLabel(ym)}</div></div>
-    <div class="metric"><div class="metric-label">รายจ่าย</div><div class="metric-value neg">${billFmt0(t.consumption)}</div><div class="metric-sub" title="ไม่รวมเงินลงทุน/ออม และยอดจ่ายบิลบัตร">${expSub}</div></div>
-    <div class="metric"><div class="metric-label">เงินเหลือ</div><div class="metric-value ${t.surplus >= 0 ? 'pos' : 'neg'}">${billFmt0(t.surplus)}</div><div class="metric-sub">${t.invest ? 'ลงทุนแล้ว ' + billFmt0(t.invest) + ' · เหลือในบัญชี <span style="color:' + (t.surplus - t.invest >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + billFmt0(t.surplus - t.invest) + '</span>' : (isYear ? avgSub(t.surplus) : 'รายรับ − รายจ่าย')}</div></div>
-    <div class="metric"><div class="metric-label">อัตราออม</div><div class="metric-value" style="color:${sr === null ? 'var(--text3)' : sr >= 20 ? 'var(--green)' : sr >= 10 ? 'var(--amber)' : 'var(--red)'};">${sr === null ? '—' : sr.toFixed(0) + '%'}</div><div class="metric-sub">${sr === null ? 'ยังไม่มีรายรับ' + unit : 'เงินเหลือ ÷ รายรับ'}</div></div>
-    <div class="metric bill-invest-tile" title="แตะเพื่อดูรายการลงทุน/ออม" onclick="billDrill('cat','invest')"><div class="metric-label">📈 ลงทุน/ออม <span style="color:var(--accent);">›</span></div><div class="metric-value" style="color:var(--green);">${billFmt0(t.invest)}</div><div class="metric-sub">${t.income > 0 ? 'อัตราการลงทุน ' + (t.invest / t.income * 100).toFixed(0) + '% ของรายรับ' : (isYear && t.invest ? avgSub(t.invest) : 'โอนเข้าพอร์ต/บัญชีออมจริง')}</div></div>`;
+    <div class="bh-l">เงินเหลือ${isYear ? 'ทั้งปี' : 'เดือนนี้'} · ${billPeriodLabel(ym)}</div>
+    <div class="bh-big">${t.surplus < 0 ? '−' : ''}${billFmt0(Math.abs(t.surplus))}</div>
+    <div class="bh-row">
+      <div><span>รับ</span><b>${billFmt0(t.income)}</b></div>
+      <div><span>จ่าย</span><b>${billFmt0(t.consumption)}</b></div>
+      <div><span>ออม</span><b>${sr === null ? '—' : sr.toFixed(0) + '%'}</b></div>
+      <div class="bill-tap" onclick="billDrill('cat','invest')" title="แตะเพื่อดูรายการลงทุน/ออม"><span>ลงทุน ›</span><b>${billFmt0(t.invest)}</b></div>
+    </div>
+    <div class="bh-sub">${heroSub}</div>`;
   // การ์ดเงินเหลือ↔DCA เป็นมุมมอง "ตอนนี้" เสมอ — มุมมองปีใช้ยอดเดือนปัจจุบันแทนยอดทั้งปี
   billRenderCashflow(isYear ? billMonthTotals(todayISO().slice(0, 7)) : t);
   billRenderRecur();
@@ -7907,6 +8076,7 @@ function billRender() {
   billRenderPay(t);
   billRenderCards(t);
   billRwRender();
+  billRenderOvTiles();
   billRenderTrend();
   billRenderList();
 }
@@ -8233,8 +8403,9 @@ function billRenderYearTable(el) {
 function billOpenMonth(ym) {
   billState.month = ym;
   billResetListDate();
+  billState.tab = 'list';
   billSetView('month');
-  document.getElementById('billListTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('billTabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function billDelete(id) {
