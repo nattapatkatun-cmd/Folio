@@ -596,6 +596,9 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .rw-big small { font-size: 12px; font-weight: 500; }
 .rw-rank-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 0.5px solid var(--bg2); }
 .rw-rank { width: 22px; height: 22px; border-radius: 50%; background: var(--bg2); color: var(--text2); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rw-fx { font-size: 12px; background: var(--blue-bg); border-radius: 12px; padding: 10px 12px; margin-top: 10px; line-height: 1.5; }
+.rw-fx-row { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; padding: 3px 0; border-top: 0.5px solid var(--border); }
+.rw-fx-row b:last-child { white-space: nowrap; }
 .rw-tip { font-size: 10.5px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
 @media (max-width: 420px) { .rw-pick-grid button { font-size: 9.5px; } .rw-cc { width: 96px; } .bill-hero .bh-big { font-size: 28px; } }
 .rw-num { width: 84px; padding: 5px 7px !important; font-size: 12px !important; }
@@ -715,7 +718,8 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .aih-input { display: flex; gap: 6px; align-items: flex-end; margin-top: 12px; }
 .aih-input textarea { flex: 1; min-width: 0; font-family: var(--font); font-size: 13px; line-height: 1.5; color: var(--text); background: var(--bg); border: 0.5px solid var(--border2); border-radius: 12px; padding: 9px 12px; resize: none; outline: none; max-height: 140px; }
 .aih-input textarea:focus { border-color: var(--accent); }
-#aihSend { font-family: var(--font); font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: none; border-radius: 12px; padding: 10px 14px; cursor: pointer; white-space: nowrap; }
+#rwcSend:disabled, .rwc-chip:disabled { opacity: .5; cursor: default; }
+#rwcSend, #aihSend { font-family: var(--font); font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: none; border-radius: 12px; padding: 10px 14px; cursor: pointer; white-space: nowrap; }
 @media (max-width: 430px) { .aih-chip { flex: 1 1 100%; } .aih-bubble { font-size: 12.5px; } }
 </style>
 <!-- Firebase -->
@@ -1480,6 +1484,21 @@ if (window._folioReady) {
         <button data-m="baht" onclick="billRwSetMode('baht')">฿ มูลค่าบาท</button>
       </div>
       <div id="billRwPick"></div>
+    </div>
+    <div class="card" style="margin-bottom:var(--gap);" id="rwcCard">
+      <div class="card-title">💬 ถาม AI: รูดใบไหนดี <button class="action" id="rwcClear" onclick="rwcClear()" style="display:none;">ล้างแชต</button></div>
+      <div class="aih-chips">
+        <button class="aih-chip rwc-chip" onclick="rwcAsk('กินข้าวร้านอาหาร ฿1,500 รูดใบไหนดี')">🍽️ กินข้าว ฿1,500</button>
+        <button class="aih-chip rwc-chip" onclick="rwcAsk('จะไปเที่ยวญี่ปุ่น ใช้จ่ายเงินเยนประมาณ ฿40,000 ควรรูดใบไหน เทียบแต้มกับค่าธรรมเนียม FX ให้ด้วย')">🇯🇵 เที่ยวญี่ปุ่น ฿40,000</button>
+        <button class="aih-chip rwc-chip" onclick="rwcAsk('ช้อปห้าง Central ฿8,000 รูดใบไหนดี ควรแยกบิลไหม')">🏬 ช้อป Central ฿8,000</button>
+        <button class="aih-chip rwc-chip" onclick="rwcAsk('สรุปรอบบิลนี้: แต่ละหมวดควรใช้บัตรใบไหน และเพดานไหนใกล้เต็มบ้าง')">🧭 แผนรอบบิลนี้</button>
+      </div>
+      <div id="rwcEmpty" class="sg-msub" style="margin-top:10px;line-height:1.6;">พิมพ์ถามได้เลย เช่น "จองโรงแรมผ่าน Agoda ฿12,000 ใช้ใบไหน" — AI เห็นโปรไฟล์บัตร เพดานที่เหลือรอบนี้ และตารางที่แอปคำนวณไว้</div>
+      <div class="aih-thread" id="rwcThread"></div>
+      <div class="aih-input">
+        <textarea id="rwcInput" rows="1" placeholder="เช่น ซื้อของ Lazada ฿3,200 รูดใบไหน…" oninput="aihAutoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();rwcSendTyped();}"></textarea>
+        <button id="rwcSend" onclick="rwcSendTyped()">ส่ง</button>
+      </div>
     </div>
     <div class="card" style="margin-bottom:var(--gap);">
       <div id="billRw"></div>
@@ -7217,8 +7236,8 @@ const BILL_RW_ROP = {
   prvi: { per: 2.7, ok: true, note: '2.7 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (หลายแหล่งตรงกัน แต่บางหน้าของ UOB ยังเขียน 1.2)' },
   premier: { per: 5, ok: true, note: '5 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (ตารางจาก creditcardth)' },
   uobworld: { per: 5, ok: true, note: '5 คะแนน = 1 ไมล์ ROP (อัตราหลัง 1 ต.ค. 68 — ผู้ใช้ยืนยันจากแอป UOB แล้ว)' },
-  passion: { per: null, ok: false, note: 'THE PASSION ไม่อยู่ในโปรแกรมพิเศษ 2:1 และไม่พบอัตราปกติ — ดูใน K PLUS แล้วใส่เอง' },
-  jcb: { per: null, ok: false, note: 'ไม่พบอัตรา K Point → ROP ของ JCB Platinum — ดูใน K PLUS แล้วใส่เอง' }
+  passion: { per: 4, ok: true, note: 'K Point → ROP: 4 K Point = 1 ไมล์ · โอนขั้นต่ำ 20,000 K Point (ผู้ใช้ยืนยัน)' },
+  jcb: { per: 4, ok: true, note: 'K Point → ROP: 4 K Point = 1 ไมล์ · โอนขั้นต่ำ 20,000 K Point (ผู้ใช้ยืนยัน)' },
 };
 // โหมดเทียบความคุ้ม: 'rop' = ไมล์ ROP ที่ได้ (ค่าเริ่มต้น) · 'baht' = มูลค่าเป็นบาท
 function billRwMode() { const m = localStorage.getItem('folio_bill_rw_mode'); return m === 'baht' || m === 'raw' ? m : 'rop'; }
@@ -7587,11 +7606,126 @@ function billRwRenderPick() {
       html += `<div class="rw-tip">💡 ถ้ายอดถึง ${billFmt0(rule.block)}${rule.perSlip ? ' ในสลิปเดียว' : ''}: <b>${esc(prof.card)}</b> ได้ ${raw ? Math.round(m.metric).toLocaleString() + ' ' + esc(prof.p.unit) + '/฿1,000' : rop ? (rule.block / m.net).toFixed(1) + ' ฿/ไมล์' : m.pct.toFixed(2) + '%'}</div>`;
     });
   }
+  if (cur !== 'THB') html += billRwFxCompare(t, amt);
   if (raw) html += '<div class="rw-tip" style="color:var(--amber);">คะแนนต่างธนาคารมีมูลค่าไม่เท่ากัน — เรียงตามจำนวนคะแนนเท่านั้น</div>';
   const noRop = billRwNoRop();
   if (noRop.length) html += `<div class="rw-tip">ไม่ได้จัดอันดับ (ยังไม่มีอัตรา ROP): ${noRop.map(esc).join(', ')}</div>`;
   el.innerHTML = html;
 }
+// ─── ต่างประเทศ: แต้มมาก (FX 2.5%) vs FX ต่ำ (1%) — ไมล์ที่ได้เพิ่มคุ้มค่าธรรมเนียมที่จ่ายเพิ่มไหม ───
+// คืนค่าไมล์/คะแนน/มูลค่า + ค่าธรรมเนียมของบัตรนี้ สำหรับยอด base (บาท ก่อนค่าธรรมเนียม) — ไม่ขึ้นกับโหมดที่เลือก
+function billRwDelta(prof, t, base, skipId) {
+  const cyc = billRwCycle(prof.stmtDay, t.date);
+  const txs = billRwTxs(prof.card, cyc.start, cyc.end, skipId);
+  const fee = String(t.currency || 'THB').toUpperCase() !== 'THB' ? billCardFee(prof.card) : 0;
+  const a = billRwCalc(prof, txs), b = billRwCalc(prof, txs.concat([{ ...t, card: prof.card, amountThb: base * (1 + fee / 100), time: '99:99' }]));
+  return { prof, fee, feeCost: base * fee / 100, pts: b.pts - a.pts, cash: b.cash - a.cash,
+    miles: prof.ropPer ? (b.pts - a.pts) / prof.ropPer : null, value: b.value - a.value };
+}
+function billRwFxCompare(t, base) {
+  const mb = billRwMileBaht();
+  const rows = billRwCards().map(p => billRwDelta(p, t, base));
+  const withMiles = rows.filter(r => r.miles != null);
+  if (withMiles.length < 2) return '';
+  const low = withMiles.slice().sort((a, b) => a.fee - b.fee || b.miles - a.miles)[0];
+  // มูลค่าสุทธิเมื่อตีไมล์ละ mb บาท = ไมล์ × mb + เงินคืน − ค่าธรรมเนียม
+  const net = r => r.miles * mb + r.cash - r.feeCost;
+  const best = withMiles.slice().sort((a, b) => net(b) - net(a))[0];
+  const lines = withMiles.filter(r => r !== low && r.miles > low.miles).sort((a, b) => b.miles - a.miles).slice(0, 4).map(r => {
+    const dFee = r.feeCost - low.feeCost, dMi = r.miles - low.miles;
+    if (dFee <= 0) return `<div class="rw-fx-row"><span><b>${esc(r.prof.card)}</b> ไมล์มากกว่าและค่าธรรมเนียมไม่แพงกว่า</span><b class="pos">คุ้มกว่าเสมอ</b></div>`;
+    const be = dFee / dMi;
+    return `<div class="rw-fx-row"><span><b>${esc(r.prof.card)}</b> จ่าย FX เพิ่ม ${billFmt(Math.round(dFee * 100) / 100)} ได้ไมล์เพิ่ม ${dMi.toFixed(1)}</span><b style="color:${be < mb ? 'var(--green)' : 'var(--text2)'};">คุ้มถ้าไมล์ > ฿${be.toFixed(2)}</b></div>`;
+  }).join('');
+  return `<div class="rw-fx"><div style="font-weight:600;margin-bottom:4px;">💱 แต้มเยอะ vs ค่าธรรมเนียมต่ำ (ยอด ${billFmt0(base)})</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">เทียบกับ <b>${esc(low.prof.card)}</b> (FX ${low.fee}% · ${low.miles.toFixed(1)} ไมล์)</div>${lines || '<div style="font-size:11px;color:var(--text3);">ไม่มีใบที่ได้ไมล์มากกว่า</div>'}
+    <div style="font-size:11.5px;margin-top:6px;">ถ้าตีไมล์ ROP ละ ฿<input class="form-input" type="number" min="0.05" step="0.05" value="${mb}" style="width:64px;padding:3px 6px;font-size:12px;display:inline-block;" onchange="billRwSetMileBaht(this.value)"> → คุ้มสุดหลังหักค่า FX: <b style="color:var(--accent-dark);">${esc(best.prof.card)}</b> (สุทธิ ${net(best) >= 0 ? '+' : '−'}${billFmt(Math.abs(Math.round(net(best) * 100) / 100))})</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5;">ไม่รวมบัตรที่ไม่มีอัตรา ROP (KBank, KWE) · ค่าธรรมเนียมตามที่ตั้งรายใบ (ไม่ได้ตั้ง = ${billDefaultFxFee()}%) · ถ้าจะใช้แต้มแลกส่วนลด/เงินคืนแทนไมล์ ให้ดูโหมด ฿ มูลค่าบาท</div></div>`;
+}
+
+// ─── 💬 ถาม AI ว่ารูดใบไหน ───
+const RWC_KEY = 'folio_rwChat';
+let rwcThread = [], rwcBusy = false;
+try { const t = JSON.parse(localStorage.getItem(RWC_KEY) || '[]'); if (Array.isArray(t)) rwcThread = t; } catch (e) {}
+function rwcSave() { try { localStorage.setItem(RWC_KEY, JSON.stringify(rwcThread.slice(-30))); } catch (e) {} }
+const RWC_RULES = [
+  'คุณคือผู้ช่วยเลือกบัตรเครดิตของผู้ใช้คนเดียว ตอบภาษาไทย กระชับ ตรงประเด็น',
+  'ใช้ข้อมูลบัตร เพดาน และตัวเลขที่แอปคำนวณไว้ในส่วน "ข้อมูลจากแอป" เป็นหลัก ห้ามแต่งอัตราหรือโปรที่ไม่มีในข้อมูล ถ้าข้อมูลไม่พอหรือติด "ยังไม่ยืนยัน" ให้บอกตรง ๆ',
+  'เริ่มคำตอบด้วยบรรทัด "แนะนำ: <ชื่อบัตร>" แล้วตามด้วยเหตุผลสั้น ๆ (ได้กี่ไมล์/คะแนน/มูลค่า, เพดานเหลือเท่าไร) และใบสำรองถ้าเพดานเต็มหรือยอดเกินเพดาน',
+  'ถ้ายอดใช้จ่ายไม่ตรงกับ ฿1,000 ในตาราง ให้คิดตามสัดส่วนเอง แต่ระวังเพดาน (capSpend) และโบนัสแบบก้อน (ต้องครบยอดต่อสลิป/สะสม) — แสดงวิธีคิดสั้น ๆ',
+  'ใช้จ่ายต่างประเทศ: เทียบทั้งไมล์/คะแนนที่ได้ และค่าธรรมเนียมแปลงสกุลเงิน (FX) ของแต่ละบัตร บอกจุดคุ้มทุนเป็น "บาทต่อไมล์" และสรุปตามมูลค่าไมล์ที่ผู้ใช้ตั้ง',
+  'โหมดที่ผู้ใช้เลือก (ไมล์ ROP / คะแนนดิบ / บาท) คือเป้าหมายหลัก ถ้าผู้ใช้บอกว่าจะเอาแต้มไปแลกส่วนลด ให้เทียบเป็นบาทแทน',
+  'ห้ามแนะนำให้รูดเพื่อให้ได้แต้มจนเกินความจำเป็น และเตือนถ้าบิลใกล้ครบกำหนดชำระ'
+].join('\n');
+function rwcContext() {
+  const L = [], today = todayISO(), mode = billRwMode();
+  L.push('วันนี้ ' + today + ' · โหมดเทียบที่ผู้ใช้เลือก: ' + (mode === 'rop' ? 'ไมล์ ROP' : mode === 'raw' ? 'คะแนนดิบ' : 'มูลค่าบาท') + ' · ผู้ใช้ตีมูลค่าไมล์ ROP ละ ฿' + billRwMileBaht());
+  billRwCards().forEach(prof => {
+    const p = prof.p, cyc = billRwCycle(prof.stmtDay, today);
+    const c = billRwCalc(prof, billRwTxs(prof.card, cyc.start, cyc.end));
+    L.push('');
+    L.push(`[บัตร] ${prof.card} (${p.bank || ''}) · หน่วย: ${p.unit} · รอบบิลนี้ ${cyc.start}–${cyc.end} (ตัดรอบวันที่ ${prof.stmtDay}, ครบชำระวันที่ ${prof.dueDay}) · รูดรอบนี้ ${Math.round(c.spend)} บาท ได้ ${c.pts} ${p.unit}`);
+    L.push(`  อัตราปกติ ${p.base.pts} ${p.unit}/${p.base.per} บาท · ROP: ${prof.ropPer ? prof.ropPer + ' ' + p.unit + ' = 1 ไมล์' : 'ไม่มีอัตรา/โอนเข้า ROP ไม่ได้'} · มูลค่า 1 ${p.unit} ≈ ฿${prof.pointValue} · FX fee ${billCardFee(prof.card)}%${p.exclude ? ' · ไม่ได้คะแนน: ' + p.exclude.join(',') : ''}${p.excludeCur ? ' · ไม่ได้คะแนนสกุล ' + p.excludeCur.join(',') : ''}`);
+    p.rules.forEach(r => {
+      if (prof.off[r.id]) return;
+      const s = c.st[r.id] || { used: 0, blocks: 0, spend: 0 };
+      const active = billRwActive(r, today) ? '' : ' (หมดโปร/ยังไม่เริ่ม)';
+      const left = r.capSpend ? ` · ใช้เพดานไป ${Math.round(s.used)}/${r.capSpend} เหลือ ${Math.max(0, Math.round(r.capSpend - s.used))}` : r.block ? ` · ครบแล้ว ${s.blocks}/${r.maxBlocks || '∞'} ครั้ง` : '';
+      L.push(`  - โปร: ${r.label} | ${billRwRuleDesc(r, p.unit)} | หมวด: ${(r.tags || ['ทุกหมวด']).join(',')}${r.cur ? ' สกุล ' + r.cur.join(',') : ''}${r.notCur ? ' ยกเว้นสกุล ' + r.notCur.join(',') : ''}${left}${active}${r.verified === false ? ' [ยังไม่ยืนยัน]' : ''}`);
+    });
+    (p.notes || []).forEach(n => L.push('  หมายเหตุ: ' + n));
+    if (prof.memo) L.push('  บันทึกของผู้ใช้: ' + prof.memo);
+  });
+  const nr = billCards().filter(c => !billRwProfile(c));
+  if (nr.length) L.push('\nบัตรที่ยังไม่มีโปรไฟล์ (ไม่มีข้อมูลสิทธิ์): ' + nr.join(', '));
+  // ตารางที่แอปคำนวณแล้ว: ต่อ ฿1,000 ในรอบบิลนี้ (เพดานที่ใช้ไปแล้วนับแล้ว)
+  L.push('\n===== ตารางคำนวณจากแอป: ยอด ฿1,000 ต่อครั้ง ในรอบบิลปัจจุบัน =====');
+  const cats = BILL_RW_PICK.filter(x => x[0] !== 'fx').map(x => [x[0], x[2], 'THB']).concat([['fx', 'ต่างประเทศ USD', 'USD'], ['fx', 'ต่างประเทศ JPY', 'JPY'], ['fx', 'ต่างประเทศ SGD', 'SGD'], ['fx', 'ต่างประเทศ EUR', 'EUR']]);
+  cats.forEach(([tag, label, cur]) => {
+    const t = { type: 'expense', payMethod: 'card', category: tag === 'dining' ? 'food' : 'other', merchant: '', currency: cur, rewardTag: tag === 'fx' ? 'general' : tag, date: today };
+    const rows = billRwCards().map(p => billRwDelta(p, t, 1000)).sort((a, b) => (b.miles || 0) - (a.miles || 0));
+    L.push(label + ': ' + rows.map(r => `${r.prof.card} ${r.pts}${r.prof.p.unit === 'ไมล์ KrisFlyer' ? 'ไมล์KF' : 'pt'}${r.miles != null ? '=' + r.miles.toFixed(1) + 'ไมล์ROP' : ''}${r.cash ? '+เงินคืน฿' + r.cash.toFixed(0) : ''}${r.fee ? ' FX฿' + r.feeCost.toFixed(0) : ''} มูลค่า≈฿${(r.value - r.feeCost).toFixed(1)}`).join(' | '));
+  });
+  return L.join('\n');
+}
+function rwcRender(scroll) {
+  const box = document.getElementById('rwcThread'); if (!box) return;
+  const empty = document.getElementById('rwcEmpty'); if (empty) empty.style.display = rwcThread.length || rwcBusy ? 'none' : '';
+  const clr = document.getElementById('rwcClear'); if (clr) clr.style.display = rwcThread.length ? '' : 'none';
+  let html = rwcThread.map((m, i) => {
+    if (m.role === 'user') return '<div class="aih-msg aih-user"><div class="aih-bubble">' + esc(m.text) + '</div></div>';
+    if (m.error) return '<div class="aih-msg aih-ai"><div class="aih-bubble aih-err">⚠️ ' + esc(m.text) + (i === rwcThread.length - 1 ? '<div><button class="sg-btn" style="margin-top:6px;" onclick="rwcRetry()">ลองใหม่</button></div>' : '') + '</div></div>';
+    return '<div class="aih-msg aih-ai"><div class="aih-bubble">' + mdLiteToHtml(m.text) + '<div class="aih-time">คำนวณจากข้อมูลบัตรในแอป · ตรวจโปร "ยังไม่ยืนยัน" กับธนาคารก่อน</div></div></div>';
+  }).join('');
+  if (rwcBusy) html += '<div class="aih-msg aih-ai"><div class="aih-bubble aih-typing"><span></span><span></span><span></span> กำลังคิด…</div></div>';
+  box.innerHTML = html;
+  document.querySelectorAll('.rwc-chip, #rwcSend').forEach(b => { b.disabled = rwcBusy; });
+  if (scroll) { const msgs = box.querySelectorAll('.aih-msg'); const t = msgs[msgs.length - 1]; if (t) setTimeout(() => t.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30); }
+}
+async function rwcAsk(q) {
+  q = String(q || '').trim();
+  if (!q || rwcBusy) return;
+  rwcBusy = true;
+  rwcThread.push({ role: 'user', text: q, t: Date.now() });
+  rwcSave(); rwcRender(true);
+  const hist = rwcThread.slice(-8).filter(m => m.role === 'user' || (m.role === 'model' && !m.error));
+  while (hist.length && hist[0].role !== 'user') hist.shift();
+  try {
+    const d = await callGemini({
+      systemInstruction: { parts: [{ text: RWC_RULES + '\n\n===== ข้อมูลจากแอป (อัปเดตล่าสุด) =====\n' + rwcContext() }] },
+      contents: hist.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+      generationConfig: { maxOutputTokens: 1500, temperature: 0.2 }
+    });
+    rwcThread.push({ role: 'model', text: geminiText(d).trim() || '(ไม่มีคำตอบ)', t: Date.now() });
+  } catch (e) {
+    const m = e.message === 'no_key' ? 'ยังไม่ได้ใส่ Gemini Key — ไปที่ ⚙️ ตั้งค่า' : e.message === 'all_quota' ? 'Gemini ทุก key หมดโควตาวันนี้' : e.message;
+    rwcThread.push({ role: 'model', text: m, error: true, t: Date.now() });
+  }
+  rwcBusy = false; rwcSave(); rwcRender(true);
+}
+function rwcSendTyped() { const ta = document.getElementById('rwcInput'); if (!ta || rwcBusy) return; const q = ta.value.trim(); if (!q) return; ta.value = ''; aihAutoGrow(ta); rwcAsk(q); }
+function rwcRetry() { if (rwcBusy) return; const last = rwcThread[rwcThread.length - 1]; if (!last || !last.error) return; rwcThread.pop(); const q = rwcThread.pop(); if (q && q.role === 'user') rwcAsk(q.text); else rwcRender(); }
+function rwcClear() { if (rwcBusy || (rwcThread.length && !confirm('ล้างบทสนทนา?'))) return; rwcThread = []; rwcSave(); rwcRender(); }
 // ─── แท็บภาพรวม: กล่อง "บิลถัดไป" + "คะแนน/ไมล์รอบนี้" ───
 function billRenderOvTiles() {
   const el = document.getElementById('billOvTiles');
@@ -7668,7 +7802,7 @@ function billRwAddAll() {
   billRwRenderModal();
 }
 function billRwSetMode(v) { localStorage.setItem('folio_bill_rw_mode', v === 'baht' || v === 'raw' ? v : 'rop'); billSyncSettings(); if (typeof billRender === 'function') billRender(); billRwRenderModal(); }
-function billRwSetMileBaht(v) { const n = parseFloat(v); if (!(n > 0 && n <= 10)) { showToast('ใส่ตัวเลขมากกว่า 0'); return; } localStorage.setItem('folio_bill_rw_milebaht', String(n)); billSyncSettings(); if (typeof billRender === 'function') billRender(); }
+function billRwSetMileBaht(v) { const n = parseFloat(v); if (!(n > 0 && n <= 10)) { showToast('ใส่ตัวเลขมากกว่า 0'); return; } localStorage.setItem('folio_bill_rw_milebaht', String(n)); billSyncSettings(); if (typeof billRender === 'function') billRender(); showToast('1 ไมล์ ROP = ฿' + n); }
 // ─── แก้สิทธิ์ในแอป (ไม่ต้องแก้โค้ด) ───
 // คำอธิบายตัวเลขจริงของกฎ (หลังแก้แล้ว)
 function billRwRuleDesc(r, unit) {
@@ -8077,6 +8211,7 @@ function billRender() {
   billRenderCards(t);
   billRwRender();
   billRenderOvTiles();
+  rwcRender();
   billRenderTrend();
   billRenderList();
 }
