@@ -1479,9 +1479,9 @@ if (window._folioReady) {
     <div class="card" style="margin-bottom:var(--gap);display:none;" id="billRwCard">
       <div class="card-title"><span>💡 รูดใบไหนดี? <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billRwSub"></span></span><button class="action" onclick="billRwOpen()">⚙️ ตั้งค่าบัตร</button></div>
       <div class="bill-view-toggle" id="billRwModeToggle" style="display:inline-flex;margin-bottom:10px;">
+        <button data-m="baht" onclick="billRwSetMode('baht')">💰 คุ้มสุด</button>
         <button data-m="rop" onclick="billRwSetMode('rop')">✈️ ไมล์ ROP</button>
         <button data-m="raw" onclick="billRwSetMode('raw')">🔢 คะแนนดิบ</button>
-        <button data-m="baht" onclick="billRwSetMode('baht')">฿ มูลค่าบาท</button>
       </div>
       <div id="billRwPick"></div>
     </div>
@@ -7166,7 +7166,7 @@ const BILL_RW_PRESETS = {
   },
   kwe: {
     name: 'UOB KrisFlyer World Elite', bank: 'UOB', match: /kwe|kris/i, stmtDay: 27, dueDay: 17,
-    unit: 'ไมล์ KrisFlyer', pointValue: 0.5, pvNote: 'ตีค่า 1 ไมล์ ≈ ฿0.5 (ค่าประมาณ แก้ได้)', pvUnverified: true,
+    unit: 'ไมล์ KrisFlyer', pointValue: 0.5, mileUnit: true, pvNote: 'ไม่ได้ตั้งเอง = ใช้มูลค่าไมล์เดียวกับ ROP (ตั้งที่ด้านบนของหน้านี้)', pvUnverified: true,
     base: { per: 35, pts: 1, verified: false },
     rules: [
       { id: 'sia', label: 'Singapore Airlines/Scoot/KrisShop ฿12.5/ไมล์', tags: ['sia'], per: 12.5, pts: 1, capSpend: 200000, verified: false },
@@ -7239,8 +7239,16 @@ const BILL_RW_ROP = {
   passion: { per: 4, ok: true, note: 'K Point → ROP: 4 K Point = 1 ไมล์ · โอนขั้นต่ำ 20,000 K Point (ผู้ใช้ยืนยัน)' },
   jcb: { per: 4, ok: true, note: 'K Point → ROP: 4 K Point = 1 ไมล์ · โอนขั้นต่ำ 20,000 K Point (ผู้ใช้ยืนยัน)' },
 };
-// โหมดเทียบความคุ้ม: 'rop' = ไมล์ ROP ที่ได้ (ค่าเริ่มต้น) · 'baht' = มูลค่าเป็นบาท
-function billRwMode() { const m = localStorage.getItem('folio_bill_rw_mode'); return m === 'baht' || m === 'raw' ? m : 'rop'; }
+// โหมดเทียบความคุ้ม: 'baht' = 💰 คุ้มสุด (ค่าเริ่มต้น — ตีมูลค่าเป็นบาทจากทางแลกที่ดีที่สุดของแต้ม + เงินคืน − ค่า FX)
+// 'rop' = ไมล์ ROP ที่ได้ · 'raw' = คะแนนดิบ
+function billRwMode() { const m = localStorage.getItem('folio_bill_rw_mode2'); return m === 'rop' || m === 'raw' ? m : 'baht'; }
+// มูลค่า 1 แต้มเป็นบาท = ทางแลกที่ให้มากกว่า ระหว่าง แลกเงินคืน/ส่วนลด (pointValue) กับ แลกไมล์ ROP (ไมล์ละ billRwMileBaht)
+function billRwPtBaht(prof) {
+  const rop = prof.ropPer ? billRwMileBaht() / prof.ropPer : 0;
+  return Math.max(prof.pointValue || 0, rop);
+}
+function billRwRoute(prof) { return prof.ropPer && billRwMileBaht() / prof.ropPer > (prof.pointValue || 0) ? 'rop' : 'cash'; }
+function billRwRouteTxt(prof) { return prof.p.mileUnit ? 'ได้ไมล์ KrisFlyer (ตีค่าเท่าไมล์ ROP)' : billRwRoute(prof) === 'rop' ? 'แต้มแลก ROP คุ้มกว่า' : 'แต้มแลกเงินคืน/ส่วนลดคุ้มกว่า'; }
 // ใช้แปลงเงินคืน (เช่น UOB Premier ซูเปอร์ฯ 5%) เป็นไมล์ในโหมด ROP เท่านั้น
 function billRwMileBaht() { const v = parseFloat(localStorage.getItem('folio_bill_rw_milebaht')); return v > 0 ? v : 0.5; }
 
@@ -7268,7 +7276,7 @@ function billRwProfile(card) {
   return {
     key, card, p, auto: !s,
     stmtDay: day(s && s.stmtDay, p.stmtDay), dueDay: day(s && s.dueDay, p.dueDay),
-    pointValue: s && typeof s.pointValue === 'number' && s.pointValue >= 0 ? s.pointValue : p.pointValue,
+    pointValue: s && typeof s.pointValue === 'number' && s.pointValue >= 0 ? s.pointValue : (p0.mileUnit ? billRwMileBaht() : p.pointValue),
     off: (s && s.off) || {}, memo: (s && s.memo) || '',
     ropPer: s && typeof s.ropPer === 'number' && s.ropPer > 0 ? s.ropPer : (BILL_RW_ROP[key] || {}).per || null,
     ropOk: s && typeof s.ropPer === 'number' && s.ropPer > 0 ? true : !!(BILL_RW_ROP[key] || {}).ok
@@ -7361,7 +7369,7 @@ function billRwCalc(prof, txs) {
   const st = {};
   let pts = 0, cash = 0, spend = 0;
   txs.forEach(t => { const a = Math.max(0, billAmtThb(t)); spend += a; const e = billRwEarn(prof, st, t, a); pts += e.pts; cash += e.cash; });
-  const value = pts * prof.pointValue + cash;
+  const value = pts * billRwPtBaht(prof) + cash;
   const miles = prof.ropPer ? pts / prof.ropPer : null;
   // score = ตัวเลขที่ใช้จัดอันดับตามโหมด (null = บัตรนี้ไม่มีอัตรา ROP)
   const mode = billRwMode();
@@ -7405,7 +7413,7 @@ function billRwFmtGain(r) {
     if (r.cash > 0) return `≈ <strong>${(r.prof.ropPer ? r.pts / r.prof.ropPer : 0).toFixed(1)}</strong> ไมล์ ROP + เงินคืน <strong>${billFmt0(r.cash)}</strong> <span style="color:var(--text3);">(${r.pts.toLocaleString()} ${esc(r.prof.p.unit)} · ตีรวม ≈${r.net.toFixed(0)} ไมล์${r.fee ? ' · FX ' + r.fee + '% = ' + billFmt0(r.feeCost) : ''})</span>`;
     return `≈ <strong>${r.net.toFixed(1)}</strong> ไมล์ ROP <span style="color:var(--text3);">(${r.pts.toLocaleString()} ${esc(r.prof.p.unit)}${bpm}${r.fee ? ' · FX ' + r.fee + '% = ' + billFmt0(r.feeCost) : ''})</span>`;
   }
-  return `≈ ${billFmt(Math.round(r.net * 100) / 100)} <span style="color:var(--text3);">(${r.pct.toFixed(2)}%${r.fee ? ' หลังหัก FX ' + r.fee + '%' : ''})</span>`;
+  return `≈ ${billFmt(Math.round(r.net * 100) / 100)} <span style="color:var(--text3);">(${r.pct.toFixed(2)}%${r.fee ? ' หลังหัก FX ' + r.fee + '%' : ''}${r.pts > 0 ? ' · ' + billRwRouteTxt(r.prof) : ''})</span>`;
 }
 
 // ─── แนะนำบัตรในฟอร์มบันทึก ───
@@ -7524,7 +7532,7 @@ function billRwRender() {
     totV += c.value; totM += c.miles || 0;
     const head = raw ? `${c.pts.toLocaleString()} ${esc(prof.p.unit)}${c.cash ? ' + ' + billFmt0(c.cash) : ''}` : rop ? (c.miles == null ? `${c.pts.toLocaleString()} ${esc(prof.p.unit)}` : `≈ ${Math.floor(c.miles).toLocaleString()} ไมล์ ROP`) : `≈ ${billFmt0(c.value)}`;
     const rate = raw ? (c.spend > 0 ? ` · เฉลี่ย ${(c.pts / c.spend * 1000).toFixed(0)} ${esc(prof.p.unit)}/฿1,000` : '') : rop ? (prof.ropPer ? ` · ${prof.ropPer} ${esc(prof.p.unit)} = 1 ไมล์ ROP${prof.ropOk ? '' : billRwBadge(false)}${c.miles > 0 ? ' · เฉลี่ย ' + (c.spend / c.miles).toFixed(1) + ' ฿/ไมล์' : ''}` : ' · <span style="color:var(--amber);">ยังไม่มีอัตรา ROP</span>')
-      : ` · 1 ${esc(prof.p.unit)} = ฿${prof.pointValue}${prof.p.pvUnverified ? billRwBadge(false) : ''}${c.spend > 0 ? ' · ได้คืนเฉลี่ย ' + (c.value / c.spend * 100).toFixed(2) + '%' : ''}`;
+      : ` · 1 ${esc(prof.p.unit)} ≈ ฿${billRwPtBaht(prof).toFixed(3)} (${billRwRouteTxt(prof)})${c.spend > 0 ? ' · ได้คืนเฉลี่ย ' + (c.value / c.spend * 100).toFixed(2) + '%' : ''}`;
     const left = billRwDays(today, cyc.end);
     const p = prof.p;
     const yearSpend = p.waiver ? (state.transactions || []).filter(t => t.type === 'expense' && t.payMethod === 'card' && (t.card || '').trim() === prof.card && (t.date || '').slice(0, 4) === ref.slice(0, 4) && !BILL_NON_SPEND.includes(t.category)).reduce((a, t) => a + billAmtThb(t), 0) : 0;
@@ -7586,7 +7594,7 @@ function billRwRenderPick() {
   const subOf = r => raw ? (r.cash ? 'เงินคืน ' + billFmt0(r.cash) : '')
     : rop ? (r.cash > 0 ? `ไมล์ ROP ${realMi(r).toFixed(1)} + เงินคืน ${billFmt0(r.cash)} · จัดอันดับโดยตีเงินคืนเป็น ≈${r.net.toFixed(0)} ไมล์ (ไมล์ละ ฿${billRwMileBaht()})` : `${r.net.toFixed(1)} ไมล์ จากยอด ${billFmt0(amt)}`)
     : `≈ ${billFmt(Math.round(r.net * 100) / 100)} จากยอด ${billFmt0(amt)}`;
-  const ruleTxt = r => { const m = billRwMatchedRule(r.prof, t); return m === '-' ? 'ไม่ได้คะแนนหมวดนี้' : m ? m.label : 'อัตราปกติ'; };
+  const ruleTxt = r => { const m = billRwMatchedRule(r.prof, t); return (m === '-' ? 'ไม่ได้คะแนนหมวดนี้' : m ? m.label : 'อัตราปกติ') + (mode === 'baht' && r.pts > 0 ? ' · ' + billRwRouteTxt(r.prof) : ''); };
   let html = `<div class="rw-pick-grid">${BILL_RW_PICK.map(([k, ic, l]) => `<button class="${k === tag ? 'on' : ''}" onclick="billRwPickSet('rwPick','${k}')"><b>${ic}</b>${l}</button>`).join('')}</div>`;
   if (tag === 'fx') html += `<div class="chips-row">${BILL_RW_PICK_CUR.map(c => `<button class="bill-chip${c === cur ? ' active' : ''}" onclick="billRwPickSet('rwCur','${c}')">${c}</button>`).join('')}</div>`;
   html += `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text2);margin:2px 0 10px;flex-wrap:wrap;"><span style="white-space:nowrap;">ยอดต่อครั้ง ฿</span><input class="form-input" type="number" min="1" step="100" value="${amt}" style="width:96px;padding:5px 8px;font-size:12px;" onchange="billRwPickSet('amt',this.value)"><span style="color:var(--text3);">· คิดจากเพดานที่เหลือในรอบบิลนี้</span></div>`;
@@ -7661,18 +7669,19 @@ const RWC_RULES = [
   'เริ่มคำตอบด้วยบรรทัด "แนะนำ: <ชื่อบัตร>" แล้วตามด้วยเหตุผลสั้น ๆ (ได้กี่ไมล์/คะแนน/มูลค่า, เพดานเหลือเท่าไร) และใบสำรองถ้าเพดานเต็มหรือยอดเกินเพดาน',
   'ถ้ายอดใช้จ่ายไม่ตรงกับ ฿1,000 ในตาราง ให้คิดตามสัดส่วนเอง แต่ระวังเพดาน (capSpend) และโบนัสแบบก้อน (ต้องครบยอดต่อสลิป/สะสม) — แสดงวิธีคิดสั้น ๆ',
   'ใช้จ่ายต่างประเทศ: เทียบทั้งไมล์/คะแนนที่ได้ และค่าธรรมเนียมแปลงสกุลเงิน (FX) ของแต่ละบัตร บอกจุดคุ้มทุนเป็น "บาทต่อไมล์" และสรุปตามมูลค่าไมล์ที่ผู้ใช้ตั้ง',
-  'โหมดที่ผู้ใช้เลือก (ไมล์ ROP / คะแนนดิบ / บาท) คือเป้าหมายหลัก ถ้าผู้ใช้บอกว่าจะเอาแต้มไปแลกส่วนลด ให้เทียบเป็นบาทแทน',
+  'เป้าหมายหลักของผู้ใช้คือ "ความคุ้มค่ารวม" — ตีทุกอย่างเป็นบาท: แต้มคิดตามทางแลกที่ให้มากกว่า (แลกไมล์ ROP ตามมูลค่าไมล์ที่ผู้ใช้ตั้ง หรือแลกเงินคืน/ส่วนลดตามมูลค่าแต้ม) + เงินคืน − ค่าธรรมเนียม FX แล้วบอกด้วยว่าแต้มของบัตรที่แนะนำควรเอาไปแลกอะไร',
+  'ถ้ามูลค่าไมล์มีผลต่อคำตอบ (เช่น ต่างประเทศ: แต้มเยอะ vs FX ต่ำ) ให้บอกจุดคุ้มทุนเป็นบาทต่อไมล์ เพื่อให้ผู้ใช้ตัดสินเองได้',
   'ห้ามแนะนำให้รูดเพื่อให้ได้แต้มจนเกินความจำเป็น และเตือนถ้าบิลใกล้ครบกำหนดชำระ'
 ].join('\n');
 function rwcContext() {
   const L = [], today = todayISO(), mode = billRwMode();
-  L.push('วันนี้ ' + today + ' · โหมดเทียบที่ผู้ใช้เลือก: ' + (mode === 'rop' ? 'ไมล์ ROP' : mode === 'raw' ? 'คะแนนดิบ' : 'มูลค่าบาท') + ' · ผู้ใช้ตีมูลค่าไมล์ ROP ละ ฿' + billRwMileBaht());
+  L.push('วันนี้ ' + today + ' · โหมดที่เปิดอยู่: ' + (mode === 'rop' ? 'ไมล์ ROP' : mode === 'raw' ? 'คะแนนดิบ' : 'คุ้มสุด (บาท)') + ' · ผู้ใช้ตีมูลค่าไมล์ ROP ละ ฿' + billRwMileBaht() + ' (อ้างอิง: ซื้อไมล์ตรงกับการบินไทย ฿1.2/ไมล์, ใช้ไมล์เป็นส่วนลดตั๋ว Cash+Miles ≈฿0.2–0.3/ไมล์)');
   billRwCards().forEach(prof => {
     const p = prof.p, cyc = billRwCycle(prof.stmtDay, today);
     const c = billRwCalc(prof, billRwTxs(prof.card, cyc.start, cyc.end));
     L.push('');
     L.push(`[บัตร] ${prof.card} (${p.bank || ''}) · หน่วย: ${p.unit} · รอบบิลนี้ ${cyc.start}–${cyc.end} (ตัดรอบวันที่ ${prof.stmtDay}, ครบชำระวันที่ ${prof.dueDay}) · รูดรอบนี้ ${Math.round(c.spend)} บาท ได้ ${c.pts} ${p.unit}`);
-    L.push(`  อัตราปกติ ${p.base.pts} ${p.unit}/${p.base.per} บาท · ROP: ${prof.ropPer ? prof.ropPer + ' ' + p.unit + ' = 1 ไมล์' : 'ไม่มีอัตรา/โอนเข้า ROP ไม่ได้'} · มูลค่า 1 ${p.unit} ≈ ฿${prof.pointValue} · FX fee ${billCardFee(prof.card)}%${p.exclude ? ' · ไม่ได้คะแนน: ' + p.exclude.join(',') : ''}${p.excludeCur ? ' · ไม่ได้คะแนนสกุล ' + p.excludeCur.join(',') : ''}`);
+    L.push(`  อัตราปกติ ${p.base.pts} ${p.unit}/${p.base.per} บาท · ROP: ${prof.ropPer ? prof.ropPer + ' ' + p.unit + ' = 1 ไมล์' : 'ไม่มีอัตรา/โอนเข้า ROP ไม่ได้'} · ถ้าแลกเงินคืน/ส่วนลด 1 ${p.unit} ≈ ฿${prof.pointValue} · มูลค่าที่ใช้ (ทางที่คุ้มกว่า) ≈ ฿${billRwPtBaht(prof).toFixed(3)} (${billRwRouteTxt(prof)}) · FX fee ${billCardFee(prof.card)}%${p.exclude ? ' · ไม่ได้คะแนน: ' + p.exclude.join(',') : ''}${p.excludeCur ? ' · ไม่ได้คะแนนสกุล ' + p.excludeCur.join(',') : ''}`);
     p.rules.forEach(r => {
       if (prof.off[r.id]) return;
       const s = c.st[r.id] || { used: 0, blocks: 0, spend: 0 };
@@ -7691,7 +7700,7 @@ function rwcContext() {
   cats.forEach(([tag, label, cur]) => {
     const t = { type: 'expense', payMethod: 'card', category: tag === 'dining' ? 'food' : 'other', merchant: '', currency: cur, rewardTag: tag === 'fx' ? 'general' : tag, date: today };
     const rows = billRwCards().map(p => billRwDelta(p, t, 1000)).sort((a, b) => (b.miles || 0) - (a.miles || 0));
-    L.push(label + ': ' + rows.map(r => `${r.prof.card} ${r.pts}${r.prof.p.unit === 'ไมล์ KrisFlyer' ? 'ไมล์KF' : 'pt'}${r.miles != null ? '=' + r.miles.toFixed(1) + 'ไมล์ROP' : ''}${r.cash ? '+เงินคืน฿' + r.cash.toFixed(0) : ''}${r.fee ? ' FX฿' + r.feeCost.toFixed(0) : ''} มูลค่า≈฿${(r.value - r.feeCost).toFixed(1)}`).join(' | '));
+    L.push(label + ': ' + rows.map(r => `${r.prof.card} ${r.pts}${r.prof.p.unit === 'ไมล์ KrisFlyer' ? 'ไมล์KF' : 'pt'}${r.miles != null ? '=' + r.miles.toFixed(1) + 'ไมล์ROP' : ''}${r.cash ? '+เงินคืน฿' + r.cash.toFixed(0) : ''}${r.fee ? ' FX฿' + r.feeCost.toFixed(0) : ''} มูลค่าคุ้มสุดสุทธิ≈฿${(r.value - r.feeCost).toFixed(1)}`).join(' | '));
   });
   return L.join('\n');
 }
@@ -7758,7 +7767,7 @@ function billRenderOvTiles() {
     tot += mode === 'rop' ? (c.miles || 0) : mode === 'baht' ? c.value : c.pts;
   });
   const earn = mode === 'rop' ? `<div class="k">✈️ ไมล์ ROP รอบนี้</div><div class="v">${Math.floor(tot).toLocaleString()}</div>`
-    : mode === 'baht' ? `<div class="k">🎁 มูลค่าคะแนนรอบนี้</div><div class="v">≈ ${billFmt0(tot)}</div>`
+    : mode === 'baht' ? `<div class="k">💰 มูลค่าแต้ม+เงินคืนรอบนี้</div><div class="v">≈ ${billFmt0(tot)}</div>`
     : `<div class="k">🔢 คะแนนรอบนี้</div><div class="v" style="font-size:15px;">ดูรายบัตร ›</div>`;
   el.innerHTML = `<div class="tile bill-tap" onclick="billSetTab('cards')">${due}</div>
     <div class="tile bill-tap" onclick="billSetTab('cards')">${earn}<div class="s" style="color:var(--text3);">ใช้ ${used} จาก ${profs.length} บัตร · แตะดูว่ารูดใบไหนดี</div></div>`;
@@ -7808,7 +7817,7 @@ function billRwAddAll() {
   if (typeof billRender === 'function') billRender();
   billRwRenderModal();
 }
-function billRwSetMode(v) { localStorage.setItem('folio_bill_rw_mode', v === 'baht' || v === 'raw' ? v : 'rop'); billSyncSettings(); if (typeof billRender === 'function') billRender(); billRwRenderModal(); }
+function billRwSetMode(v) { localStorage.setItem('folio_bill_rw_mode2', v === 'rop' || v === 'raw' ? v : 'baht'); billSyncSettings(); if (typeof billRender === 'function') billRender(); billRwRenderModal(); }
 function billRwSetMileBaht(v) { const n = parseFloat(v); if (!(n > 0 && n <= 10)) { showToast('ใส่ตัวเลขมากกว่า 0'); return; } localStorage.setItem('folio_bill_rw_milebaht', String(n)); billSyncSettings(); if (typeof billRender === 'function') billRender(); showToast('1 ไมล์ ROP = ฿' + n); }
 // ─── แก้สิทธิ์ในแอป (ไม่ต้องแก้โค้ด) ───
 // คำอธิบายตัวเลขจริงของกฎ (หลังแก้แล้ว)
@@ -7917,8 +7926,8 @@ function billRwRenderModal() {
       <div class="form-group"><label class="form-label">เทียบความคุ้มด้วย</label><select class="form-select" onchange="billRwSetMode(this.value)">
         <option value="rop" ${mode === 'rop' ? 'selected' : ''}>✈️ ไมล์ ROP ที่ได้ (แปลงคะแนนทุกบัตรเป็นไมล์ ROP)</option>
         <option value="raw" ${mode === 'raw' ? 'selected' : ''}>🔢 คะแนนดิบ (ไว้ดูตอนจะแลกส่วนลด/เงินคืน)</option>
-        <option value="baht" ${mode === 'baht' ? 'selected' : ''}>฿ มูลค่าเป็นบาท (ตามมูลค่าคะแนนที่ตั้ง)</option></select></div>
-      ${mode === 'rop' ? `<div class="form-group" style="margin-top:6px;"><label class="form-label">1 ไมล์ ROP ≈ กี่บาท (ใช้แปลงเงินคืน เช่น ซูเปอร์ฯ 5% เป็นไมล์เท่านั้น)</label><input class="form-input" type="number" min="0.05" step="0.05" value="${billRwMileBaht()}" onchange="billRwSetMileBaht(this.value)"></div>` : ''}
+        <option value="baht" ${mode === 'baht' ? 'selected' : ''}>💰 คุ้มสุด (บาท: เลือกทางแลกแต้มที่ดีที่สุด + เงินคืน − ค่า FX)</option></select></div>
+      ${mode !== 'raw' ? `<div class="form-group" style="margin-top:6px;"><label class="form-label">1 ไมล์ ROP ≈ กี่บาท (ใช้ตีค่าแต้มที่แลก ROP และแปลงเงินคืนเป็นไมล์)</label><input class="form-input" type="number" min="0.05" step="0.05" value="${billRwMileBaht()}" onchange="billRwSetMileBaht(this.value)"></div>` : ''}
       <div style="font-size:10.5px;color:var(--text3);line-height:1.6;margin-top:4px;">โหมด ROP ไม่หักค่าธรรมเนียม FX (คนละหน่วย) แต่แสดงไว้ข้างอันดับ · คะแนนดิบเทียบข้ามธนาคารไม่ได้ (2 คะแนน BBL ≠ 2 พอยต์กรุงศรี) จึงแปลงเป็นไมล์ ROP ก่อน</div></div>`;
   if (!cards.length) { el.innerHTML = head + '<div class="empty">ยังไม่มีบัตรในรายชื่อ — กด "เพิ่มบัตรตามโปรไฟล์" ด้านบน</div>'; return; }
   el.innerHTML = head + cards.map(card => {
@@ -7934,7 +7943,7 @@ function billRwRenderModal() {
           <div class="form-group"><label class="form-label">วันตัดรอบ</label><input class="form-input" type="number" min="1" max="31" value="${prof.stmtDay}" onchange='billRwSet(${q},"stmtDay",this.value)'></div>
           <div class="form-group"><label class="form-label">วันครบกำหนดชำระ</label><input class="form-input" type="number" min="1" max="31" value="${prof.dueDay}" onchange='billRwSet(${q},"dueDay",this.value)'></div>
           <div class="form-group full"><label class="form-label">${esc(p.unit)} ต่อ 1 ไมล์ ROP${prof.ropOk ? '' : billRwBadge(false)}</label><input class="form-input" type="number" min="0" step="0.1" value="${prof.ropPer || ''}" placeholder="ยังไม่รู้ — เว้นว่าง = ไม่จัดอันดับในโหมด ROP" onchange='billRwSet(${q},"ropPer",this.value)'><span style="font-size:10px;color:var(--text3);line-height:1.5;">${esc((BILL_RW_ROP[prof.key] || {}).note || '')}</span></div>
-          <div class="form-group full"><label class="form-label">มูลค่า 1 ${esc(p.unit)} (บาท) — ใช้ในโหมดบาท${p.pvUnverified ? billRwBadge(false) : ''}</label><input class="form-input" type="number" min="0" step="0.005" value="${prof.pointValue}" onchange='billRwSet(${q},"pointValue",this.value)'><span style="font-size:10px;color:var(--text3);line-height:1.5;">${esc(p.pvNote || '')}</span></div>
+          <div class="form-group full"><label class="form-label">มูลค่า 1 ${esc(p.unit)} ถ้าแลกเงินคืน/ส่วนลด (บาท)${p.pvUnverified ? billRwBadge(false) : ''}</label><input class="form-input" type="number" min="0" step="0.005" value="${prof.pointValue}" onchange='billRwSet(${q},"pointValue",this.value)'><span style="font-size:10px;color:var(--text3);line-height:1.5;">${esc(p.pvNote || '')}</span></div>
         </div>
         <div style="font-size:11px;color:var(--text2);margin:4px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">อัตราปกติ
           <input class="form-input rw-num" style="width:70px;" type="number" min="0" step="0.5" value="${p.base.pts}" onchange='billRwBaseSet(${q},"pts",this.value)'> ${esc(p.unit)} ต่อ
@@ -9552,7 +9561,7 @@ function billSyncSettings() {
   if (window.FB) window.FB.setDoc('settings', 'bill', {
     owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(), customCats: billCustomCats(),
     fxFee: billDefaultFxFee(), cardFees: billCardFees(), cardProfiles: billRwSaved(),
-    rwMode: billRwMode(), rwMileBaht: billRwMileBaht()
+    rwMode2: billRwMode(), rwMileBaht: billRwMileBaht()
   }).catch(() => {});
 }
 // ─── จัดการหมวดที่เพิ่มเอง ───
@@ -9603,7 +9612,7 @@ async function billLoadSettings() {
     if (typeof doc.fxFee === 'number') localStorage.setItem('folio_bill_fx_fee', String(doc.fxFee));
     if (doc.cardFees && typeof doc.cardFees === 'object') localStorage.setItem('folio_bill_card_fees', JSON.stringify(doc.cardFees));
     if (doc.cardProfiles && typeof doc.cardProfiles === 'object') localStorage.setItem('folio_bill_card_profiles', JSON.stringify(doc.cardProfiles));
-    if (doc.rwMode === 'rop' || doc.rwMode === 'baht' || doc.rwMode === 'raw') localStorage.setItem('folio_bill_rw_mode', doc.rwMode);
+    if (doc.rwMode2 === 'rop' || doc.rwMode2 === 'baht' || doc.rwMode2 === 'raw') localStorage.setItem('folio_bill_rw_mode2', doc.rwMode2);
     if (typeof doc.rwMileBaht === 'number' && doc.rwMileBaht > 0) localStorage.setItem('folio_bill_rw_milebaht', String(doc.rwMileBaht));
     if (Array.isArray(doc.customCats)) { localStorage.setItem('folio_bill_custom_cats', JSON.stringify(doc.customCats)); billApplyCustomCats(); }
     const page = document.getElementById('page-bills');
