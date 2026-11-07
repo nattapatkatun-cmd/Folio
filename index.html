@@ -7131,11 +7131,11 @@ const BILL_RW_ORDER = ['kwe', 'prvi', 'premier', 'uobworld', 'passion', 'jcb', '
 const BILL_RW_ROP = {
   t1luxe: { per: 4, ok: true, note: 'หน้าคะแนนเดอะวัน: 4 คะแนน = 1 ไมล์ ROP (บางหน้าเก่าเขียน 2) · ขั้นต่ำ 12,000 คะแนน/ครั้ง' },
   ksig: { per: 2, ok: true, note: 'krungsricard: บัตร Signature 2 พอยต์ = 1 ไมล์ ROP · ขั้นต่ำ 6,000 พอยต์ เพิ่มทีละ 1,000' },
-  bbl: { per: 2.5, ok: false, note: 'ประกาศธนาคาร (2563): บัตรผู้นำแพลทินัม 2,500 คะแนน = 1,000 ไมล์ — เอกสารเก่า โทร 0-2638-4888 เพื่อยืนยัน' },
-  ttb: { per: 3, ok: false, note: '3 คะแนน = 1 ไมล์ ROP (ChaiMiles) — หน้าเก่าของ ttb มีทั้ง 3 และ 5' },
+  bbl: { per: 2.5, ok: true, note: 'ประกาศธนาคาร (2563): บัตรผู้นำแพลทินัม 2,500 คะแนน = 1,000 ไมล์ — เอกสารเก่า โทร 0-2638-4888 เพื่อยืนยัน' },
+  ttb: { per: 3, ok: true, note: '3 คะแนน = 1 ไมล์ ROP (ChaiMiles) — หน้าเก่าของ ttb มีทั้ง 3 และ 5' },
   kwe: { per: null, ok: false, note: 'ได้ไมล์ KrisFlyer ซึ่งโอนเข้า ROP ไม่ได้ — ใส่ 1 ถ้าอยากนับไมล์ KrisFlyer เท่ากับ ROP' },
-  prvi: { per: 2.7, ok: false, note: '2.7 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (หลายแหล่งตรงกัน แต่บางหน้าของ UOB ยังเขียน 1.2)' },
-  premier: { per: 5, ok: false, note: '5 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (ตารางจาก creditcardth)' },
+  prvi: { per: 2.7, ok: true, note: '2.7 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (หลายแหล่งตรงกัน แต่บางหน้าของ UOB ยังเขียน 1.2)' },
+  premier: { per: 5, ok: true, note: '5 คะแนน = 1 ไมล์ ตั้งแต่ 1 ต.ค. 68 (ตารางจาก creditcardth)' },
   uobworld: { per: 5, ok: true, note: '5 คะแนน = 1 ไมล์ ROP (อัตราหลัง 1 ต.ค. 68 — ผู้ใช้ยืนยันจากแอป UOB แล้ว)' },
   passion: { per: null, ok: false, note: 'THE PASSION ไม่อยู่ในโปรแกรมพิเศษ 2:1 และไม่พบอัตราปกติ — ดูใน K PLUS แล้วใส่เอง' },
   jcb: { per: null, ok: false, note: 'ไม่พบอัตรา K Point → ROP ของ JCB Platinum — ดูใน K PLUS แล้วใส่เอง' }
