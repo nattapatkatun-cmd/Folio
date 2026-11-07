@@ -7190,7 +7190,7 @@ const BILL_RW_PRESETS = {
     unit: 'คะแนน UOB', pointValue: 0.05, pvNote: 'ยังไม่พบอัตราแลกเงินคืนมาตรฐาน — ตั้งไว้ ≈0.4% ของยอดรูด', pvUnverified: true,
     base: { per: 25, pts: 2, verified: true }, exclude: ['utility', 'ewallet'],
     rules: [
-      { id: 'super', label: 'ซูเปอร์มาร์เก็ตเงินคืน 5%', tags: ['supermarket'], pct: 5, validTo: '2026-12-31', verified: false, note: 'ต้องลงทะเบียนผ่าน SMS ครั้งเดียว · ยังไม่พบเพดานเงินคืน (ใส่ใน "หมายเหตุ" ของบัตรได้)' },
+      { id: 'super', label: 'ซูเปอร์มาร์เก็ตเงินคืน 5% (≤฿500/เดือน · ขั้นต่ำ ฿800/สลิป)', tags: ['supermarket'], pct: 5, capCash: 500, minSlip: 800, validTo: '2026-12-31', verified: true, note: 'เงินคืนสูงสุด ฿500/บัตรหลัก/เดือน (รวมบัตรเสริม) = ยอด ฿10,000 · ต้องลงทะเบียน SMS ตามกติกาของแต่ละรอบ · เพดานรายเดือนแอปนับตามรอบบิล' },
       { id: 'dept', label: 'ห้างฯ/Duty Free x4', tags: ['dept', 'dutyfree'], per: 25, pts: 4, verified: true }
     ],
     notes: ['เครื่องดื่มฟรีเดือนละ 1 ครั้ง · Miracle Lounge 2 ครั้ง/ปี', 'ไม่ได้คะแนน: ค่าสาธารณูปโภค (MCC 4900) และการเติมเงิน e-Wallet']
@@ -7334,7 +7334,7 @@ function billRwEarn(prof, st, t, a) {
   const p = prof.p, tags = billRwTags(t), cur = String(t.currency || 'THB').toUpperCase();
   const basePts = n => Math.floor(n / p.base.per + 1e-9) * p.base.pts;
   if ((p.exclude && p.exclude.some(x => tags.has(x))) || (p.excludeCur && p.excludeCur.includes(cur))) return { pts: 0, cash: 0, rule: '-' };
-  const r = p.rules.find(r => !prof.off[r.id] && billRwActive(r, t.date) && billRwMatch(r, tags, cur));
+  const r = p.rules.find(r => !prof.off[r.id] && billRwActive(r, t.date) && billRwMatch(r, tags, cur) && !(r.minSlip && a < r.minSlip));
   if (!r) return { pts: basePts(a), cash: 0, rule: '' };
   const s = st[r.id] = st[r.id] || { used: 0, spend: 0, blocks: 0, bonus: 0, cash: 0 };
   let pts = basePts(a), cash = 0;
@@ -7402,7 +7402,8 @@ function billRwFmtGain(r) {
   if (r.raw) return `≈ <strong>${r.pts.toLocaleString()}</strong> ${esc(r.prof.p.unit)}${r.cash ? ' + เงินคืน ' + billFmt0(r.cash) : ''}${r.fee ? ' <span style="color:var(--text3);">(FX ' + r.fee + '% = ' + billFmt0(r.feeCost) + ')</span>' : ''}`;
   if (r.rop) {
     const bpm = r.net > 0 ? ' · ' + (r.base / r.net).toFixed(1) + ' ฿/ไมล์' : '';
-    return `≈ <strong>${r.net.toFixed(1)}</strong> ไมล์ ROP <span style="color:var(--text3);">(${r.pts.toLocaleString()} ${esc(r.prof.p.unit)}${r.cash ? ' + เงินคืน ' + billFmt0(r.cash) : ''}${bpm}${r.fee ? ' · FX ' + r.fee + '% = ' + billFmt0(r.feeCost) : ''})</span>`;
+    if (r.cash > 0) return `≈ <strong>${(r.prof.ropPer ? r.pts / r.prof.ropPer : 0).toFixed(1)}</strong> ไมล์ ROP + เงินคืน <strong>${billFmt0(r.cash)}</strong> <span style="color:var(--text3);">(${r.pts.toLocaleString()} ${esc(r.prof.p.unit)} · ตีรวม ≈${r.net.toFixed(0)} ไมล์${r.fee ? ' · FX ' + r.fee + '% = ' + billFmt0(r.feeCost) : ''})</span>`;
+    return `≈ <strong>${r.net.toFixed(1)}</strong> ไมล์ ROP <span style="color:var(--text3);">(${r.pts.toLocaleString()} ${esc(r.prof.p.unit)}${bpm}${r.fee ? ' · FX ' + r.fee + '% = ' + billFmt0(r.feeCost) : ''})</span>`;
   }
   return `≈ ${billFmt(Math.round(r.net * 100) / 100)} <span style="color:var(--text3);">(${r.pct.toFixed(2)}%${r.fee ? ' หลังหัก FX ' + r.fee + '%' : ''})</span>`;
 }
@@ -7467,7 +7468,7 @@ function billRwRuleLine(prof, r, s, ref) {
   s = s || { used: 0, spend: 0, blocks: 0, bonus: 0, cash: 0 };
   if (off) status = '<span style="color:var(--text3);">ปิดไว้</span>';
   else if (expired) status = '<span style="color:var(--text3);">⌛ หมดโปรแล้ว</span>';
-  else if (r.pct) status = `รูด ${billFmt0(s.spend)} · เงินคืน <strong>${billFmt0(s.cash)}</strong>${r.capCash ? ' / ' + billFmt0(r.capCash) : ''}`;
+  else if (r.pct) { status = `รูด ${billFmt0(s.spend)} · เงินคืน <strong>${billFmt0(s.cash)}</strong>${r.capCash ? ' / ' + billFmt0(r.capCash) + (s.cash < r.capCash ? ' · เหลือรูดได้อีก <strong>' + billFmt0((r.capCash - s.cash) / r.pct * 100) + '</strong>' : ' · <span style="color:var(--green);">เต็มแล้ว</span>') : ''}`; if (r.capCash) bar = billRwBar(s.cash, r.capCash); }
   else if (r.block) {
     const max = r.maxBlocks || 0;
     status = `ครบ <strong>${s.blocks}/${max}</strong> ครั้ง · โบนัส ${s.bonus.toLocaleString()} ${esc(prof.p.unit)}` +
@@ -7556,7 +7557,7 @@ function billRwDues() {
 function billRwMatchedRule(prof, t) {
   const p = prof.p, tags = billRwTags(t), cur = String(t.currency || 'THB').toUpperCase();
   if ((p.exclude && p.exclude.some(x => tags.has(x))) || (p.excludeCur && p.excludeCur.includes(cur))) return '-';
-  return p.rules.find(r => !prof.off[r.id] && billRwActive(r, t.date) && billRwMatch(r, tags, cur)) || null;
+  return p.rules.find(r => !prof.off[r.id] && billRwActive(r, t.date) && billRwMatch(r, tags, cur) && !(r.minSlip && (t.amountThb || 0) && t.amountThb < r.minSlip)) || null;
 }
 // ─── แท็บบัตร: "รูดใบไหนดี" เลือกหมวดด้วยไอคอน ───
 const BILL_RW_PICK = [['dining', '🍽️', 'ร้านอาหาร'], ['online', '🛒', 'ออนไลน์'], ['dept', '🏬', 'ห้าง'], ['supermarket', '🧺', 'ซูเปอร์ฯ'], ['central', '🏷️', 'Central'],
@@ -7575,10 +7576,16 @@ function billRwRenderPick() {
   const tag = billState.rwPick || 'dining', cur = tag === 'fx' ? (billState.rwCur || 'USD') : 'THB', amt = billState.rwAmt || 1000;
   const mode = billRwMode(), rop = mode === 'rop', raw = mode === 'raw';
   const ref = billRwRefDate();
-  const t = { type: 'expense', payMethod: 'card', category: tag === 'dining' ? 'food' : 'other', merchant: '', currency: cur, rewardTag: tag === 'fx' ? 'general' : tag, date: ref };
+  const t = { type: 'expense', payMethod: 'card', category: tag === 'dining' ? 'food' : 'other', merchant: '', currency: cur, rewardTag: tag === 'fx' ? 'general' : tag, date: ref, amountThb: amt };
   const rank = billRwRank(t, amt);
-  const big = r => raw ? `${r.pts.toLocaleString()} <small>${esc(r.prof.p.unit)}</small>` : rop ? (r.net > 0 ? `${(amt / r.net).toFixed(1)} <small>฿/ไมล์</small>` : '—') : `${r.pct.toFixed(2)}<small>%</small>`;
-  const subOf = r => raw ? (r.cash ? 'เงินคืน ' + billFmt0(r.cash) : '') : rop ? `${r.net.toFixed(1)} ไมล์ จากยอด ${billFmt0(amt)}` : `≈ ${billFmt(Math.round(r.net * 100) / 100)} จากยอด ${billFmt0(amt)}`;
+  // ไมล์จริงจากคะแนน (ไม่รวมเงินคืน) — เงินคืนแสดงแยก แต่ยังใช้มูลค่ารวมจัดอันดับ
+  const realMi = r => r.prof.ropPer ? r.pts / r.prof.ropPer : 0;
+  const big = r => raw ? `${r.pts.toLocaleString()} <small>${esc(r.prof.p.unit)}</small>`
+    : rop ? (r.cash > 0 ? `${realMi(r).toFixed(1)} <small>ไมล์</small> + ${billFmt0(r.cash)}` : r.net > 0 ? `${(amt / r.net).toFixed(1)} <small>฿/ไมล์</small>` : '—')
+    : `${r.pct.toFixed(2)}<small>%</small>`;
+  const subOf = r => raw ? (r.cash ? 'เงินคืน ' + billFmt0(r.cash) : '')
+    : rop ? (r.cash > 0 ? `ไมล์ ROP ${realMi(r).toFixed(1)} + เงินคืน ${billFmt0(r.cash)} · จัดอันดับโดยตีเงินคืนเป็น ≈${r.net.toFixed(0)} ไมล์ (ไมล์ละ ฿${billRwMileBaht()})` : `${r.net.toFixed(1)} ไมล์ จากยอด ${billFmt0(amt)}`)
+    : `≈ ${billFmt(Math.round(r.net * 100) / 100)} จากยอด ${billFmt0(amt)}`;
   const ruleTxt = r => { const m = billRwMatchedRule(r.prof, t); return m === '-' ? 'ไม่ได้คะแนนหมวดนี้' : m ? m.label : 'อัตราปกติ'; };
   let html = `<div class="rw-pick-grid">${BILL_RW_PICK.map(([k, ic, l]) => `<button class="${k === tag ? 'on' : ''}" onclick="billRwPickSet('rwPick','${k}')"><b>${ic}</b>${l}</button>`).join('')}</div>`;
   if (tag === 'fx') html += `<div class="chips-row">${BILL_RW_PICK_CUR.map(c => `<button class="bill-chip${c === cur ? ' active' : ''}" onclick="billRwPickSet('rwCur','${c}')">${c}</button>`).join('')}</div>`;
@@ -7811,6 +7818,7 @@ function billRwRuleDesc(r, unit) {
   else if (r.block) a.push(`+${r.bonusPts} ${unit}/${r.per}฿ เมื่อครบ ${billFmt0(r.block)}${r.perSlip ? '/สลิป' : ''} · ${r.maxBlocks || '∞'} ครั้ง/รอบ`);
   else a.push(`${r.pts} ${unit} ต่อ ${r.per} บาท`);
   if (r.capSpend) a.push('เพดานยอด ' + billFmt0(r.capSpend) + '/รอบ');
+  if (r.minSlip) a.push('ขั้นต่ำ ' + billFmt0(r.minSlip) + '/สลิป');
   if (r.cur) a.push('สกุล ' + r.cur.join('/'));
   if (r.validTo) a.push('ถึง ' + billFmtDate(r.validTo));
   return a.join(' · ');
@@ -7819,7 +7827,7 @@ function billRwRuleEditor(q, prof, r) {
   const unit = prof.p.unit, rid = esc(JSON.stringify(r.id));
   const inp = (f, v, step, ph) => `<label class="rw-ed-f">${ph}<input class="form-input rw-num" type="number" min="0" step="${step}" value="${v == null ? '' : v}" onchange='billRwRuleSet(${q},${rid},"${f}",this.value)'></label>`;
   let fields;
-  if (r.pct) fields = inp('pct', r.pct, 0.5, 'เงินคืน %') + inp('capCash', r.capCash, 100, 'เงินคืนสูงสุด/รอบ ฿');
+  if (r.pct) fields = inp('pct', r.pct, 0.5, 'เงินคืน %') + inp('capCash', r.capCash, 100, 'เงินคืนสูงสุด/รอบ ฿') + inp('minSlip', r.minSlip, 100, 'ขั้นต่ำต่อสลิป ฿');
   else if (r.block) fields = inp('bonusPts', r.bonusPts, 0.5, `โบนัส ${unit}/${r.per}฿`) + inp('block', r.block, 500, 'ต้องครบ ฿') + inp('maxBlocks', r.maxBlocks, 1, 'ครั้ง/รอบ');
   else fields = inp('pts', r.pts, 0.5, unit) + inp('per', r.per, 0.5, 'ต่อ ฿') + inp('capSpend', r.capSpend, 1000, 'เพดานยอด/รอบ ฿ (ว่าง = ไม่มี)');
   fields += `<label class="rw-ed-f">หมดเขต<input class="form-input" type="date" value="${esc(r.validTo || '')}" onchange='billRwRuleSet(${q},${rid},"validTo",this.value)' style="padding:5px 6px;font-size:12px;"></label>`;
@@ -7838,7 +7846,7 @@ function billRwRuleSet(card, rid, field, value) {
   const custom = (cur.custom || []).find(c => c.id === rid);
   const tgt = custom || ((cur.ruleEdit = cur.ruleEdit || {})[rid] = (cur.ruleEdit || {})[rid] || {});
   if (field === 'validTo') { if (/^\d{4}-\d{2}-\d{2}$/.test(value)) tgt.validTo = value; else tgt.validTo = ''; }
-  else { const n = parseFloat(value); if (n > 0) tgt[field] = n; else tgt[field] = (field === 'capSpend' || field === 'capCash' || field === 'maxBlocks') ? 0 : tgt[field]; }
+  else { const n = parseFloat(value); if (n > 0) tgt[field] = n; else tgt[field] = (field === 'capSpend' || field === 'capCash' || field === 'maxBlocks' || field === 'minSlip') ? 0 : tgt[field]; }
   all[card] = cur;
   billRwSaveAll(all); billRwRenderModal();
 }
