@@ -1,4 +1,4 @@
-const CACHE = 'folio-v8';
+const CACHE = 'folio-v9';
 const SHARE_CACHE = 'folio-share'; // ไฟล์ที่แชร์เข้ามา (Share Target) — หน้าเว็บอ่านแล้วลบทิ้งเอง
 const SHELL = ['/Folio/', '/Folio/index.html'];
 
@@ -54,8 +54,14 @@ self.addEventListener('fetch', e => {
   // cache is only a fallback when offline. Avoids needing to bump CACHE on every release.
   const isShell = e.request.mode === 'navigate' || SHELL.some(s => url.endsWith(s));
   if (isShell) {
+    // cache: 'no-cache' = ถามเซิร์ฟเวอร์ทุกครั้ง (ไม่เปลี่ยนก็ได้ 304 เร็ว) — GitHub Pages ตั้ง max-age=600
+    // ถ้าไม่ใส่ เบราว์เซอร์จะเอา HTML เก่าใน HTTP cache มาใช้ได้นานถึง 10 นาทีหลัง deploy
+    // navigate request สร้าง Request ใหม่ด้วย init ไม่ได้ จึงส่ง URL แทน
+    const fresh = e.request.mode === 'navigate'
+      ? fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+      : fetch(e.request, { cache: 'no-cache' });
     e.respondWith(
-      fetch(e.request).then(res => {
+      fresh.then(res => {
         // เก็บเฉพาะหน้าที่โหลดสำเร็จ — ไม่เอาหน้า error มาทับ shell ที่ใช้ได้
         if (res.ok) {
           const copy = res.clone();
