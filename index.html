@@ -6305,9 +6305,51 @@ async function init() {
         reloaded = true;
         window.location.reload();
       });
+      folioSwReg = reg;
     }).catch(()=>{});
   }
 }
+
+// ─── ตรวจเวอร์ชันใหม่ทุกครั้งที่กลับเข้าแอป ───
+// Android/PWA: สลับแอปกลับมา = หน้าเดิมในหน่วยความจำ ไม่ได้โหลดใหม่ → ดึง index.html ล่าสุดมาเทียบลายเซ็นของ script/style
+// ต่างกัน = มี deploy ใหม่ → โหลดใหม่ให้เอง (ถ้ากำลังกรอกฟอร์ม/เปิดหน้าต่างอยู่ แสดงแถบให้แตะเองแทน)
+let folioSwReg = null, folioSig0 = '', folioLastCheck = 0;
+function folioSig(doc) {
+  let s = '';
+  doc.querySelectorAll('script:not([src]), style').forEach(n => { if (!n.dataset.dyn) s += n.textContent; });
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h + ':' + s.length;
+}
+function folioShowUpdateBar() {
+  if (document.getElementById('folioUpdateBar')) return;
+  const b = document.createElement('button');
+  b.id = 'folioUpdateBar';
+  b.textContent = '✨ มีเวอร์ชันใหม่ — แตะเพื่ออัปเดต';
+  b.style.cssText = 'position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:9999;background:var(--accent);color:#fff;border:none;border-radius:99px;padding:9px 16px;font-family:var(--font);font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.2);cursor:pointer;';
+  b.onclick = () => location.reload();
+  document.body.appendChild(b);
+}
+async function folioCheckUpdate() {
+  if (!folioSig0 || Date.now() - folioLastCheck < 30000) return;
+  folioLastCheck = Date.now();
+  if (folioSwReg) folioSwReg.update().catch(() => {});
+  try {
+    const r = await fetch(location.pathname, { cache: 'no-cache' });
+    if (!r.ok) return;
+    const sig = folioSig(new DOMParser().parseFromString(await r.text(), 'text/html'));
+    if (sig === folioSig0) return;
+    // กันวนโหลดซ้ำ: ถ้าเพิ่งโหลดใหม่เพราะลายเซ็นนี้แล้วยังไม่ตรง ไม่ต้องโหลดอีก ให้แถบไว้แตะเอง
+    const busy = document.querySelector('.modal-overlay.open') || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
+    if (busy || sessionStorage.getItem('folio_reload_sig') === sig) { folioShowUpdateBar(); return; }
+    sessionStorage.setItem('folio_reload_sig', sig);
+    location.reload();
+  } catch (e) {}
+}
+document.addEventListener('DOMContentLoaded', () => { folioSig0 = folioSig(document); folioLastCheck = Date.now(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') folioCheckUpdate(); });
+window.addEventListener('pageshow', e => { if (e.persisted) folioCheckUpdate(); });
+window.addEventListener('online', folioCheckUpdate);
 
 init();
 
