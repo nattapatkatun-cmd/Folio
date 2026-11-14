@@ -764,6 +764,14 @@ window.FB = {
   async setDoc(col, docId, data) {
     await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, updatedAt: serverTimestamp() }, { merge: true });
   },
+  // เขียนทับทั้งเอกสาร (ไม่ merge) — ใช้กับ settings ที่ต้องลบคีย์ได้ (merge จะเก็บ map ซ้อนที่ลบแล้วไว้)
+  async replace(col, docId, data) {
+    await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, updatedAt: serverTimestamp() });
+  },
+  async get(col, docId) {
+    const snap = await getDoc(doc(db, `users/${UID}/${col}`, docId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  },
   // สร้างเอกสารด้วย id ที่กำหนดเอง (ไม่ merge) — ใช้กับรายการที่ต้องกันซ้ำด้วยเลขอ้างอิง
   async put(col, docId, data) {
     await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, createdAt: serverTimestamp() });
@@ -3377,9 +3385,8 @@ async function addExpense() {
 async function deleteExpense(i) {
   const e = state.budgetExpenses[i];
   if (!e || !confirm('ลบงบ ' + (e.name || e.cat) + ' ฿' + Number(e.amount).toLocaleString() + ' ?')) return;
-  if (window.FB && e.id) await window.FB.del('budget_expenses', e.id);
-  state.budgetExpenses.splice(i, 1);
-  renderBudget();
+  if (window.FB && e.id) await window.FB.del('budget_expenses', e.id); // listener อัปเดต state + จอเอง — ห้าม splice ซ้ำ ไม่งั้นหายสองรายการ
+  else { state.budgetExpenses.splice(i, 1); renderBudget(); }
 }
 
 async function addSaving() {
@@ -3398,8 +3405,7 @@ async function addSaving() {
 async function deleteSaving(i) {
   const s = state.budgetSavings[i];
   if (window.FB && s.id) await window.FB.del('budget_savings', s.id);
-  state.budgetSavings.splice(i, 1);
-  renderBudget();
+  else { state.budgetSavings.splice(i, 1); renderBudget(); }
 }
 
 // --- Add Holding ---
@@ -8143,7 +8149,7 @@ function billCashflowContext() {
 // ═══ Render ═══
 function billOnData() {
   if (typeof renderBudget === 'function') renderBudget();
-  if (!window._billLoaded && window.FB) billLoadSettings();
+  if (!window._billSettingsLoaded && window.FB) billLoadSettings(); // ล้มเหลวรอบก่อน → ลองใหม่เมื่อข้อมูลอัปเดตครั้งถัดไป
   window._billLoaded = true;
   if (typeof initPhase12 === 'function') initPhase12();
   const page = document.getElementById('page-bills');
@@ -8166,7 +8172,7 @@ function billMatchFilters(t) {
   if (pf) {
     if (pf.startsWith('card:')) {
       // บัตรรายใบ: ทั้งที่รูด และที่โอนจ่ายบิลของบัตรใบนั้น
-      if ((t.card || '') !== pf.slice(5) || !(t.payMethod === 'card' || t.category === 'cc_payment')) return false;
+      if (((t.card || '').trim() || 'ไม่ระบุบัตร') !== pf.slice(5) || !(t.payMethod === 'card' || t.category === 'cc_payment')) return false;
     } else if ((BILL_PAY[t.payMethod] ? t.payMethod : 'unknown') !== pf) return false;
   }
   return true;
@@ -8379,7 +8385,9 @@ function billYearOverYear(y, cur) {
   const cutoff = isThisYear ? todayISO().slice(5) : '12-31';
   const p = billTotals(t => t.date.slice(0, 4) === prev && t.date.slice(5) <= cutoff);
   if (!(p.consumption > 0)) return null;
-  return { prev: p.consumption, pct: (cur.consumption - p.consumption) / p.consumption * 100 };
+  // ปีนี้ตัดที่วันนี้เหมือนกัน — ไม่นับงวดผ่อนล่วงหน้าที่ยังไม่ถึงวัน
+  const c = isThisYear ? billTotals(t => t.date.slice(0, 4) === String(y) && t.date.slice(5) <= cutoff) : cur;
+  return { prev: p.consumption, pct: (c.consumption - p.consumption) / p.consumption * 100 };
 }
 
 function billCssVar(n, fb) {
@@ -8986,8 +8994,7 @@ function billNormDate(s) {
   const m = String(s || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (!m) return todayISO();
   let y = +m[1];
-  const thisYear = new Date().getFullYear();
-  if (y > thisYear + 1) y -= 543;
+  if (y >= 2400) y -= 543; // เฉพาะปีที่เป็น พ.ศ. จริง — ปี ค.ศ. ในอนาคต (เช่นงวดผ่อน 2028) ต้องไม่ถูกแปลง
   const d = new Date(y, +m[2] - 1, +m[3]);
   if (isNaN(d) || d.getMonth() !== +m[2] - 1) return todayISO();
   return isoFromDate(d);
@@ -9072,12 +9079,17 @@ function billMarkDuplicates() {
     d.dup = null;
     const rk = billRefKey(d.ref);
     const others = (state.transactions || []).filter(t => t.id !== billState.editingId);
+    const thb = billDraftThb(d);
     if (rk) {
-      if (others.some(t => t.refKey === rk) || seen[rk]) d.dup = 'ref';
-      seen[rk] = true;
+      // เลขอ้างอิงเดียวกัน + วันและยอดเท่ากัน = สลิปซ้ำแน่นอน; เลขเดียวกันแต่วัน/ยอดต่างกัน (เช่นเลขใบเสร็จ POS ซ้ำข้ามร้าน) = เตือนเฉย ๆ
+      const same = x => x.date === d.date && Math.abs(x.thb - thb) < 0.01;
+      const prior = others.filter(t => t.refKey === rk).map(t => ({ date: t.date, thb: billAmtThb(t), who: t.merchant || billCat(t.category, t.type).label }))
+        .concat(seen[rk] || []);
+      if (prior.some(same)) d.dup = 'ref';
+      else if (prior.length) d.dup = 'refdiff:' + prior[0].who;
+      (seen[rk] = seen[rk] || []).push({ date: d.date, thb, who: d.merchant || '' });
     }
     if (!d.dup && Number(d.amount) > 0) {
-      const thb = billDraftThb(d);
       const hit = others.find(t => t.date === d.date && t.type === d.type && Math.abs(billAmtThb(t) - thb) < 0.01);
       if (hit) d.dup = 'maybe:' + (hit.merchant || billCat(hit.category, hit.type).label);
     }
@@ -9114,6 +9126,7 @@ function billRenderDrafts() {
     const curOpts = curs.map(c => `<option ${c === d.currency ? 'selected' : ''}>${c}</option>`).join('');
     let warn = '';
     if (d.dup === 'ref') warn = `<div class="bill-warn" style="background:var(--red-bg);color:var(--red);">⛔ เลขอ้างอิงนี้บันทึกไปแล้ว — น่าจะเป็นสลิปซ้ำ</div>`;
+    else if (d.dup && d.dup.startsWith('refdiff:')) warn = `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">⚠️ เลขอ้างอิงนี้เคยใช้กับรายการอื่น (${esc(d.dup.slice(8))}) แต่วัน/ยอดต่างกัน — น่าจะไม่ซ้ำ ตรวจดูก่อนบันทึก</div>`;
     else if (d.dup) warn = `<div class="bill-warn" style="background:var(--amber-bg);color:var(--amber);">⚠️ วันเดียวกันมียอดเท่ากันแล้ว (${esc(d.dup.slice(6))}) — ตรวจว่าไม่ซ้ำ</div>`;
     if (editing && d.subscriptionId) warn += `<div class="bill-warn" style="background:var(--accent-bg, var(--bg2));color:var(--text2);">🔁 รอบที่ ${d.subscriptionNo} ของ Subscription — แก้ไขเฉพาะรอบนี้ (เปลี่ยนราคารอบถัดไปที่การ์ด 🔁 Subscription)</div>`;
     if (editing && d.installmentOf > 1) warn += `<div class="bill-warn" style="background:var(--accent-bg, var(--bg2));color:var(--text2);">🗓️ งวด ${d.installmentNo}/${d.installmentOf} ของรายการผ่อน — แก้ไขเฉพาะงวดนี้</div>`;
@@ -9233,6 +9246,17 @@ async function billDraftCurrency(i, cur) {
   await billDraftRefreshFx(i);
 }
 
+// บันทึกด้วย id ผูกเลขอ้างอิง: ถ้ามี id นี้อยู่แล้วและวัน+ยอดเท่ากัน = สลิปเดิม (ข้าม, คืน false);
+// ถ้าวัน/ยอดต่างกัน (เลขอ้างอิงซ้ำโดยบังเอิญ) = รายการใหม่จริง บันทึกด้วย id สุ่ม
+async function billPutByRef(refKey, row) {
+  const id = 'ref_' + refKey;
+  const ex = await window.FB.get('transactions', id);
+  if (!ex) { await window.FB.put('transactions', id, row); return true; }
+  if (ex.date === row.date && Math.abs(billAmtThb(ex) - billAmtThb(row)) < 0.01) return false;
+  await window.FB.add('transactions', row);
+  return true;
+}
+
 async function billSaveDrafts() {
   const btn = document.getElementById('billSaveBtn');
   const items = billState.drafts.filter(d => d.include);
@@ -9278,25 +9302,23 @@ async function billSaveDrafts() {
         // ผ่อน: สร้างรายการเดือนละงวด ผูกกันด้วย installmentId — เลขอ้างอิงสลิปติดไว้ที่งวดแรกเท่านั้น (กันชน id/เตือนซ้ำ)
         const instId = 'inst_' + Date.now().toString(36) + '_' + d.uid;
         const paid = billInstPaid(d);
+        let instSkipped = false;
         for (let k = 0; k < n - paid; k++) {
           const row = { ...data, date: billInstDate(d.date, k), time: k ? '' : data.time,
             ref: k ? '' : data.ref, refKey: k ? '' : refKey,
             installmentId: instId, installmentNo: paid + k + 1, installmentOf: n };
           if (!window.FB) state.transactions.push({ id: 'local_' + d.uid + '_' + k, ...row });
           else if (!k && refKey) {
-            if (await window.FB.exists('transactions', 'ref_' + refKey)) { skipped++; break; }
-            await window.FB.put('transactions', 'ref_' + refKey, row);
+            if (!(await billPutByRef(refKey, row))) { instSkipped = true; break; }
           } else await window.FB.add('transactions', row);
         }
-        saved++;
+        if (instSkipped) skipped++; else saved++;
         continue;
       }
       if (!window.FB) { state.transactions.push({ id: 'local_' + d.uid, ...data }); saved++; continue; }
       if (refKey) {
         // id ผูกกับเลขอ้างอิง — แชร์สลิปเดิมซ้ำ (แม้จากอีกเครื่อง) จะไม่ได้เอกสารใหม่
-        const docId = 'ref_' + refKey;
-        if (await window.FB.exists('transactions', docId)) { skipped++; continue; }
-        await window.FB.put('transactions', docId, data);
+        if (!(await billPutByRef(refKey, data))) { skipped++; continue; }
       } else {
         await window.FB.add('transactions', data);
       }
@@ -9599,8 +9621,9 @@ function billSaveDefaultFee(v) {
   showToast('ค่าธรรมเนียม FX เริ่มต้น ' + n + '%');
 }
 // เก็บชื่อบัญชี/บัตร/ค่าธรรมเนียมใน Firestore settings/bill ด้วย ให้ใช้ได้ทุกเครื่อง
+// ไม่ sync จนกว่าจะโหลดค่าจาก cloud สำเร็จ (กันค่าว่างของเครื่องไปทับรายชื่อบัตร/หมวดบน cloud) และเขียนทับทั้งก้อนเพื่อให้การลบมีผล
 function billSyncSettings() {
-  if (window.FB) window.FB.setDoc('settings', 'bill', {
+  if (window.FB && window._billSettingsLoaded) window.FB.replace('settings', 'bill', {
     owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(), customCats: billCustomCats(),
     fxFee: billDefaultFxFee(), cardFees: billCardFees(), cardProfiles: billRwSaved(),
     rwMode2: billRwMode(), rwMileBaht: billRwMileBaht()
@@ -9646,9 +9669,12 @@ function billDeleteCustomCat(key) {
 }
 
 async function billLoadSettings() {
+  if (window._billSettingsLoaded || window._billSettingsLoading) return;
+  window._billSettingsLoading = true;
   try {
-    const doc = (await window.FB.getAll('settings')).find(d => d.id === 'bill');
-    if (!doc) return;
+    const doc = await window.FB.get('settings', 'bill');
+    window._billSettingsLoaded = true; // โหลดสำเร็จ (ไม่มีเอกสาร = ยังไม่เคยตั้งค่า) → เริ่ม sync ได้
+    if (!doc) { if (billCards().length || billCustomCats().length) billSyncSettings(); return; }
     if (typeof doc.owner === 'string') localStorage.setItem('folio_bill_owner', doc.owner);
     if (Array.isArray(doc.cards)) localStorage.setItem('folio_bill_cards', doc.cards.join(', '));
     if (typeof doc.fxFee === 'number') localStorage.setItem('folio_bill_fx_fee', String(doc.fxFee));
@@ -9659,7 +9685,8 @@ async function billLoadSettings() {
     if (Array.isArray(doc.customCats)) { localStorage.setItem('folio_bill_custom_cats', JSON.stringify(doc.customCats)); billApplyCustomCats(); }
     const page = document.getElementById('page-bills');
     if (page && page.classList.contains('active')) billRender();
-  } catch (e) {}
+  } catch (e) { console.warn('bill settings load', e); }
+  window._billSettingsLoading = false;
 }
 
 // ═══ สำรองข้อมูล ═══
@@ -9673,22 +9700,34 @@ const BILL_EXPORT_HEADERS = ['วันที่', 'เวลา', 'ประเ
 
 // ใช้ Apps Script webhook เดิม (action=clear_append) — ส่งทีละเดือน แยกแท็บ Bills_YYYY-MM ให้ URL ไม่ยาวเกิน
 async function billBackupSheet() {
-  const ym = billPeriod(); // มุมมองปี → ส่งทั้งปีไปแท็บ Bills_YYYY
+  const ym = billPeriod(); // มุมมองปี → ส่งทีละเดือน (แท็บ Bills_YYYY-MM) ไม่รวมทั้งปีใน URL เดียว
   const list = (state.transactions || []).filter(t => billInPeriod(t, ym));
   if (!list.length) { showToast('ไม่มีรายการในช่วงนี้'); return; }
+  const byMonth = {};
+  list.forEach(t => { (byMonth[t.date.slice(0, 7)] = byMonth[t.date.slice(0, 7)] || []).push(t); });
+  const months = Object.keys(byMonth).sort();
   const base = window._PORTFOLIO_SHEET_URL || localStorage.getItem('folio_PORTFOLIO_SHEET_URL') || window._SHEETS_URL || SHEETS_URL;
-  const params = new URLSearchParams({ action: 'clear_append', tab: 'Bills_' + ym, data: JSON.stringify({ headers: BILL_EXPORT_HEADERS, rows: billRowsForExport(list) }) });
   showToast('กำลังส่งไป Google Sheet...');
+  let ok = 0, unsupported = false, unsure = 0;
   try {
-    const res = await fetch(base + '?' + params.toString(), { redirect: 'follow', mode: 'cors' });
-    let j = null;
-    try { j = await res.json(); } catch (_) {}
-    if (j && j.ok) showToast('✅ สำรอง ' + list.length + ' รายการไปแท็บ Bills_' + ym + ' แล้ว');
-    else if (j && (j.holdings || j.timestamp)) showToast('⚠️ Apps Script ยังไม่รองรับ action clear_append — ใช้ ⬇️ CSV แทน');
-    else showToast('ส่งแล้ว — ตรวจแท็บ Bills_' + ym + ' ใน Sheet');
+    for (const m of months) {
+      const params = new URLSearchParams({ action: 'clear_append', tab: 'Bills_' + m, data: JSON.stringify({ headers: BILL_EXPORT_HEADERS, rows: billRowsForExport(byMonth[m]) }) });
+      const url = base + '?' + params.toString();
+      if (url.length > 7500) throw new Error('เดือน ' + m + ' มีรายการมากเกินไปสำหรับส่งทาง URL');
+      const res = await fetch(url, { redirect: 'follow', mode: 'cors' });
+      let j = null;
+      try { j = await res.json(); } catch (_) {}
+      if (j && j.ok) ok++;
+      else if (j && (j.holdings || j.timestamp)) { unsupported = true; break; }
+      else unsure++;
+    }
   } catch (e) {
-    showToast('ส่งไป Sheet ไม่สำเร็จ (' + e.message + ') — ใช้ ⬇️ CSV แทน');
+    showToast('ส่งไป Sheet ไม่สำเร็จ (' + e.message + ') — ใช้ ⬇️ CSV แทน' + (ok ? ' · ส่งสำเร็จแล้ว ' + ok + ' เดือน' : ''));
+    return;
   }
+  if (unsupported) showToast('⚠️ Apps Script ยังไม่รองรับ action clear_append — ใช้ ⬇️ CSV แทน');
+  else if (unsure) showToast('ส่งแล้ว — ตรวจแท็บ Bills_YYYY-MM ใน Sheet (' + ok + ' เดือนยืนยันแล้ว)');
+  else showToast('✅ สำรอง ' + list.length + ' รายการไป ' + ok + ' แท็บ (Bills_' + months[0] + (months.length > 1 ? ' … ' + months[months.length - 1] : '') + ') แล้ว');
 }
 
 function billExportCsv() {
