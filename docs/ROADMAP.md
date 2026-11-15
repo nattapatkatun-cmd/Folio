@@ -9,7 +9,7 @@
 2. **ห้ามเปลี่ยนรูปแบบข้อมูลใน Firestore** (`users/<uid>/transactions`, `subscriptions`, `budget_expenses`, `settings/bill`) เว้นแต่เฟสนั้นระบุไว้ ข้อมูลเดิมของผู้ใช้ต้องอ่านได้เหมือนเดิม
 3. **ก่อนเปิด PR ต้องผ่านทุกข้อ**
    - `node tools/ui-check.js` ได้ `OK` (ไม่มี JS error) แล้วเปิดภาพใน `.ui-shots/` ดูหน้าที่แก้ด้วยตาเอง
-   - `node --test tests/` ผ่าน (มีตั้งแต่เฟส 0)
+   - `node --test` ผ่าน (มีตั้งแต่เฟส 0; Node 22 ใช้ `node --test tests/` ไม่ได้ ต้องไม่ใส่โฟลเดอร์)
    - ไล่ "เกณฑ์ตรวจรับ" ของเฟสนั้นทีละข้อ ข้อไหนตรวจไม่ได้ให้เขียนไว้ใน PR ว่ายังไม่ได้ตรวจ
 4. **อย่าใส่เพดาน/ค่าคงที่โดยไม่วัดจริง** (บทเรียนจาก PR #29: เพดาน URL 7,500 ตัวอักษรทำให้สำรอง Sheet พัง) วัดก่อน แล้วเขียนผลวัดไว้ในคอมเมนต์
 5. **`tools/ui-check.js` บล็อก network ทั้งหมด** จึงทดสอบเฉพาะโหมดไม่มี Firebase (`!window.FB`) โค้ดฝั่ง Firestore ต้องอ่านทวนด้วยตา และระบุใน PR ว่าไม่ได้ทดสอบกับ Firestore จริง
@@ -38,10 +38,10 @@
 
 ## เฟส 0 — ตาข่ายนิรภัย (ทำก่อนทุกอย่าง)
 
-- [ ] ย้ายฟังก์ชันคำนวณล้วน (ไม่แตะ DOM) ไปไฟล์ `js/bill-core.js` แล้วโหลดด้วย `<script src>` ก่อน script หลัก: `billAmtThb`, `billRefKey`, `billAddMonths`, `billInPeriod`, `billTotals` (รับ list เป็น argument), `billInstDate`, `billSubDate`, `billSubDueCount`, `billNormDate`, `billRwIso`, `billRwCycle`, `billRwDue`, `billRwMatch`, `billRwEarn`
+- [x] ย้ายฟังก์ชันคำนวณล้วน (ไม่แตะ DOM) ไปไฟล์ `js/bill-core.js` แล้วโหลดด้วย `<script src>` ก่อน script หลัก: `billAmtThb`, `billRefKey`, `billAddMonths`, `billInPeriod`, `billTotals` (รับ list เป็น argument), `billInstDate`, `billSubDate`, `billSubDueCount`, `billNormDate`, `billRwIso`, `billRwCycle`, `billRwDue`, `billRwMatch`, `billRwEarn`
   - ท้ายไฟล์ใส่ `if (typeof module !== 'undefined') module.exports = {...}` เพื่อให้ Node เรียกได้
   - เพิ่ม `/Folio/js/bill-core.js` ใน `SHELL` ของ `sw.js` และเปลี่ยนชื่อ `CACHE`
-- [ ] เขียน `tests/bill-core.test.js` ด้วย `node:test` ครอบคลุมอย่างน้อย:
+- [x] เขียน `tests/bill-core.test.js` ด้วย `node:test` ครอบคลุมอย่างน้อย:
   - `billNormDate`: `2028-01-14` คงเดิม, `2569-11-14` → `2026-11-14`, วันที่ผิดรูป → วันนี้
   - `billInstDate`: 31 ม.ค. +1 เดือน → 28 ก.พ., ข้ามปี
   - `billRwCycle` / `billRwDue`: วันตัดรอบ 15, 29, 31 และเดือน ม.ค. (ข้ามปี)
@@ -49,6 +49,8 @@
   - `billRwEarn`: กฎ `capSpend`, `block` + `perSlip`, `pct` + `capCash`, `minSlip`
 
 **เกณฑ์ตรวจรับ:** test ผ่าน, `ui-check` ผ่าน, ภาพทุกแท็บเหมือนก่อนแก้ (ไม่มีการเปลี่ยน UI ในเฟสนี้)
+
+**บันทึกการทำ:** ต้องย้ายตามไปด้วยเพราะฟังก์ชันข้างบนเรียกใช้: `isoFromDate`, `todayISO`, `billIsoAdd`, `billOffsetCat`, `billSubStep`, `billRwAutoTags`, `billRwTags`, `billRwActive`, `BILL_PAY`, `BILL_NON_SPEND`, `BILL_RW_TAGS`, `BILL_RW_RX` · `billTotals(match, list)` ถ้าไม่ส่ง `list` จะใช้ `state.transactions` (ผู้เรียกเดิมไม่ต้องแก้) · ข้อสังเกตจากเทสต์ (ยังไม่แก้ ไม่อยู่ในขอบเขตเฟส 0): `billTotals` ไม่หักเงินคืนออกจาก `byPay` ผลรวม `byPay` จึงมากกว่า `consumption` เมื่อมีเงินคืน
 
 ## เฟส 1 — เก็บจุดเกะกะบนจอ (เสี่ยงต่ำ ไม่เปลี่ยนโครงสร้าง)
 
