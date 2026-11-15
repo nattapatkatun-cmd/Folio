@@ -1,4 +1,4 @@
-const CACHE = 'folio-v9';
+const CACHE = 'folio-v10'; // v10: ล้าง cache อัตราแลกเปลี่ยนที่เคยถูกเก็บค้างไว้
 const SHARE_CACHE = 'folio-share'; // ไฟล์ที่แชร์เข้ามา (Share Target) — หน้าเว็บอ่านแล้วลบทิ้งเอง
 const SHELL = ['/Folio/', '/Folio/index.html'];
 
@@ -47,7 +47,8 @@ self.addEventListener('fetch', e => {
       url.includes('generativelanguage') || url.includes('workers.dev') ||
       url.includes('coingecko') || url.includes('alphavantage') ||
       url.includes('finnhub') || url.includes('marketaux') ||
-      url.includes('script.google') || url.includes('fonts.googleapis')) {
+      url.includes('script.google') || url.includes('fonts.googleapis') ||
+      url.includes('frankfurter') || url.includes('exchangerate-api')) {
     return;
   }
   // App shell: network-first so a new deploy shows up immediately on refresh;
