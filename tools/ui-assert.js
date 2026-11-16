@@ -12,7 +12,7 @@ const overlap = (a, b) => a && b && a.x < b.r && b.x < a.r && a.y < b.b && b.y <
 // ───────── เฟส 1 ─────────
 test('เฟส1: หัวหน้าบิลเป็นแถวเดียว ไม่มี eyebrow', async p => {
   await p.evaluate(() => { showPage('bills'); billSetTab('list'); });
-  assert.equal(await p.evaluate(() => document.querySelector('#page-bills .page-greeting')), null);
+  assert.equal(await p.evaluate(() => document.querySelector('#page-bills .bill-head .page-greeting')), null);
   const t = await rect(p, '#page-bills .bill-head .page-title'), n = await rect(p, '#page-bills .bill-head .bill-month-nav');
   assert.ok(Math.abs((t.y + t.h / 2) - (n.y + n.h / 2)) < 8, 'ชื่อหน้ากับแถบเดือนต้องอยู่แถวเดียวกัน');
   assert.ok(n.r <= 390 && n.x >= 0, 'แถบเดือนต้องไม่ล้นจอ');
@@ -362,6 +362,120 @@ test('เฟส3: แถวแรกของแท็บรายการอ�
   assert.ok(r.y < 422);
 });
 
+// ───────── เฟส 4 ─────────
+const go = (p, name) => p.evaluate(n => { showPage('bills'); billSetTab(n); window.scrollTo(0, 0); }, name);
+test('เฟส4: มือถือ — แถบล่าง 4 ปุ่ม ไม่มีเมนูบนเลื่อนแนวนอน และไม่มีหน้าเลื่อนแนวนอน', async p => {
+  assert.equal(await vis(p, '.topbar .nav'), false);
+  assert.equal(await vis(p, '#bottomNav'), true);
+  const btns = await p.evaluate(() => [...document.querySelectorAll('#bottomNav button')].map(b => { const r = b.getBoundingClientRect(); return { t: b.textContent.trim(), h: r.height, w: r.width }; }));
+  assert.equal(btns.length, 4);
+  btns.forEach(b => assert.ok(b.h >= 44, 'ปุ่ม ' + b.t + ' สูง ' + b.h));
+  const nav = await rect(p, '#bottomNav'); assert.ok(Math.abs(nav.b - 844) < 1, 'แถบล่างต้องชิดขอบล่าง');
+  for (const pg of ['overview', 'trading', 'benchmark', 'signals', 'bills', 'settings']) {
+    await p.evaluate(x => showPage(x), pg); await p.waitForTimeout(100);
+    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390 && document.body.scrollWidth <= 390), pg + ' เลื่อนแนวนอน');
+  }
+});
+test('เฟส4: เมนูลงทุน = ซื้อขาย / Benchmark / สัญญาณ จำแท็บล่าสุด', async p => {
+  await p.evaluate(() => { _lastInvest = 'trading'; showPage('overview'); });   // ค่าเริ่มต้นของ "ลงทุน" = ซื้อขาย
+  await p.click('#bottomNav [data-group=invest]');
+  assert.equal(await p.evaluate(() => document.getElementById('page-trading').classList.contains('active')), true);
+  assert.deepEqual(await p.locator('#page-trading .invest-tabs button').allInnerTexts(), ['ซื้อขาย', '📈 Benchmark', '📡 สัญญาณ']);
+  await p.locator('#page-trading .invest-tabs button', { hasText: 'Benchmark' }).click();
+  assert.equal(await p.evaluate(() => document.getElementById('page-benchmark').classList.contains('active')), true);
+  assert.equal(await p.evaluate(() => document.querySelector('#bottomNav [data-group=invest]').classList.contains('active')), true);
+  await p.click('#bottomNav [data-group=bills]');
+  assert.equal(await p.evaluate(() => document.querySelector('#bottomNav [data-group=invest]').classList.contains('active')), false);
+  await p.click('#bottomNav [data-group=invest]');
+  assert.equal(await p.evaluate(() => document.getElementById('page-benchmark').classList.contains('active')), true, 'ต้องกลับไปแท็บลงทุนล่าสุด');
+  await p.locator('#page-benchmark .invest-tabs button', { hasText: 'สัญญาณ' }).click();
+  assert.equal(await p.evaluate(() => document.getElementById('page-signals').classList.contains('active')), true);
+  await p.click('#bottomNav [data-group=settings]');
+  assert.equal(await p.evaluate(() => document.getElementById('page-settings').classList.contains('active')), true);
+  await p.click('#bottomNav [data-group=overview]');
+  assert.equal(await p.evaluate(() => document.getElementById('page-overview').classList.contains('active')), true);
+});
+test('เฟส4: ปุ่มลอย ＋ และแถบเลิกทำอยู่เหนือแถบล่าง', async p => {
+  await go(p, 'list');
+  const fab = await rect(p, '.bill-fab'), nav = await rect(p, '#bottomNav');
+  assert.ok(fab.b <= nav.y, 'ปุ่มลอยต้องไม่ทับแถบล่าง fab.b=' + fab.b + ' nav.y=' + nav.y);
+  await p.evaluate(() => billShowUndo('ทดสอบ', []));
+  const u = await rect(p, '#billUndo');
+  assert.ok(u.b <= fab.y + 1 || u.r <= fab.x, 'แถบเลิกทำต้องไม่ทับปุ่มลอย');
+  assert.ok(u.b <= nav.y);
+  await p.evaluate(() => billHideUndo());
+  // เลื่อนสุดหน้า ไม่มีเนื้อหาถูกแถบล่างบัง
+  for (const t of ['overview', 'list', 'cards', 'recur', 'budget']) {
+    await go(p, t); await p.evaluate(() => window.scrollTo(0, 1e6)); await p.waitForTimeout(120);
+    const last = await p.evaluate(() => { const els = [...document.querySelectorAll('#page-bills .bill-tab.on .card, #page-bills .bill-tab.on .metric')]; const e = els[els.length - 1]; return e ? e.getBoundingClientRect().bottom : 0; });
+    const nv = await rect(p, '#bottomNav'); assert.ok(last <= nv.y, t + ': เนื้อหาท้ายหน้าถูกแถบล่างบัง ' + last + ' > ' + nv.y);
+  }
+});
+test('เฟส4: หน้างบประมาณย้ายเป็นแท็บ "งบ" — ลิงก์เก่า showPage(budget) พาไปแท็บนี้', async p => {
+  assert.equal(await p.evaluate(() => !!document.getElementById('page-budget')), false);
+  assert.equal(await p.locator('.nav-btn[data-group=budget], #bottomNav [data-group=budget]').count(), 0);
+  await p.evaluate(() => showPage('budget')); await p.waitForTimeout(150);
+  assert.deepEqual(await p.evaluate(() => [document.getElementById('page-bills').classList.contains('active'), billState.tab]), [true, 'budget']);
+  assert.ok((await p.locator('#budgetMetrics .metric').count()) >= 4);
+  assert.equal(await vis(p, '[data-tab=budget]'), true);
+  assert.equal(await vis(p, '#page-bills .bill-head .bill-month-nav'), false);
+  assert.equal(await p.evaluate(() => document.querySelector('#billTabs button.on').dataset.t), 'budget');
+});
+test('เฟส4: ฟังก์ชันงบเดิมครบ — ตั้ง/แก้/ลบงบ, ตั้งงบจาก "ใช้จ่ายนอกงบ", เป้าออม, แก้รายได้, แตะไปดูรายการ', async p => {
+  await p.evaluate(() => showPage('budget')); await p.waitForTimeout(150);
+  const nb = () => p.evaluate(() => state.budgetExpenses.length);
+  const n0 = await nb();
+  // ตั้งงบใหม่
+  await p.locator('[data-tab=budget] button', { hasText: '+ ตั้งงบ' }).first().click();
+  await p.selectOption('#exp-billcat', 'transport'); await p.fill('#exp-amount', '3000');
+  await p.click('#expense-modal .btn-primary'); await p.waitForTimeout(200);
+  assert.equal(await nb(), n0 + 1);
+  assert.ok((await p.textContent('#expenseList')).includes('฿3,000'));
+  // แก้งบ
+  const idx = await p.evaluate(() => state.budgetExpenses.findIndex(e => e.billCat === 'transport'));
+  await p.evaluate(i => budgetOpenExpense(i), idx); await p.fill('#exp-amount', '3500'); await p.click('#expense-modal .btn-primary'); await p.waitForTimeout(150);
+  assert.equal(await p.evaluate(i => state.budgetExpenses[i].amount, idx), 3500);
+  // ลบงบ
+  p.once('dialog', d => d.accept()); await p.evaluate(i => deleteExpense(i), idx); await p.waitForTimeout(150);
+  assert.equal(await nb(), n0);
+  // ตั้งงบจากรายการ "ใช้จ่ายนอกงบ"
+  const out = p.locator('#expenseList >> text=+ ตั้งงบ').first();
+  assert.ok(await out.count() > 0, 'ต้องมีปุ่มตั้งงบจากรายการนอกงบ');
+  await out.click(); assert.equal(await p.evaluate(() => document.getElementById('expense-modal').classList.contains('open')), true);
+  assert.notEqual(await p.inputValue('#exp-billcat'), 'food');   // หมวดถูกเติมจากแถวที่แตะ
+  await p.evaluate(() => closeModal('expense-modal'));
+  // เป้าออม
+  await p.evaluate(() => { openModal('saving-modal'); }); await p.fill('#sav-name', 'ทดสอบออม'); await p.fill('#sav-target', '10000'); await p.fill('#sav-current', '2500');
+  await p.click('#saving-modal .btn-primary'); await p.waitForTimeout(150);
+  assert.ok((await p.textContent('#savingsList')).includes('ทดสอบออม'));
+  await p.evaluate(() => deleteSaving(state.budgetSavings.length - 1)); await p.waitForTimeout(100);
+  assert.ok(!(await p.textContent('#savingsList')).includes('ทดสอบออม'));
+  // แก้รายได้ตามแผน
+  p.once('dialog', d => d.accept('90000')); await p.evaluate(() => editIncome()); await p.waitForTimeout(150);
+  assert.ok((await p.textContent('#budgetMetrics')).includes('90,000'));
+  // แตะหมวดไปดูรายการจริง (budgetGoBills)
+  await p.evaluate(() => budgetGoBills('cat', 'food')); await p.waitForTimeout(150);
+  assert.deepEqual(await p.evaluate(() => [billState.tab, billState.catFilter]), ['list', 'food']);
+  await p.evaluate(() => billClearFilters());
+});
+test('เฟส4: ตั้งค่าที่เดียว — เนื้อหา billSettingsModal ย้ายเข้าหน้า ⚙️ ตั้งค่า และ ⚙️ ในหน้าบิลพาไปหัวข้อนั้น', async p => {
+  assert.equal(await p.evaluate(() => !!document.getElementById('billSettingsModal')), false);
+  assert.equal(await p.evaluate(() => ['billOwnerNames', 'billCardChips', 'billFxFeeDefault', 'billCardNew'].every(id => document.querySelector('#page-settings #settingsBill #' + id))), true);
+  await go(p, 'cards');
+  await p.click('#page-bills .bill-head .bill-icon-btn'); await p.waitForTimeout(700);
+  assert.equal(await p.evaluate(() => document.getElementById('page-settings').classList.contains('active')), true);
+  const r = await rect(p, '#settingsBill'); assert.ok(r.y < 300 && r.y > -50, 'เลื่อนไปที่หัวข้อ y=' + r.y);
+  await go(p, 'cards');
+  await p.click('#page-bills [data-tab=cards] button:has-text("ตั้งค่าบัตร")'); await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => document.getElementById('page-settings').classList.contains('active')), true);
+  await p.locator('#settingsBill button', { hasText: 'สิทธิ์บัตร' }).click();
+  assert.equal(await p.evaluate(() => document.getElementById('billRwModal').classList.contains('open')), true);
+  await p.evaluate(() => closeModal('billRwModal'));
+  await p.fill('#billCardNew', 'KTC 9999'); await p.click('#settingsBill button:has-text("เพิ่มบัตร")');
+  assert.ok((await p.evaluate(() => localStorage.getItem('folio_bill_cards'))).includes('KTC 9999'));
+  await p.evaluate(() => localStorage.setItem('folio_bill_cards', 'UOB PRVI Miles, KBank THE PASSION, ttb absolute'));
+});
+
 (async () => {
   const { b, p, errors } = await lib.open();
   for (const [name, fn] of tests) {
@@ -369,6 +483,29 @@ test('เฟส3: แถวแรกของแท็บรายการอ�
     catch (e) { failed++; console.log('FAIL', name, '\n   ', String(e.message).split('\n').slice(0, 4).join('\n    ')); }
   }
   await b.close();
+  // จอกว้าง: แถบบนจัดกลุ่มเดียวกัน ไม่มีแถบล่าง
+  {
+    const d = await lib.open({ width: 1280, height: 800 });
+    try {
+      assert.equal(await vis(d.p, '.topbar .nav'), true);
+      assert.deepEqual(await d.p.locator('.topbar .nav-btn').allInnerTexts(), ['ภาพรวม', '📈 ลงทุน', '🧾 บิล', '⚙️ ตั้งค่า']);
+      assert.equal(await vis(d.p, '#bottomNav'), false);
+      await d.p.click('.topbar .nav-btn[data-group=invest]');
+      assert.equal(await d.p.evaluate(() => document.getElementById('page-trading').classList.contains('active')), true);
+      passed++; console.log('PASS เฟส4: จอกว้าง — แถบบน 4 กลุ่ม ไม่มีแถบล่าง');
+    } catch (e) { failed++; console.log('FAIL เฟส4: จอกว้าง', e.message.split('\n')[0]); }
+    await d.b.close();
+  }
+  // Share Target: ?share-target=1 ต้องเปิดหน้าบิล
+  {
+    const s = await lib.open(null, '?share-target=1');
+    try {
+      await s.p.waitForTimeout(800);
+      assert.equal(await s.p.evaluate(() => document.getElementById('page-bills').classList.contains('active')), true);
+      passed++; console.log('PASS เฟส4: Share Target (?share-target=1) เปิดหน้าบิล');
+    } catch (e) { failed++; console.log('FAIL เฟส4: Share Target', e.message.split('\n')[0]); }
+    await s.b.close();
+  }
   if (errors.length) { failed++; console.log('FAIL: มี JS error ' + errors.length + ' รายการ'); }
   console.log(failed ? `\n${failed} FAILED, ${passed} passed` : `\nALL ${passed} PASSED`);
   process.exit(failed ? 1 : 0);

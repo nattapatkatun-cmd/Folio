@@ -611,13 +611,32 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-undo { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #14121A; color: #fff; font-size: 12.5px; padding: 6px 8px 6px 16px; border-radius: 12px; z-index: 300; display: none; align-items: center; gap: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.25); max-width: 92vw; }
 .bill-undo.show { display: flex; }
 .bill-undo button { background: none; border: none; color: #FFB3C6; font-family: var(--font); font-size: 13px; font-weight: 700; min-height: 44px; padding: 0 12px; cursor: pointer; }
+/* เฟส 4: แถบล่าง + แท็บย่อยลงทุน */
+.bottom-nav { display: none; }
+.invest-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.invest-tabs button { font-family: var(--font); font-size: 13px; min-height: 40px; padding: 0 16px; border-radius: 99px; border: 0.5px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; }
+.invest-tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+#page-bills.tab-budget .bill-head .bill-view-toggle, #page-bills.tab-budget .bill-head .bill-month-nav { display: none; }
+#settingsBill.flash { box-shadow: 0 0 0 3px var(--accent); transition: box-shadow .3s; }
+@media (max-width: 779px) {
+  .topbar .nav { display: none; }
+  .bottom-nav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 99; background: var(--surface); border-top: 0.5px solid var(--border); padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 10px rgba(0,0,0,.05); }
+  .bottom-nav button { flex: 1; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: none; font-family: var(--font); font-size: 11px; color: var(--text3); cursor: pointer; }
+  .bottom-nav button .ic { font-size: 19px; line-height: 1; }
+  .bottom-nav button.active { color: var(--accent); font-weight: 600; }
+  .page { padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+  #page-bills { padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important; }
+  .bill-fab { bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .bill-undo { bottom: calc(138px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(72px + env(safe-area-inset-bottom)); }
+}
 #page-bills { padding-bottom: 110px; } /* เผื่อที่ให้ปุ่มลอย ＋ (56px + ขอบล่าง) ไม่ทับยอดเงิน/ปุ่มท้ายหน้า */
 body:has(.modal-overlay.open) .bill-fab { display: none !important; } /* ซ่อนปุ่มลอยเมื่อมี modal เปิด */
 .bill-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 14px; }
 .bill-head .bill-view-toggle button { padding: 5px 9px; }
 .bill-head .bill-month-nav span { min-width: 84px; }
 .bill-head .bill-icon-btn { width: 34px; height: 34px; flex: none; }
-#page-budget .metric-value { font-family: var(--font); font-weight: 600; letter-spacing: -0.3px; } /* ตัวเลขชุดเดียวกับหน้าบิล (sans) */
+#page-bills [data-tab="budget"] .metric-value { font-family: var(--font); font-weight: 600; letter-spacing: -0.3px; } /* ตัวเลขชุดเดียวกับหน้าบิล (sans) */
 .bill-icon-btn { background: var(--surface); border: 0.5px solid var(--border); border-radius: 99px; width: 36px; height: 36px; font-size: 16px; cursor: pointer; }
 .rw-pick-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
 .rw-pick-grid button { font-family: var(--font); background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; padding: 8px 2px; font-size: 10.5px; color: var(--text2); cursor: pointer; }
@@ -922,13 +941,10 @@ if (window._folioReady) {
   <header class="topbar">
     <div class="logo">folio<em>.</em></div>
     <nav class="nav">
-      <button class="nav-btn active" data-page="overview" onclick="showPage('overview')">ภาพรวม</button>
-      <button class="nav-btn" data-page="signals" onclick="showPage('signals')">📡 สัญญาณ</button>
-      <button class="nav-btn" data-page="trading" onclick="showPage('trading')">ซื้อขาย</button>
-      <button class="nav-btn" data-page="benchmark" onclick="showPage('benchmark')">📈 Benchmark</button>
-      <button class="nav-btn" data-page="budget" onclick="showPage('budget')">งบประมาณ</button>
-      <button class="nav-btn" data-page="bills" onclick="showPage('bills')">🧾 บิล</button>
-      <button class="nav-btn" data-page="settings" onclick="showPage('settings')">⚙️ ตั้งค่า</button>
+      <button class="nav-btn active" data-group="overview" onclick="navGo('overview')">ภาพรวม</button>
+      <button class="nav-btn" data-group="invest" onclick="navGo('invest')">📈 ลงทุน</button>
+      <button class="nav-btn" data-group="bills" onclick="navGo('bills')">🧾 บิล</button>
+      <button class="nav-btn" data-group="settings" onclick="navGo('settings')">⚙️ ตั้งค่า</button>
     </nav>
     <div class="topbar-right">
       <span class="date-badge" id="dateDisplay"></span>
@@ -1254,6 +1270,7 @@ if (window._folioReady) {
 
   <!-- ─────────── TRADING PAGE ─────────── -->
   <main class="page" id="page-trading">
+    <div class="invest-tabs"></div>
     <div class="page-header">
       <div class="page-greeting">ประวัติการซื้อขาย</div>
       <div class="page-title">บันทึกธุรกรรม</div>
@@ -1340,6 +1357,7 @@ if (window._folioReady) {
 
   <!-- ─────────── BENCHMARK PAGE ─────────── -->
   <main class="page" id="page-benchmark">
+    <div class="invest-tabs"></div>
     <div class="page-header">
       <div class="page-greeting">เปรียบเทียบพอร์ตกับตลาด</div>
       <div class="page-title">📈 Benchmark & Trend</div>
@@ -1388,30 +1406,6 @@ if (window._folioReady) {
   </main>
 
   <!-- ─────────── BUDGET PAGE ─────────── -->
-  <main class="page" id="page-budget">
-    <div class="page-header">
-      <div class="page-greeting" id="budgetMonth"></div>
-      <div class="page-title">งบประมาณส่วนตัว</div>
-    </div>
-    <div class="metric-row" id="budgetMetrics"></div>
-    <div class="budget-grid">
-      <div class="card">
-        <div class="card-title">
-          งบรายจ่าย เทียบ ใช้จริงเดือนนี้
-          <button class="action" onclick="budgetOpenExpense()">+ ตั้งงบ</button>
-        </div>
-        <div id="expenseList"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">
-          เป้าหมายการออม
-          <button class="action" onclick="openModal('saving-modal')">+ เพิ่มเป้าหมาย</button>
-        </div>
-        <div id="savingsList" style="display:flex;flex-direction:column;gap:12px;padding-top:4px;"></div>
-      </div>
-    </div>
-  </main>
-
   <!-- ─────────── BILL MANAGER PAGE ─────────── -->
   <main class="page" id="page-bills">
     <div class="page-header bill-head">
@@ -1426,7 +1420,7 @@ if (window._folioReady) {
         <span id="billMonthLabel">—</span>
         <button onclick="billShiftMonth(1)" aria-label="ถัดไป">›</button>
       </div>
-      <button class="bill-icon-btn" onclick="openModal('billSettingsModal')" aria-label="ตั้งค่า">⚙️</button>
+      <button class="bill-icon-btn" onclick="billOpenSettings()" aria-label="ตั้งค่าหน้าบิล">⚙️</button>
       </div>
     </div>
 
@@ -1441,6 +1435,7 @@ if (window._folioReady) {
       <button data-t="list" onclick="billSetTab('list')">รายการ</button>
       <button data-t="cards" onclick="billSetTab('cards')">บัตร</button>
       <button data-t="recur" onclick="billSetTab('recur')">ประจำ</button>
+      <button data-t="budget" onclick="billSetTab('budget')">งบ</button>
     </div>
 
     <section class="bill-tab" data-tab="overview">
@@ -1501,9 +1496,30 @@ if (window._folioReady) {
 
     </section>
 
+    <section class="bill-tab" data-tab="budget">
+      <div class="page-greeting" id="budgetMonth" style="margin-bottom:10px;"></div>
+      <div class="metric-row" id="budgetMetrics"></div>
+    <div class="budget-grid">
+      <div class="card">
+        <div class="card-title">
+          งบรายจ่าย เทียบ ใช้จริงเดือนนี้
+          <button class="action" onclick="budgetOpenExpense()">+ ตั้งงบ</button>
+        </div>
+        <div id="expenseList"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">
+          เป้าหมายการออม
+          <button class="action" onclick="openModal('saving-modal')">+ เพิ่มเป้าหมาย</button>
+        </div>
+        <div id="savingsList" style="display:flex;flex-direction:column;gap:12px;padding-top:4px;"></div>
+      </div>
+    </div>
+    </section>
+
     <section class="bill-tab" data-tab="cards">
     <div class="card" style="margin-bottom:var(--gap);display:none;" id="billRwCard">
-      <div class="card-title"><span>💡 รูดใบไหนดี? <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billRwSub"></span></span><button class="action" onclick="billRwOpen()">⚙️ ตั้งค่าบัตร</button></div>
+      <div class="card-title"><span>💡 รูดใบไหนดี? <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billRwSub"></span></span><button class="action" onclick="billOpenSettings()">⚙️ ตั้งค่าบัตร</button></div>
       <div class="bill-view-toggle" id="billRwModeToggle" style="display:inline-flex;margin-bottom:10px;">
         <button data-m="baht" onclick="billRwSetMode('baht')">💰 คุ้มสุด</button>
         <button data-m="rop" onclick="billRwSetMode('rop')">✈️ ไมล์ ROP</button>
@@ -1552,6 +1568,7 @@ if (window._folioReady) {
 
   <!-- ─────────── SETTINGS PAGE ─────────── -->
   <main class="page" id="page-signals">
+    <div class="invest-tabs"></div>
     <div class="page-header">
       <div class="page-greeting">สัญญาณรายสินทรัพย์ · ตัวช่วย DCA</div>
       <div class="page-title">📡 สัญญาณ</div>
@@ -1697,7 +1714,48 @@ service cloud.firestore {
       <button class="btn-primary" style="flex:1;" onclick="saveSettings()">💾 บันทึกทุก Key</button>
       <button class="btn-ghost" onclick="testConnections()" style="flex:1;">🔌 ทดสอบการเชื่อมต่อ</button>
     </div>
+    <!-- ตั้งค่าหน้าบิล (ย้ายมาจาก modal ในหน้าบิล) -->
+    <div class="card" id="settingsBill" style="margin-top:14px;">
+      <div class="card-title">🧾 ตั้งค่าหน้าบิล</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn-ghost" style="font-size:12px;" onclick="billRwOpen()">💳 สิทธิ์บัตร / รอบบิล</button>
+      <button class="btn-ghost" style="font-size:12px;" onclick="billOpenCatModal()">🏷️ หมวดที่เพิ่มเอง</button>
+    </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งช่วงที่ดูอยู่ไป Google Sheet</button>
+        <button class="btn-ghost" style="font-size:12px;" onclick="billExportCsv()">⬇️ ดาวน์โหลด CSV ทั้งหมด</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ชื่อบัญชีของคุณ (ช่วย AI แยกว่าเงินเข้าหรือออก)</label>
+        <input class="form-input" id="billOwnerNames" placeholder="เช่น ณัฐพัฒน์, NATTAPAT" onchange="billSaveOwner(this.value)">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label class="form-label">บัตรเครดิตของคุณ (ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
+        <div id="billCardChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input class="form-input" id="billCardNew" placeholder="เช่น KTC 1234" style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter')billAddCardFromInput()">
+          <button class="btn-primary" style="flex:none;padding:8px 14px;font-size:12px;" onclick="billAddCardFromInput()">+ เพิ่มบัตร</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;">
+          ค่าธรรมเนียมแปลงสกุลเงิน (ใช้จ่ายต่างประเทศ) เริ่มต้น
+          <input class="form-input" id="billFxFeeDefault" type="number" step="0.1" min="0" max="10" style="width:70px;padding:5px 8px;" onchange="billSaveDefaultFee(this.value)"> %
+          <span style="color:var(--text3);">· แตะชื่อบัตรด้านบนเพื่อตั้งแยกรายใบ</span>
+        </div>
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
+        🔒 รูปสลิปถูกส่งไปให้ Gemini อ่าน (ไม่ได้ประมวลผลในเครื่อง) และ<strong>ไม่ถูกเก็บ</strong> — Firestore เก็บเฉพาะข้อมูลที่อ่านได้ (วันที่ ยอด หมวด ร้าน เลขอ้างอิง)<br>
+        📲 แชร์ screenshot เข้า Folio ได้จากเมนู Share บน Android (ต้องติดตั้ง Folio เป็นแอปก่อน)
+      </div>
+    </div>
   </main>
+
+<!-- แถบเมนูล่าง (มือถือ ≤779px) -->
+<nav class="bottom-nav" id="bottomNav" aria-label="เมนูหลัก">
+  <button class="active" data-group="overview" onclick="navGo('overview')"><span class="ic">🏠</span>ภาพรวม</button>
+  <button data-group="invest" onclick="navGo('invest')"><span class="ic">📈</span>ลงทุน</button>
+  <button data-group="bills" onclick="navGo('bills')"><span class="ic">🧾</span>บิล</button>
+  <button data-group="settings" onclick="navGo('settings')"><span class="ic">⚙️</span>ตั้งค่า</button>
+</nav>
 
 </div><!-- end .app -->
 
@@ -1994,42 +2052,6 @@ service cloud.firestore {
       <button class="bill-add-btn" style="grid-column:1/-1;" onclick="closeModal('billAddModal');billOpenManualSub()">🔁 Subscription / หักอัตโนมัติ</button>
     </div>
     <div class="modal-actions" style="margin-top:14px;"><button class="btn-ghost" style="flex:1;" onclick="closeModal('billAddModal')">ปิด</button></div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="billSettingsModal">
-  <div class="modal" style="width:480px;">
-    <h3>⚙️ ตั้งค่าหน้าบิล</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="btn-ghost" style="font-size:12px;" onclick="closeModal('billSettingsModal');billRwOpen()">💳 สิทธิ์บัตร / รอบบิล</button>
-      <button class="btn-ghost" style="font-size:12px;" onclick="closeModal('billSettingsModal');billOpenCatModal()">🏷️ หมวดที่เพิ่มเอง</button>
-    </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งช่วงที่ดูอยู่ไป Google Sheet</button>
-        <button class="btn-ghost" style="font-size:12px;" onclick="billExportCsv()">⬇️ ดาวน์โหลด CSV ทั้งหมด</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">ชื่อบัญชีของคุณ (ช่วย AI แยกว่าเงินเข้าหรือออก)</label>
-        <input class="form-input" id="billOwnerNames" placeholder="เช่น ณัฐพัฒน์, NATTAPAT" onchange="billSaveOwner(this.value)">
-      </div>
-      <div class="form-group" style="margin-top:10px;">
-        <label class="form-label">บัตรเครดิตของคุณ (ใส่เลข 4 ตัวท้ายช่วยให้ AI จับคู่แม่นขึ้น)</label>
-        <div id="billCardChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px;"></div>
-        <div style="display:flex;gap:6px;">
-          <input class="form-input" id="billCardNew" placeholder="เช่น KTC 1234" style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter')billAddCardFromInput()">
-          <button class="btn-primary" style="flex:none;padding:8px 14px;font-size:12px;" onclick="billAddCardFromInput()">+ เพิ่มบัตร</button>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--text2);flex-wrap:wrap;">
-          ค่าธรรมเนียมแปลงสกุลเงิน (ใช้จ่ายต่างประเทศ) เริ่มต้น
-          <input class="form-input" id="billFxFeeDefault" type="number" step="0.1" min="0" max="10" style="width:70px;padding:5px 8px;" onchange="billSaveDefaultFee(this.value)"> %
-          <span style="color:var(--text3);">· แตะชื่อบัตรด้านบนเพื่อตั้งแยกรายใบ</span>
-        </div>
-      </div>
-      <div style="font-size:10.5px;color:var(--text3);line-height:1.7;margin-top:10px;">
-        🔒 รูปสลิปถูกส่งไปให้ Gemini อ่าน (ไม่ได้ประมวลผลในเครื่อง) และ<strong>ไม่ถูกเก็บ</strong> — Firestore เก็บเฉพาะข้อมูลที่อ่านได้ (วันที่ ยอด หมวด ร้าน เลขอ้างอิง)<br>
-        📲 แชร์ screenshot เข้า Folio ได้จากเมนู Share บน Android (ต้องติดตั้ง Folio เป็นแอปก่อน)
-      </div>
-        <div class="modal-actions" style="margin-top:14px;"><button class="btn-ghost" style="flex:1;" onclick="closeModal('billSettingsModal')">ปิด</button></div>
   </div>
 </div>
 
@@ -2523,15 +2545,25 @@ function updateGreeting() {
 }
 updateGreeting();
 
+// เมนู 4 กลุ่ม: ภาพรวม · ลงทุน (ซื้อขาย / Benchmark / สัญญาณ) · บิล (รวมแท็บงบ) · ตั้งค่า
+const NAV_GROUP = { overview: 'overview', trading: 'invest', benchmark: 'invest', signals: 'invest', bills: 'bills', settings: 'settings' };
+const INVEST_TABS = [['trading', 'ซื้อขาย'], ['benchmark', '📈 Benchmark'], ['signals', '📡 สัญญาณ']];
+let _lastInvest = 'trading';
+function navGo(group) { showPage(group === 'invest' ? _lastInvest : group); }
 function showPage(id) {
+  if (id === 'budget') { // ลิงก์เก่า: หน้างบประมาณย้ายไปเป็นแท็บ "งบ" ในหน้าบิล
+    billState.tab = 'budget';
+    try { localStorage.setItem('folio_bill_tab', 'budget'); } catch (e) {}
+    id = 'bills';
+  }
+  if (INVEST_TABS.some(t => t[0] === id)) _lastInvest = id;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b => {
-    if (b.dataset.page === id) b.classList.add('active');
+  document.querySelectorAll('[data-group]').forEach(b => b.classList.toggle('active', b.dataset.group === NAV_GROUP[id]));
+  document.querySelectorAll('.invest-tabs').forEach(el => {
+    el.innerHTML = INVEST_TABS.map(([k, l]) => `<button class="${k === id ? 'on' : ''}" onclick="showPage('${k}')">${l}</button>`).join('');
   });
   if (id === 'bills' && typeof billRender === 'function') billRender(); // Chart.js ต้องวาดตอน canvas มองเห็นแล้ว
-  if (id === 'budget' && typeof renderBudget === 'function') renderBudget();
   if (id === 'signals' && typeof sgOnShowSignals === 'function') sgOnShowSignals();
 }
 
@@ -7792,7 +7824,8 @@ function billApplyTab() {
   document.querySelectorAll('#billTabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   document.querySelectorAll('#page-bills .bill-tab').forEach(sct => sct.classList.toggle('on', sct.dataset.tab === tab));
   const hero = document.getElementById('billMetrics');
-  if (hero) hero.classList.toggle('compact', tab !== 'overview'); // การ์ดสรุปเต็มเฉพาะแท็บภาพรวม แท็บอื่นเป็นบรรทัดเดียว
+  if (hero) hero.classList.toggle('compact', tab !== 'overview');
+  document.getElementById('page-bills').classList.toggle('tab-budget', tab === 'budget'); // แท็บงบคิดเดือนปัจจุบันเสมอ → ซ่อนตัวเลือกเดือน/ปีบนหัวหน้า // การ์ดสรุปเต็มเฉพาะแท็บภาพรวม แท็บอื่นเป็นบรรทัดเดียว
 }
 // ─── ตั้งค่าโปรไฟล์บัตร ───
 function billRwSaveAll(o) {
@@ -7923,6 +7956,12 @@ function billRwReset(card) {
   if (!all[card]) return;
   delete all[card].ruleEdit; delete all[card].custom; delete all[card].base;
   billRwSaveAll(all); billRwRenderModal();
+}
+// ⚙️ ในหน้าบิล → ไปหัวข้อ "ตั้งค่าหน้าบิล" ในหน้าตั้งค่า
+function billOpenSettings() {
+  showPage('settings');
+  const el = document.getElementById('settingsBill');
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1600); }
 }
 function billRwOpen() { billRwRenderModal(); openModal('billRwModal'); }
 function billRwRenderModal() {
@@ -8198,6 +8237,7 @@ function billRender() {
   rwcRender();
   billRenderTrend();
   billRenderList();
+  if (billState.tab === 'budget' && typeof renderBudget === 'function') renderBudget();
 }
 
 function billRenderCashflow(t) {
