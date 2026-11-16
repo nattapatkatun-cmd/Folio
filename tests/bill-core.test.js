@@ -215,15 +215,18 @@ test('billCsvRecords: จับคอลัมน์จากชื่อหั�
   assert.match(C.billCsvRecords([['วันที่', 'ประเภท', 'ยอด']]).error, /ว่าง/);
 });
 
-test('index.html: ไม่มีสำเนาที่ซ้ำ และโหลด bill-core ก่อน script หลัก', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  for (const name of ['billAmtThb', 'billTotals', 'billRwEarn', 'billRwCycle', 'billNormDate', 'todayISO', 'billInstDate'])
-    assert.ok(!new RegExp('function ' + name + '\\(').test(html), name + ' ยังซ้ำอยู่ใน index.html');
-  for (const name of ['BILL_PAY', 'BILL_NON_SPEND', 'BILL_RW_TAGS', 'BILL_RW_RX'])
-    assert.ok(!new RegExp('const ' + name + '\\b').test(html), name + ' ยังซ้ำอยู่ใน index.html');
+test('index.html/js: ไม่มีสำเนาของฟังก์ชันใน bill-core ที่ซ้ำในไฟล์อื่น และโหลด bill-core ก่อน script หลัก', () => {
+  const root = path.join(__dirname, '..');
+  const files = ['index.html'].concat(fs.readdirSync(path.join(root, 'js')).filter(f => f !== 'bill-core.js').map(f => 'js/' + f));
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    for (const name of ['billAmtThb', 'billTotals', 'billRwEarn', 'billRwCycle', 'billNormDate', 'todayISO', 'billInstDate'])
+      assert.ok(!new RegExp('^function ' + name + '\\(', 'm').test(src), name + ' ซ้ำใน ' + f);
+    for (const name of ['BILL_PAY', 'BILL_NON_SPEND', 'BILL_RW_TAGS', 'BILL_RW_RX'])
+      assert.ok(!new RegExp('^const ' + name + '\\b', 'm').test(src), name + ' ซ้ำใน ' + f);
+  }
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const core = html.indexOf('<script src="js/bill-core.js"></script>');
-  const main = html.indexOf('<script>\n// --- NOTE');
-  assert.ok(core > 0 && main > core);
-  const sw = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
-  assert.ok(sw.includes("'/Folio/js/bill-core.js'"));
+  assert.ok(core > 0 && core < html.indexOf('<script src="js/portfolio.js"></script>'));
+  assert.ok(fs.readFileSync(path.join(root, 'sw.js'), 'utf8').includes("'/Folio/js/bill-core.js'"));
 });

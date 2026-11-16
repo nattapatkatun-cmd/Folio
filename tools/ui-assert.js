@@ -898,6 +898,43 @@ test('เฟส6d: แถบอยู่บนสุดของหน้าแ�
     if (f.errors.length) { failed++; console.log('FAIL เฟส6a: มี JS error', f.errors.join(' | ')); }
     await f.b.close();
   }
+  // ───────── เฟส 8: เปิดแอปออฟไลน์จาก service worker หลังโหลดครั้งแรก (เซิร์ฟเวอร์ภายในเครื่องที่ /Folio/ + SW จริง) ─────────
+  {
+    const http = require('http'), fsx = require('fs'), pth = require('path'), { chromium } = require('playwright');
+    const root = pth.resolve(__dirname, '..');
+    const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+    const srv = http.createServer((req, res) => {
+      const u = decodeURIComponent(req.url.split('?')[0]); if (!u.startsWith('/Folio/')) { res.writeHead(404); return res.end(); }
+      const fp = pth.join(root, u.slice('/Folio/'.length) || 'index.html');
+      if (!fp.startsWith(root) || !fsx.existsSync(fp) || fsx.statSync(fp).isDirectory()) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'content-type': mime[pth.extname(fp)] || 'application/octet-stream' }); fsx.createReadStream(fp).pipe(res);
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const base = 'http://127.0.0.1:' + srv.address().port + '/Folio/';
+    const br = await chromium.launch(); const ctx = await br.newContext({ viewport: { width: 390, height: 844 } });
+    const pg = await ctx.newPage();
+    await pg.route('**/*', r => r.request().url().startsWith(base.slice(0, base.indexOf('/Folio/'))) ? r.continue() : r.abort());
+    const errs = []; pg.on('pageerror', e => errs.push(e.message));
+    try {
+      await pg.goto(base); await pg.evaluate(() => navigator.serviceWorker.ready);
+      await pg.waitForFunction(async () => { const ks = await caches.keys(); const k = ks.find(x => /^folio-v\d+$/.test(x)); return !!k && (await (await caches.open(k)).keys()).length >= 10; }, null, { timeout: 15000 });
+      await ctx.setOffline(true);
+      await pg.reload({ waitUntil: 'load' }); await pg.waitForTimeout(800);
+      const probe = await pg.evaluate(() => ({
+        fns: ['billTotals', 'renderHoldings', 'callGemini', 'billRwRender', 'billRender', 'sgOnShowSignals', 'aihAsk'].map(n => typeof window[n]),
+        css: getComputedStyle(document.querySelector('.topbar')).position, st: typeof state, pages: document.querySelectorAll('.page').length, online: navigator.onLine }));
+      assert.equal(probe.online, false);
+      assert.deepEqual(probe.fns, Array(7).fill('function'));
+      assert.equal(probe.css, 'sticky'); assert.equal(probe.st, 'object'); assert.ok(probe.pages >= 5);
+      // เปิดหน้าบิลและทำงานได้ตามปกติ (ข้อมูลในเครื่อง)
+      await pg.evaluate(() => { showPage('bills'); billSetTab('overview'); }); await pg.waitForTimeout(200);
+      assert.equal(await pg.evaluate(() => document.getElementById('page-bills').classList.contains('active')), true);
+      const jsErr = errs.filter(e => !/module|import|fetch|Firebase|firebase/i.test(e));
+      assert.deepEqual(jsErr, [], 'JS error ตอนออฟไลน์');
+      passed++; console.log('PASS เฟส8: ออฟไลน์หลังโหลดครั้งแรก — ไฟล์ css/js ทั้ง 8 ไฟล์โหลดจาก service worker cache แอปเปิดและใช้งานได้');
+    } catch (e) { failed++; console.log('FAIL เฟส8: ออฟไลน์', String(e.message).split('\n').slice(0, 5).join('\n    '), errs.slice(0, 3)); }
+    await br.close(); srv.close();
+  }
   // อันดับบัตรต้องตรงกับโหมด "คุ้มสุด" เดิม (ไฟล์อ้างอิงถ่ายจากโค้ดก่อนเฟส 5) แม้ผู้ใช้เคยตั้งโหมดอื่นไว้
   {
     const f = await lib.open();
