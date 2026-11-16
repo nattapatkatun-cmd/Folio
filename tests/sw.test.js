@@ -57,9 +57,9 @@ test('Chart.js จาก cdnjs แคชได้แม้เป็น opaque re
 });
 test('activate: ลบแคชเก่า แต่เก็บแคช SDK (folio-cdn) และไฟล์ที่แชร์เข้ามา (folio-share)', async () => {
   const w = load();
-  for (const n of ['folio-v11', 'folio-v12', 'folio-cdn', 'folio-share', 'other']) w.mkCache(n);
+  for (const n of ['folio-v11', 'folio-v12', 'folio-v13', 'folio-cdn', 'folio-share', 'other']) w.mkCache(n);
   const e = { waitUntil(p) { this.p = p; } }; w.handlers.activate(e); await e.p;
-  assert.deepEqual([...w.stores.keys()].sort(), ['folio-cdn', 'folio-share', 'folio-v12']);
+  assert.deepEqual([...w.stores.keys()].sort(), ['folio-cdn', 'folio-share', 'folio-v13']);
 });
 test('หน้าแอป (navigate) ออฟไลน์ → ใช้ shell ที่แคชไว้ รวมถึง URL ที่มี query (?share-target=1)', async () => {
   const w = load();
@@ -71,5 +71,5 @@ test('หน้าแอป (navigate) ออฟไลน์ → ใช้ shell
 test('SW: SHELL มี js/bill-core.js และ CACHE ถูกเปลี่ยนชื่อเมื่อเปลี่ยนไฟล์ใน SHELL', () => {
   const s = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
   assert.ok(s.includes("'/Folio/js/bill-core.js'"));
-  assert.match(s, /const CACHE = 'folio-v1[2-9]|const CACHE = 'folio-v[2-9]\d/);
+  assert.match(s, /const CACHE = 'folio-v(1[3-9]|[2-9]\d)/);
 });

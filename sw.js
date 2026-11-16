@@ -1,7 +1,10 @@
-const CACHE = 'folio-v12'; // v12: แคช Firebase SDK/Chart.js ให้เปิดแอปออฟไลน์ได้ (เดิมไฟล์ firebase-firestore.js ถูกตัวกรอง 'firestore' ส่งไปเครือข่ายทุกครั้ง) · v11: เพิ่ม js/bill-core.js เข้า SHELL (v10: ล้าง cache อัตราแลกเปลี่ยนที่เคยถูกเก็บค้างไว้)
+const CACHE = 'folio-v13'; // v13: แยก index.html เป็น css/app.css + js/*.js (เฟส 8) · v12: แคช Firebase SDK/Chart.js ให้เปิดแอปออฟไลน์ได้ (เดิมไฟล์ firebase-firestore.js ถูกตัวกรอง 'firestore' ส่งไปเครือข่ายทุกครั้ง) · v11: เพิ่ม js/bill-core.js เข้า SHELL (v10: ล้าง cache อัตราแลกเปลี่ยนที่เคยถูกเก็บค้างไว้)
 const CDN_CACHE = 'folio-cdn'; // SDK/ไลบรารีที่ระบุเวอร์ชันใน URL (ไม่เปลี่ยนเนื้อหา) — เก็บข้ามการเปลี่ยน CACHE
 const SHARE_CACHE = 'folio-share'; // ไฟล์ที่แชร์เข้ามา (Share Target) — หน้าเว็บอ่านแล้วลบทิ้งเอง
-const SHELL = ['/Folio/', '/Folio/index.html', '/Folio/js/bill-core.js'];
+// ไฟล์ของแอป (network-first แล้ว fallback cache ตอนออฟไลน์) — ไฟล์ไหนไม่อยู่ในรายการนี้จะเป็น cache-first และค้างเวอร์ชันเก่า
+// เพิ่ม/เปลี่ยนชื่อไฟล์ css/js ต้องมาแก้ที่นี่และเปลี่ยนชื่อ CACHE (tests/structure.test.js ตรวจให้)
+const SHELL = ['/Folio/', '/Folio/index.html', '/Folio/css/app.css', '/Folio/js/bill-core.js', '/Folio/js/portfolio.js', '/Folio/js/advisor.js',
+  '/Folio/js/rewards.js', '/Folio/js/bill.js', '/Folio/js/signals.js', '/Folio/js/ai.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
