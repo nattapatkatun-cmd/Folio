@@ -218,4 +218,57 @@ function billNormDate(s) {
   return isoFromDate(d);
 }
 
-if (typeof module !== 'undefined') module.exports = { BILL_PAY, isoFromDate, todayISO, billOffsetCat, billRwIso, billRwCycle, billRwDue, billRwAutoTags, billRwTags, billRwActive, billRwMatch, billRwEarn, billAmtThb, billRefKey, billAddMonths, billInPeriod, billTotals, billIsoAdd, billInstDate, billSubStep, billSubDate, billSubDueCount, billNormDate, BILL_NON_SPEND, BILL_RW_TAGS, BILL_RW_RX };
+// ─── เฟส 6c: อ่านไฟล์ CSV ที่ส่งออกจากแอปนี้ (billExportCsv) — ฟังก์ชันล้วน ไม่แตะ DOM ───
+// แยกเซลล์แบบ RFC 4180: เครื่องหมายคำพูดคู่, "" = ", ขึ้นบรรทัดใหม่ในเซลล์ได้, CRLF/LF, ตัด BOM, เดาตัวคั่น , ; หรือ tab จากบรรทัดแรก
+function billParseCsv(text) {
+  text = String(text == null ? '' : text).replace(/^\uFEFF/, '');
+  const first = text.split(/\r?\n/, 1)[0] || '';
+  const count = ch => (first.match(new RegExp(ch === '\t' ? '\\t' : '\\' + ch, 'g')) || []).length;
+  const delim = count(',') >= count(';') && count(',') >= count('\t') ? ',' : count(';') >= count('\t') ? ';' : '\t';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === delim) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); cell = ''; if (row.some(x => x.trim() !== '')) rows.push(row); row = []; }
+    else cell += ch;
+  }
+  row.push(cell); if (row.some(x => x.trim() !== '')) rows.push(row);
+  return rows;
+}
+// วันที่ในไฟล์ → YYYY-MM-DD (ค.ศ.) หรือ '' ถ้าอ่านไม่ได้ · รับ 2026-11-02 / 2026/11/2 / 2/11/2026 / 2-11-2569 (พ.ศ. ลบ 543 เมื่อปี ≥ 2400)
+function billCsvDate(s) {
+  s = String(s || '').trim();
+  let y, m, d, mt;
+  if ((mt = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))) { y = +mt[1]; m = +mt[2]; d = +mt[3]; }
+  else if ((mt = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) { d = +mt[1]; m = +mt[2]; y = +mt[3]; }
+  else return '';
+  if (y >= 2400) y -= 543;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? isoFromDate(dt) : '';
+}
+function billCsvNum(s) { const n = parseFloat(String(s == null ? '' : s).replace(/[,฿\s]/g, '')); return isFinite(n) ? n : NaN; }
+// แถวหัวตาราง (ชื่อคอลัมน์ตามที่ส่งออก ลำดับไหนก็ได้) → { records, skipped, error }
+// records[i] = { date, time, type:'income'|'expense', category(ชื่อหมวดตามที่เขียนในไฟล์), merchant, amount, currency, thb|null, pay(ข้อความ), card, ref, note }
+function billCsvRecords(rows) {
+  const H = { date: 'วันที่', time: 'เวลา', type: 'ประเภท', category: 'หมวด', merchant: 'ร้าน/ผู้รับ', amount: 'ยอด', currency: 'สกุลเงิน', thb: 'ยอด(THB)', pay: 'จ่ายด้วย', card: 'บัตร', ref: 'เลขอ้างอิง', note: 'โน้ต' };
+  if (!rows || rows.length < 2) return { records: [], skipped: 0, error: 'ไฟล์ว่างหรือไม่มีแถวข้อมูล' };
+  const head = rows[0].map(x => String(x).trim()), idx = {};
+  Object.keys(H).forEach(k => { idx[k] = head.indexOf(H[k]); });
+  const miss = ['date', 'type', 'amount'].filter(k => idx[k] < 0).map(k => H[k]);
+  if (miss.length) return { records: [], skipped: 0, error: 'ไม่ใช่ไฟล์ที่ส่งออกจากแอปนี้ — ไม่พบคอลัมน์ ' + miss.join(' / ') };
+  const get = (r, k) => (idx[k] >= 0 && r[idx[k]] != null ? String(r[idx[k]]).trim() : '');
+  const records = []; let skipped = 0;
+  rows.slice(1).forEach(r => {
+    const date = billCsvDate(get(r, 'date')), amount = billCsvNum(get(r, 'amount'));
+    const ty = get(r, 'type'), type = /รายรับ|income/i.test(ty) ? 'income' : /รายจ่าย|expense/i.test(ty) ? 'expense' : '';
+    if (!date || !type || !(amount > 0)) { skipped++; return; }
+    const cur = get(r, 'currency').toUpperCase(), thb = billCsvNum(get(r, 'thb'));
+    records.push({ date, time: /^\d{1,2}:\d{2}/.test(get(r, 'time')) ? get(r, 'time').slice(0, 5).padStart(5, '0') : '', type, category: get(r, 'category'),
+      merchant: get(r, 'merchant'), amount, currency: /^[A-Z]{3}$/.test(cur) ? cur : 'THB', thb: thb > 0 ? thb : null, pay: get(r, 'pay'), card: get(r, 'card'), ref: get(r, 'ref'), note: get(r, 'note') });
+  });
+  return { records, skipped, error: '' };
+}
+
+if (typeof module !== 'undefined') module.exports = { billParseCsv, billCsvDate, billCsvNum, billCsvRecords, BILL_PAY, isoFromDate, todayISO, billOffsetCat, billRwIso, billRwCycle, billRwDue, billRwAutoTags, billRwTags, billRwActive, billRwMatch, billRwEarn, billAmtThb, billRefKey, billAddMonths, billInPeriod, billTotals, billIsoAdd, billInstDate, billSubStep, billSubDate, billSubDueCount, billNormDate, BILL_NON_SPEND, BILL_RW_TAGS, BILL_RW_RX };

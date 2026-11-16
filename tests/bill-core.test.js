@@ -184,6 +184,37 @@ test('billRwTags: เดาหมวดสิทธิ์จากชื่อ�
   assert.ok(t({}).has('thb'));
 });
 
+test('billParseCsv: เครื่องหมายคำพูด, "" ในเซลล์, ขึ้นบรรทัดใหม่ในเซลล์, CRLF/LF, BOM, ตัวคั่น ; และ tab', () => {
+  assert.deepEqual(C.billParseCsv('﻿a,b,c\r\n1,"x, y",3\n"he said ""hi""","l1\nl2",\n'), [['a', 'b', 'c'], ['1', 'x, y', '3'], ['he said "hi"', 'l1\nl2', '']]);
+  assert.deepEqual(C.billParseCsv('a;b\n1;2'), [['a', 'b'], ['1', '2']]);
+  assert.deepEqual(C.billParseCsv('a\tb\n1\t2'), [['a', 'b'], ['1', '2']]);
+  assert.deepEqual(C.billParseCsv('a,b\n\n,\n1,2'), [['a', 'b'], ['1', '2']]);   // ข้ามแถวว่าง
+  assert.deepEqual(C.billParseCsv(''), []);
+});
+test('billCsvDate: รูปแบบวันที่ที่ Excel/ไทยมักเขียน + พ.ศ. + วันที่ที่ไม่มีจริง', () => {
+  assert.equal(C.billCsvDate('2026-11-02'), '2026-11-02');
+  assert.equal(C.billCsvDate('2026/1/5'), '2026-01-05');
+  assert.equal(C.billCsvDate('2/11/2026'), '2026-11-02');
+  assert.equal(C.billCsvDate('02-11-2569'), '2026-11-02');
+  assert.equal(C.billCsvDate('2569-11-02 10:00'), '2026-11-02');
+  assert.equal(C.billCsvDate('2026-02-30'), '');
+  assert.equal(C.billCsvDate('garbage'), '');
+  assert.equal(C.billCsvDate(''), '');
+});
+test('billCsvRecords: จับคอลัมน์จากชื่อหัว (ลำดับไหนก็ได้), ข้ามแถวเสีย, แจ้งผิดรูปแบบ', () => {
+  const rows = [['ยอด', 'โน้ต', 'วันที่', 'ประเภท', 'สกุลเงิน', 'ยอด(THB)', 'เวลา'],
+    ['1,234.50', 'n', '2026-11-02', 'รายจ่าย', 'usd', '43,000', '9:05'],
+    ['10', '', '2026-11-03', 'รายรับ', '', '', ''],
+    ['0', '', '2026-11-03', 'รายจ่าย', '', '', ''],        // ยอด 0
+    ['5', '', 'xx', 'รายจ่าย', '', '', ''],                // วันที่เสีย
+    ['5', '', '2026-11-03', 'อื่น', '', '', '']];          // ประเภทไม่รู้จัก
+  const r = C.billCsvRecords(rows);
+  assert.equal(r.skipped, 3); assert.equal(r.error, '');
+  assert.deepEqual(r.records.map(x => [x.date, x.type, x.amount, x.currency, x.thb, x.time, x.note]), [['2026-11-02', 'expense', 1234.5, 'USD', 43000, '09:05', 'n'], ['2026-11-03', 'income', 10, 'THB', null, '', '']]);
+  assert.match(C.billCsvRecords([['a', 'b'], ['1', '2']]).error, /ไม่ใช่ไฟล์ที่ส่งออกจากแอปนี้.*วันที่.*ประเภท.*ยอด/);
+  assert.match(C.billCsvRecords([['วันที่', 'ประเภท', 'ยอด']]).error, /ว่าง/);
+});
+
 test('index.html: ไม่มีสำเนาที่ซ้ำ และโหลด bill-core ก่อน script หลัก', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   for (const name of ['billAmtThb', 'billTotals', 'billRwEarn', 'billRwCycle', 'billNormDate', 'todayISO', 'billInstDate'])
