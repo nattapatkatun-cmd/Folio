@@ -7585,8 +7585,8 @@ function billRwRender() {
       const col = x.done ? 'var(--green)' : x.days < 0 ? 'var(--red)' : x.days <= 5 ? 'var(--amber)' : 'var(--text2)';
       return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--bg2);">
         <span>💳 ${esc(x.prof.card)} <span style="color:var(--text3);font-size:10.5px;">รอบ ${billRwShort(x.closed.start)}–${billRwShort(x.closed.end)}</span></span>
-        <span style="text-align:right;white-space:nowrap;"><strong>${billFmt0(x.spent)}</strong> <span style="color:${col};font-size:11px;">${x.done ? '✅ จ่ายแล้ว' : 'ครบ ' + billRwShort(x.due) + (x.days < 0 ? ' (เลยมา ' + -x.days + ' วัน)' : x.days === 0 ? ' (วันนี้)' : ' (อีก ' + x.days + ' วัน)')}</span></span></div>`;
-    }).join('') + '<div style="font-size:10px;color:var(--text3);margin:4px 0 8px;">ยอดจากรายการที่บันทึกในแอป (อาจไม่ตรง statement) · "จ่ายแล้ว" ดูจากรายการ 💳 จ่ายบิลบัตรเครดิตของบัตรนั้น</div>';
+        <span style="text-align:right;white-space:nowrap;"><strong>${billFmt0(x.spent)}</strong> <span style="color:${col};font-size:11px;">${x.done ? '✅ จ่ายแล้ว' : 'ครบ ' + billRwShort(x.due) + (x.days < 0 ? ' (เลยมา ' + -x.days + ' วัน)' : x.days === 0 ? ' (วันนี้)' : ' (อีก ' + x.days + ' วัน)')}</span></span></div>` + billStmtBlock(x);
+    }).join('') + '<div style="font-size:10px;color:var(--text3);margin:4px 0 8px;">ยอดจากรายการที่บันทึกในแอป · ใส่ยอดจาก statement เพื่อดูส่วนต่าง · "จ่ายแล้ว" ดูจากรายการ 💳 จ่ายบิลบัตรเครดิตของบัตรนั้น</div>';
   }
   const rop = billRwMode() === 'rop';
   const raw = billRwMode() === 'raw';
@@ -7616,6 +7616,37 @@ function billRwRender() {
   el.innerHTML = html;
 }
 
+// ─── เฟส 6b: กระทบยอดบัตร — ยอดจาก statement ของรอบที่ปิดแล้ว เทียบกับยอดในแอป ───
+// เก็บที่ localStorage 'folio_bill_statements' และ Firestore settings/bill.statements = { [ชื่อบัตร]: { [วันตัดรอบ YYYY-MM-DD]: ยอด } }
+function billStatements() { try { const o = JSON.parse(localStorage.getItem('folio_bill_statements') || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+function billStatementSet(card, end, value) {
+  const all = billStatements(), raw = String(value == null ? '' : value).replace(/,/g, '').trim(), n = parseFloat(raw);
+  if (raw === '' || !(n >= 0)) { if (all[card]) { delete all[card][end]; if (!Object.keys(all[card]).length) delete all[card]; } }
+  else (all[card] = all[card] || {})[end] = Math.round(n * 100) / 100;
+  localStorage.setItem('folio_bill_statements', JSON.stringify(all));
+  billSyncSettings();
+  if (typeof billRender === 'function') billRender();
+}
+// รายการต่างประเทศของรอบนั้นที่ยอดบาทยังเป็นค่าประมาณ (thbActual !== true) — ตัวการที่ทำให้ยอดในแอปไม่ตรง statement
+function billStatementEstimates(x) { return billRwTxs(x.prof.card, x.closed.start, x.closed.end).filter(t => String(t.currency || 'THB').toUpperCase() !== 'THB' && !t.thbActual); }
+function billStmtBlock(x) {
+  const end = x.closed.end, st = (billStatements()[x.prof.card] || {})[end], q = esc(JSON.stringify(x.prof.card)), dq = esc(JSON.stringify(end));
+  const est = billStatementEstimates(x);
+  let res = '';
+  if (typeof st === 'number') {
+    const diff = Math.round((st - x.spent) * 100) / 100;
+    res = Math.abs(diff) < 1
+      ? '<span style="color:var(--green);">✓ ตรงกับยอดในแอป</span>'
+      : diff > 0 ? `<span style="color:var(--amber);">statement สูงกว่าแอป <b>+${billFmt0(diff)}</b> — อาจมีรายการที่ยังไม่ได้บันทึก (หรือค่าธรรมเนียม/ดอกเบี้ย)</span>`
+        : `<span style="color:var(--amber);">แอปสูงกว่า statement <b>${billFmt0(-diff)}</b> — อาจมีรายการซ้ำ หรือยอดต่างประเทศที่ประมาณไว้สูงเกิน</span>`;
+  }
+  return `<div class="rw-stmt" data-card="${esc(x.prof.card)}" style="font-size:11px;padding:4px 0 8px;border-bottom:0.5px solid var(--bg2);">
+    <label style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--text2);">📄 ยอด statement ฿
+      <input class="form-input" type="number" inputmode="decimal" min="0" step="0.01" value="${typeof st === 'number' ? st : ''}" placeholder="ใส่จากใบแจ้งหนี้" style="width:120px;padding:5px 8px;" onchange='billStatementSet(${q},${dq},this.value)'></label>
+    ${res ? `<div class="rw-stmt-res" style="margin-top:3px;">${res} <span style="color:var(--text3);">· ยอดในแอป ${billFmt0(x.spent)}</span></div>` : ''}
+    ${est.length ? `<div class="rw-stmt-est" style="margin-top:4px;color:var(--text2);">⚠️ รายการต่างประเทศที่ยอดบาทยังเป็นค่าประมาณ ${est.length} รายการ — ใส่ยอดจริงจาก statement แล้วส่วนต่างจะลดลง:${est.map(t => `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0;"><span>${esc(t.merchant || billCat(t.category, t.type).label)} · ${esc(t.currency)} ${Number(t.amount).toLocaleString()}</span><span>≈ ${billFmt0(billAmtThb(t))} <button class="bill-chip" style="min-height:32px;" onclick='billEdit(${esc(JSON.stringify(t.id))})'>ใส่ยอดจริง</button></span></div>`).join('')}</div>` : ''}
+  </div>`;
+}
 // ครบกำหนดชำระของรอบที่ปิดล่าสุดของแต่ละบัตร (ใช้ทั้งแท็บบัตรและกล่องในภาพรวม)
 function billRwDues() {
   const today = todayISO();
@@ -9673,7 +9704,8 @@ function billSyncSettings() {
   window.FB.replace('settings', 'bill', {
     owner: localStorage.getItem('folio_bill_owner') || '', cards: billCards(), customCats: billCustomCats(),
     fxFee: billDefaultFxFee(), cardFees: billCardFees(), cardProfiles: billRwSaved(),
-    rwMode2: localStorage.getItem('folio_bill_rw_mode2') || 'baht', rwMileBaht: billRwMileBaht()
+    rwMode2: localStorage.getItem('folio_bill_rw_mode2') || 'baht', rwMileBaht: billRwMileBaht(),
+    statements: billStatements() // เฟส 6b — replace เขียนทับทั้งเอกสาร ต้องส่งทุกคีย์ไปด้วยเสมอ
   }).then(() => { try { localStorage.removeItem('folio_bill_settings_dirty'); } catch (e) {} }).catch(() => {});
 }
 // ─── จัดการหมวดที่เพิ่มเอง ───
@@ -9734,6 +9766,7 @@ async function billLoadSettings() {
     if (doc.cardProfiles && typeof doc.cardProfiles === 'object') localStorage.setItem('folio_bill_card_profiles', JSON.stringify(doc.cardProfiles));
     if (doc.rwMode2 === 'rop' || doc.rwMode2 === 'baht' || doc.rwMode2 === 'raw') localStorage.setItem('folio_bill_rw_mode2', doc.rwMode2);
     if (typeof doc.rwMileBaht === 'number' && doc.rwMileBaht > 0) localStorage.setItem('folio_bill_rw_milebaht', String(doc.rwMileBaht));
+    if (doc.statements && typeof doc.statements === 'object') localStorage.setItem('folio_bill_statements', JSON.stringify(doc.statements));
     if (Array.isArray(doc.customCats)) { localStorage.setItem('folio_bill_custom_cats', JSON.stringify(doc.customCats)); billApplyCustomCats(); }
     const page = document.getElementById('page-bills');
     if (page && page.classList.contains('active')) billRender();
