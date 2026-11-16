@@ -57,7 +57,7 @@ test('เฟส1: ฟอร์มกรอกเอง = "เพิ่มรา�
   assert.equal(await p.locator('#billDrafts input[type=checkbox]').count(), 2);
   await p.evaluate(() => billCloseConfirm());
 });
-test('เฟส1: ลบจากฟอร์มแก้ไข — ยกเลิกแล้วอยู่ครบ, ยืนยันแล้วลบและปิดฟอร์ม', async p => {
+test('เฟส1+3: ลบจากฟอร์มแก้ไข — ลบทันที (ไม่มี confirm) ปิดฟอร์ม และมีแถบเลิกทำ', async p => {
   const count = () => p.evaluate(() => state.transactions.length);
   const n0 = await count();
   await p.evaluate(() => billEdit('x2'));
@@ -65,20 +65,26 @@ test('เฟส1: ลบจากฟอร์มแก้ไข — ยกเล
   const btn = p.locator('#billDrafts button', { hasText: 'ลบรายการนี้' });
   assert.equal(await btn.count(), 1);
   assert.ok((await btn.boundingBox()).height >= 44, 'ปุ่มลบสูงอย่างน้อย 44px');
-  p.once('dialog', d => d.dismiss()); await btn.click(); await p.waitForTimeout(150);
-  assert.equal(await count(), n0); assert.equal(await p.evaluate(() => document.getElementById('bill-confirm-modal').classList.contains('open')), true);
-  p.once('dialog', d => d.accept()); await btn.click(); await p.waitForTimeout(250);
+  let dialogs = 0; const on = () => { dialogs++; }; p.on('dialog', d => { on(); d.dismiss(); });
+  await btn.click(); await p.waitForTimeout(250);
+  p.removeAllListeners('dialog');
+  assert.equal(dialogs, 0, 'ไม่ควรมี confirm');
   assert.equal(await count(), n0 - 1);
   assert.equal(await p.evaluate(() => state.transactions.some(t => t.id === 'x2')), false);
   assert.equal(await p.evaluate(() => document.getElementById('bill-confirm-modal').classList.contains('open')), false);
+  assert.equal(await vis(p, '#billUndo'), true);
+  await p.evaluate(() => billUndoRun());   // คืนข้อมูลให้เทสต์ถัดไป
 });
-test('เฟส1: ลบงวดผ่อนจากฟอร์ม — ถามลบทั้งชุด', async p => {
+test('เฟส1+3: ลบงวดผ่อนจากฟอร์ม — ยังถามลบทั้งชุด', async p => {
   await p.evaluate(() => { state.transactions.push(...[1, 2, 3].map(n => ({ id: 'inst_' + n, date: todayISO().slice(0, 7) + '-0' + (3 + n), type: 'expense', category: 'shopping', amount: 500, currency: 'THB', fxToThb: 1, amountThb: 500, merchant: 'ผ่อนทีวี', payMethod: 'cash', installmentId: 'I1', installmentNo: n, installmentOf: 3 }))); billRender(); billEdit('inst_2'); });
   const dialogs = []; p.on('dialog', d => { dialogs.push(d.message().slice(0, 12)); d.accept(); });
   await p.locator('#billDrafts button', { hasText: 'ลบรายการนี้' }).click(); await p.waitForTimeout(300);
   p.removeAllListeners('dialog');
-  assert.equal(dialogs.length, 2);
+  assert.equal(dialogs.length, 1);
   assert.equal(await p.evaluate(() => state.transactions.filter(t => t.installmentId === 'I1').length), 0);
+  await p.evaluate(() => billUndoRun());
+  assert.deepEqual(await p.evaluate(() => state.transactions.filter(t => t.installmentId === 'I1').map(t => t.id).sort()), ['inst_1', 'inst_2', 'inst_3']);
+  await p.evaluate(() => { state.transactions = state.transactions.filter(t => t.installmentId !== 'I1'); billRender(); });
 });
 test('เฟส1: ตัวเลขหน้างบประมาณใช้ฟอนต์ sans เหมือนหน้าบิล', async p => {
   await p.evaluate(() => showPage('budget')); await p.waitForTimeout(200);
@@ -248,6 +254,112 @@ test('เฟส2: เส้นทางเดิมยังใช้ได้ �
   await p.evaluate(() => { state.transactions.push({ id: 'refx', date: '2026-02-02', type: 'expense', category: 'food', amount: 5, currency: 'THB', amountThb: 5, refKey: 'ZZ99', ref: 'ZZ99', merchant: 'q', payMethod: 'cash' }); billOpenConfirm([billNewDraft({ amount: 5, ref: 'ZZ99', date: '2026-02-02', source: 'upload' })], ''); });
   assert.match(await p.locator('.bill-warn').first().innerText(), /เลขอ้างอิงนี้บันทึกไปแล้ว/);
   await closeForm(p);
+});
+
+// ───────── เฟส 3 ─────────
+const tab = (p, name) => p.evaluate(n => { showPage('bills'); billSetTab(n); window.scrollTo(0, 0); }, name);
+test('เฟส3: แท็บรายการมีแค่ค้นหา + ปุ่มกรองปุ่มเดียว; ตัวกรองอยู่ในแผ่นล่าง', async p => {
+  await tab(p, 'list');
+  assert.equal(await vis(p, '#billFilterBtn'), true);
+  assert.equal(await vis(p, '#billSearch'), true);
+  for (const s of ['#billCatFilter', '#billPayFilter', '#billFilterChips', '#billListModeToggle']) assert.equal(await vis(p, s), false, s + ' ต้องซ่อนจนกว่าจะเปิดแผ่นกรอง');
+  await p.click('#billFilterBtn'); await p.waitForTimeout(150);
+  for (const s of ['#billCatFilter', '#billPayFilter', '#billFilterChips', '#billListModeToggle']) assert.equal(await vis(p, s), true, s);
+  const m = await rect(p, '#billFilterSheet .modal'); assert.ok(Math.abs(m.b - 844) < 2, 'แผ่นต้องชิดขอบล่างจอ');
+  assert.equal(await vis(p, '.bill-fab'), false);
+  await p.selectOption('#billCatFilter', 'food');
+  await p.click('#billFilterChips [data-f=expense]');
+  await p.click('#billListModeToggle [data-m=week]');
+  await p.evaluate(() => closeModal('billFilterSheet'));
+  const chips = await p.locator('#billActiveFilters .bill-card-chip').allInnerTexts();
+  assert.equal(chips.length, 3, chips.join('|'));
+  assert.equal(await p.textContent('#billFilterBadge'), '3');
+  assert.equal(await vis(p, '#billRangeNav'), true);
+  // ลบชิปทีละอัน
+  await p.locator('#billActiveFilters .bill-card-chip button').first().click();
+  assert.equal(await p.evaluate(() => billState.listMode), 'month');
+  assert.equal(await p.textContent('#billFilterBadge'), '2');
+  await p.evaluate(() => billClearFilters());
+  assert.deepEqual(await p.evaluate(() => [billState.catFilter, billState.payFilter, billState.filter, billState.listMode]), ['', '', 'all', 'month']);
+  assert.equal(await vis(p, '#billActiveFilters'), false);
+});
+test('เฟส3: ค่าเริ่มต้นช่วงรายการ = เดือน และไม่จำโหมดวัน/สัปดาห์ข้ามการเปิดแอป', async p => {
+  await p.evaluate(() => billSetListMode('day'));
+  assert.equal(await p.evaluate(() => localStorage.getItem('folio_bill_listmode')), null);
+  await p.evaluate(() => billSetListMode('month'));
+});
+test('เฟส3: การ์ดสรุปเต็มเฉพาะภาพรวม แท็บอื่นบรรทัดเดียว', async p => {
+  await tab(p, 'overview'); const full = await rect(p, '#billMetrics');
+  assert.ok(full.h > 110, 'เต็ม ' + full.h);
+  for (const t of ['list', 'cards', 'recur']) {
+    await tab(p, t); const c = await rect(p, '#billMetrics');
+    assert.ok(c.h < 60, t + ' ย่อ ' + c.h);
+    assert.match(await p.textContent('#billMetrics .bh-compact'), /เงินเหลือ.*รับ.*จ่าย/);
+  }
+});
+test('เฟส3: ภาพรวมเรียงใหม่ (บิลถัดไป → หมวด 5 อันดับ → แนวโน้ม → เงินเหลือ↔DCA → ช่องทาง พับ → AI)', async p => {
+  await tab(p, 'overview');
+  assert.equal(await vis(p, '#billCashflowCard'), false, 'ไม่มี DCA/ไม่มีเดือนที่จบแล้ว ต้องซ่อน ' + JSON.stringify(await p.evaluate(() => ({ dca: dcaMonthly(), avg: billAvgSurplus(), n: state.dcaSchedules }))));
+  assert.equal(await p.locator('#billCatList .bill-cat-row').count(), 5);
+  await p.locator('#billCatMore').click();
+  assert.ok((await p.locator('#billCatList .bill-cat-row').count()) > 5);
+  await p.locator('#billCatMore').click();
+  assert.equal(await p.locator('#billCatList .bill-cat-row').count(), 5);
+  assert.equal(await p.evaluate(() => document.getElementById('billPayCard').open), false, 'แยกตามช่องทางจ่ายต้องพับ');
+  assert.equal(await p.locator('#billPay').isVisible(), false);
+  await p.evaluate(() => { window.dcaMonthly = () => 5000; billRender(); });
+  assert.equal(await vis(p, '#billCashflowCard'), true);
+  const ys = await p.evaluate(() => ['#billOvTiles', '#billCatList', '#billTrendTitle', '#billCashflowCard', '#billPayCard', '#billAiBtn'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().y)));
+  assert.deepEqual([...ys].sort((a, b) => a - b), ys, 'ลำดับ ' + ys);
+  await p.evaluate(() => { delete window.dcaMonthly; billRender(); });
+});
+test('เฟส3: แตะจากแดชบอร์ด (billDrill) กรองถูกและยอดสรุปตรงกับตัวเลขที่แตะ', async p => {
+  const ym = await p.evaluate(() => billState.month);
+  const fmt = n => '฿' + Math.round(n).toLocaleString();
+  const expected = await p.evaluate(ym => { const sum = f => state.transactions.filter(t => t.date.startsWith(ym) && f(t)).reduce((a, t) => a + billAmtThb(t), 0); return { food: sum(t => t.type === 'expense' && t.category === 'food') - sum(t => t.type === 'income' && t.category === 'refund' && (t.offsetCat || 'other') === 'food'), uob: sum(t => t.type === 'expense' && t.payMethod === 'card' && t.card === 'UOB PRVI Miles' && !BILL_NON_SPEND.includes(t.category)) }; }, ym);
+  await p.evaluate(() => { showPage('bills'); billSetTab('overview'); billDrill('cat', 'food'); });
+  assert.equal(await p.evaluate(() => billState.tab), 'list');
+  assert.ok((await p.textContent('#billRangeSummary')).includes('−' + fmt(expected.food)), await p.textContent('#billRangeSummary'));
+  const rows = await p.evaluate(() => [...document.querySelectorAll('#billList .bill-sub')].map(e => e.textContent));
+  assert.ok(rows.length > 0 && rows.every(s => s.includes('อาหาร')));
+  await p.evaluate(() => billDrill('pay', 'card:UOB PRVI Miles'));
+  assert.ok((await p.textContent('#billRangeSummary')).includes('−' + fmt(expected.uob)), await p.textContent('#billRangeSummary'));
+  assert.ok((await p.locator('#billActiveFilters').innerText()).includes('UOB PRVI Miles'));
+  await p.evaluate(() => billClearFilters());
+});
+test('เฟส3: ลบแล้วเลิกทำ — คืนด้วย id เดิม (ref_… และ <subId>_<n>) และแถบหายใน 6 วินาที', async p => {
+  await p.evaluate(() => { const y = todayISO(); state.transactions.push({ id: 'ref_ABC123', date: y, type: 'expense', category: 'food', amount: 80, currency: 'THB', amountThb: 80, merchant: 'สลิป', refKey: 'ABC123', ref: 'ABC123', payMethod: 'cash' }, { id: 's1_7', date: y, type: 'expense', category: 'entertainment', amount: 419, currency: 'THB', amountThb: 419, merchant: 'Netflix', subscriptionId: 's1', subscriptionNo: 7, payMethod: 'card', card: 'UOB PRVI Miles' }); billRender(); });
+  for (const id of ['ref_ABC123', 's1_7']) {
+    const before = await p.evaluate(id => ({ ...state.transactions.find(t => t.id === id) }), id);
+    await p.evaluate(id => billDelete(id), id);
+    assert.equal(await p.evaluate(id => state.transactions.some(t => t.id === id), id), false);
+    assert.equal(await vis(p, '#billUndo'), true);
+    await p.click('#billUndoBtn'); await p.waitForTimeout(150);
+    assert.deepEqual(await p.evaluate(id => state.transactions.find(t => t.id === id), id), before);
+    assert.equal(await vis(p, '#billUndo'), false);
+  }
+  await p.evaluate(() => billDelete('ref_ABC123')); assert.equal(await vis(p, '#billUndo'), true);
+  await p.waitForTimeout(6300); assert.equal(await vis(p, '#billUndo'), false, 'ต้องซ่อนหลัง 6 วินาที');
+  await p.evaluate(() => billUndoRun()); // แถบหายแล้ว เลิกทำไม่ได้
+  assert.equal(await p.evaluate(() => state.transactions.some(t => t.id === 'ref_ABC123')), false);
+  await p.evaluate(() => { state.transactions = state.transactions.filter(t => t.id !== 's1_7'); billRender(); });
+});
+test('เฟส3: โหมด Firestore (จำลอง FB) — ลบเรียก FB.del, เลิกทำเรียก FB.put ด้วย id เดิมและไม่ส่งฟิลด์ id', async p => {
+  const calls = await p.evaluate(async () => {
+    const log = [];
+    state.transactions.push({ id: 's1_9', date: todayISO(), type: 'expense', category: 'food', amount: 5, currency: 'THB', amountThb: 5, merchant: 'FBทดสอบ', payMethod: 'cash' });
+    window.FB = { del: async (c, id) => log.push(['del', c, id]), put: async (c, id, d) => log.push(['put', c, id, Object.keys(d).includes('id'), d.merchant]) };
+    await billDelete('s1_9'); await billUndoRun();
+    delete window.FB; state.transactions = state.transactions.filter(t => t.id !== 's1_9'); billHideUndo();
+    return log;
+  });
+  assert.deepEqual(calls, [['del', 'transactions', 's1_9'], ['put', 'transactions', 's1_9', false, 'FBทดสอบ']]);
+});
+test('เฟส3: แถวแรกของแท็บรายการอยู่ในครึ่งบนของจอ 844px (y < 422)', async p => {
+  await tab(p, 'list');
+  const r = await rect(p, '#billList .bill-row');
+  console.log('   แถวแรกอยู่ที่ y =', Math.round(r.y));
+  assert.ok(r.y < 422);
 });
 
 (async () => {
