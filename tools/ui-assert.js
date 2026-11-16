@@ -789,6 +789,18 @@ test('เฟส6d: แถบอยู่บนสุดของหน้าแ�
   await p.evaluate(() => { state.budgetExpenses = []; state.transactions = []; renderAlerts(); });
 });
 
+// ───────── แก้ติ่งดำ (toast ที่ซ่อนอยู่ต้องมองไม่เห็นจริง) ─────────
+test('toast ที่ซ่อนอยู่ไม่โผล่เป็นติ่งดำเหนือแถบล่าง และแสดงได้เมื่อเรียก showToast', async p => {
+  await p.evaluate(() => { showPage('bills'); document.getElementById('toast').classList.remove('show'); }); await p.waitForTimeout(500);
+  assert.equal(await p.locator('#toast').isVisible(), false);
+  const hidden = await p.evaluate(() => { const s = getComputedStyle(document.getElementById('toast')); return [s.visibility, s.opacity]; });
+  assert.deepEqual(hidden, ['hidden', '0']);
+  await p.evaluate(() => showToast('ทดสอบ')); await p.waitForTimeout(400);
+  assert.equal(await p.locator('#toast').isVisible(), true);
+  const t = await rect(p, '#toast'), nav = await rect(p, '#bottomNav'); assert.ok(t.b <= nav.y + 1, 'toast ต้องอยู่เหนือแถบล่าง');
+  await p.evaluate(() => { document.getElementById('toast').classList.remove('show'); });
+});
+
 (async () => {
   const { b, p, errors } = await lib.open();
   for (const [name, fn] of tests) {
