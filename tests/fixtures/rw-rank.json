@@ -1,0 +1,1174 @@
+{
+ "cards": [
+  "UOB KrisFlyer World Elite",
+  "UOB PRVI Miles",
+  "UOB Premier",
+  "UOB World",
+  "KBank THE PASSION",
+  "KBank JCB Platinum",
+  "Central The 1 Luxe",
+  "Krungsri Signature",
+  "BBL Platinum Leader",
+  "ttb absolute"
+ ],
+ "rank": {
+  "dining/THB/1500": [
+   [
+    "UOB World",
+    30,
+    2,
+    300,
+    0,
+    0
+   ],
+   [
+    "BBL Platinum Leader",
+    24,
+    1.6,
+    120,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    21,
+    1.4,
+    42,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    18.5185,
+    1.2346,
+    100,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    15,
+    1,
+    120,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    15,
+    1,
+    60,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    12.5,
+    0.8333,
+    75,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    12,
+    0.8,
+    120,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    7.5,
+    0.5,
+    60,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    7.5,
+    0.5,
+    60,
+    0,
+    0
+   ]
+  ],
+  "online/THB/3200": [
+   [
+    "UOB World",
+    64,
+    2,
+    640,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    53.3333,
+    1.6667,
+    320,
+    0,
+    0
+   ],
+   [
+    "BBL Platinum Leader",
+    51.2,
+    1.6,
+    256,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    45.5,
+    1.4219,
+    91,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    39.4444,
+    1.2326,
+    213,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    32,
+    1,
+    256,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    32,
+    1,
+    128,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    25.6,
+    0.8,
+    256,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    16,
+    0.5,
+    128,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    16,
+    0.5,
+    128,
+    0,
+    0
+   ]
+  ],
+  "dept/THB/8000": [
+   [
+    "Krungsri Signature",
+    280,
+    3.5,
+    1120,
+    0,
+    0
+   ],
+   [
+    "BBL Platinum Leader",
+    128,
+    1.6,
+    640,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    128,
+    1.6,
+    1280,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    114,
+    1.425,
+    228,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    98.7037,
+    1.2338,
+    533,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    80,
+    1,
+    640,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    66.6667,
+    0.8333,
+    400,
+    0,
+    0
+   ],
+   [
+    "UOB World",
+    64,
+    0.8,
+    640,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    40,
+    0.5,
+    320,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    40,
+    0.5,
+    320,
+    0,
+    0
+   ]
+  ],
+  "supermarket/THB/2500": [
+   [
+    "UOB Premier",
+    145,
+    5.8,
+    200,
+    125,
+    0
+   ],
+   [
+    "BBL Platinum Leader",
+    40,
+    1.6,
+    200,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    35.5,
+    1.42,
+    71,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    30.7407,
+    1.2296,
+    166,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    25,
+    1,
+    200,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    25,
+    1,
+    100,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    20.8333,
+    0.8333,
+    125,
+    0,
+    0
+   ],
+   [
+    "UOB World",
+    20,
+    0.8,
+    200,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    12.5,
+    0.5,
+    100,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    12.5,
+    0.5,
+    100,
+    0,
+    0
+   ]
+  ],
+  "central/THB/6000": [
+   [
+    "Central The 1 Luxe",
+    120,
+    2,
+    960,
+    0,
+    0
+   ],
+   [
+    "BBL Platinum Leader",
+    96,
+    1.6,
+    480,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    85.5,
+    1.425,
+    171,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    74.0741,
+    1.2346,
+    400,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    60,
+    1,
+    480,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    60,
+    1,
+    240,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    50,
+    0.8333,
+    300,
+    0,
+    0
+   ],
+   [
+    "UOB World",
+    48,
+    0.8,
+    480,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    48,
+    0.8,
+    480,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    30,
+    0.5,
+    240,
+    0,
+    0
+   ]
+  ],
+  "fuel/THB/1200": [
+   [
+    "BBL Platinum Leader",
+    19.2,
+    1.6,
+    96,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    17,
+    1.4167,
+    34,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    14.8148,
+    1.2346,
+    80,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    12,
+    1,
+    96,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    12,
+    1,
+    48,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    10,
+    0.8333,
+    60,
+    0,
+    0
+   ],
+   [
+    "UOB World",
+    9.6,
+    0.8,
+    96,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    9.6,
+    0.8,
+    96,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    6,
+    0.5,
+    48,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    6,
+    0.5,
+    48,
+    0,
+    0
+   ]
+  ],
+  "airhotel/THB/12000": [
+   [
+    "Krungsri Signature",
+    520,
+    4.3333,
+    2080,
+    0,
+    0
+   ],
+   [
+    "UOB World",
+    240,
+    2,
+    2400,
+    0,
+    0
+   ],
+   [
+    "BBL Platinum Leader",
+    192,
+    1.6,
+    960,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    171,
+    1.425,
+    342,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    148.1481,
+    1.2346,
+    800,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    120,
+    1,
+    960,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    100,
+    0.8333,
+    600,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    96,
+    0.8,
+    960,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    60,
+    0.5,
+    480,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    60,
+    0.5,
+    480,
+    0,
+    0
+   ]
+  ],
+  "ewallet/THB/600": [
+   [
+    "UOB World",
+    12,
+    2,
+    120,
+    0,
+    0
+   ],
+   [
+    "BBL Platinum Leader",
+    9.6,
+    1.6,
+    48,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    8.5,
+    1.4167,
+    17,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    7.4074,
+    1.2346,
+    40,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    6,
+    1,
+    48,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    6,
+    1,
+    24,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    5,
+    0.8333,
+    30,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    3,
+    0.5,
+    24,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    3,
+    0.5,
+    24,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  ],
+  "general/THB/800": [
+   [
+    "BBL Platinum Leader",
+    12.8,
+    1.6,
+    64,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    11,
+    1.375,
+    22,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    9.8148,
+    1.2269,
+    53,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    8,
+    1,
+    64,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    8,
+    1,
+    32,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    6.6667,
+    0.8333,
+    40,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    6.4,
+    0.8,
+    64,
+    0,
+    0
+   ],
+   [
+    "UOB World",
+    6.4,
+    0.8,
+    64,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    4,
+    0.5,
+    32,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    4,
+    0.5,
+    32,
+    0,
+    0
+   ]
+  ],
+  "general/THB/25000": [
+   [
+    "BBL Platinum Leader",
+    400,
+    1.6,
+    2000,
+    0,
+    0
+   ],
+   [
+    "UOB KrisFlyer World Elite",
+    357,
+    1.428,
+    714,
+    0,
+    0
+   ],
+   [
+    "UOB PRVI Miles",
+    308.5185,
+    1.2341,
+    1666,
+    0,
+    0
+   ],
+   [
+    "KBank THE PASSION",
+    250,
+    1,
+    2000,
+    0,
+    0
+   ],
+   [
+    "Krungsri Signature",
+    250,
+    1,
+    1000,
+    0,
+    0
+   ],
+   [
+    "ttb absolute",
+    208.3333,
+    0.8333,
+    1250,
+    0,
+    0
+   ],
+   [
+    "UOB World",
+    200,
+    0.8,
+    2000,
+    0,
+    0
+   ],
+   [
+    "UOB Premier",
+    200,
+    0.8,
+    2000,
+    0,
+    0
+   ],
+   [
+    "KBank JCB Platinum",
+    125,
+    0.5,
+    1000,
+    0,
+    0
+   ],
+   [
+    "Central The 1 Luxe",
+    125,
+    0.5,
+    1000,
+    0,
+    0
+   ]
+  ],
+  "fx/USD/4000": [
+   [
+    "UOB KrisFlyer World Elite",
+    2.5,
+    0.0625,
+    205,
+    0,
+    2.5
+   ],
+   [
+    "ttb absolute",
+    -6.3333,
+    -0.1583,
+    202,
+    0,
+    1
+   ],
+   [
+    "UOB World",
+    -18,
+    -0.45,
+    820,
+    0,
+    2.5
+   ],
+   [
+    "BBL Platinum Leader",
+    -34.4,
+    -0.86,
+    328,
+    0,
+    2.5
+   ],
+   [
+    "KBank THE PASSION",
+    -38.5,
+    -0.9625,
+    492,
+    0,
+    2.5
+   ],
+   [
+    "UOB PRVI Miles",
+    -49.4444,
+    -1.2361,
+    273,
+    0,
+    2.5
+   ],
+   [
+    "Krungsri Signature",
+    -59,
+    -1.475,
+    164,
+    0,
+    2.5
+   ],
+   [
+    "UOB Premier",
+    -67.2,
+    -1.68,
+    328,
+    0,
+    2.5
+   ],
+   [
+    "KBank JCB Platinum",
+    -79.5,
+    -1.9875,
+    164,
+    0,
+    2.5
+   ],
+   [
+    "Central The 1 Luxe",
+    -79.5,
+    -1.9875,
+    164,
+    0,
+    2.5
+   ]
+  ],
+  "fx/JPY/40000": [
+   [
+    "UOB KrisFlyer World Elite",
+    25,
+    0.0625,
+    2050,
+    0,
+    2.5
+   ],
+   [
+    "ttb absolute",
+    -63.3333,
+    -0.1583,
+    2020,
+    0,
+    1
+   ],
+   [
+    "BBL Platinum Leader",
+    -344,
+    -0.86,
+    3280,
+    0,
+    2.5
+   ],
+   [
+    "KBank THE PASSION",
+    -385,
+    -0.9625,
+    4920,
+    0,
+    2.5
+   ],
+   [
+    "UOB World",
+    -485.4,
+    -1.2135,
+    5146,
+    0,
+    2.5
+   ],
+   [
+    "UOB PRVI Miles",
+    -493.8889,
+    -1.2347,
+    2733,
+    0,
+    2.5
+   ],
+   [
+    "Krungsri Signature",
+    -590,
+    -1.475,
+    1640,
+    0,
+    2.5
+   ],
+   [
+    "KBank JCB Platinum",
+    -670,
+    -1.675,
+    2640,
+    0,
+    2.5
+   ],
+   [
+    "UOB Premier",
+    -672,
+    -1.68,
+    3280,
+    0,
+    2.5
+   ],
+   [
+    "Central The 1 Luxe",
+    -795,
+    -1.9875,
+    1640,
+    0,
+    2.5
+   ]
+  ],
+  "fx/SGD/15000": [
+   [
+    "UOB KrisFlyer World Elite",
+    9,
+    0.06,
+    768,
+    0,
+    2.5
+   ],
+   [
+    "ttb absolute",
+    -23.8333,
+    -0.1589,
+    757,
+    0,
+    1
+   ],
+   [
+    "UOB World",
+    -67.5,
+    -0.45,
+    3075,
+    0,
+    2.5
+   ],
+   [
+    "BBL Platinum Leader",
+    -129,
+    -0.86,
+    1230,
+    0,
+    2.5
+   ],
+   [
+    "UOB PRVI Miles",
+    -137.7778,
+    -0.9185,
+    1281,
+    0,
+    2.5
+   ],
+   [
+    "KBank THE PASSION",
+    -144.375,
+    -0.9625,
+    1845,
+    0,
+    2.5
+   ],
+   [
+    "Krungsri Signature",
+    -221.25,
+    -1.475,
+    615,
+    0,
+    2.5
+   ],
+   [
+    "UOB Premier",
+    -252,
+    -1.68,
+    1230,
+    0,
+    2.5
+   ],
+   [
+    "KBank JCB Platinum",
+    -298.125,
+    -1.9875,
+    615,
+    0,
+    2.5
+   ],
+   [
+    "Central The 1 Luxe",
+    -298.125,
+    -1.9875,
+    615,
+    0,
+    2.5
+   ]
+  ]
+ },
+ "calc": {
+  "UOB KrisFlyer World Elite": [
+   "2026-10-28",
+   "2026-11-27",
+   259,
+   0,
+   129.5,
+   7000,
+   null
+  ],
+  "UOB PRVI Miles": [
+   "2026-10-28",
+   "2026-11-27",
+   536,
+   0,
+   99.2593,
+   8050,
+   198.5185
+  ],
+  "UOB Premier": [
+   "2026-10-28",
+   "2026-11-27",
+   728,
+   0,
+   72.8,
+   9100,
+   145.6
+  ],
+  "UOB World": [
+   "2026-10-28",
+   "2026-11-27",
+   1346,
+   0,
+   134.6,
+   10150,
+   269.2
+  ],
+  "KBank THE PASSION": [
+   "2026-10-18",
+   "2026-11-17",
+   1008,
+   0,
+   126,
+   11200,
+   252
+  ],
+  "KBank JCB Platinum": [
+   "2026-10-18",
+   "2026-11-17",
+   490,
+   0,
+   61.25,
+   12250,
+   122.5
+  ],
+  "Central The 1 Luxe": [
+   "2026-10-16",
+   "2026-11-15",
+   532,
+   0,
+   66.5,
+   13300,
+   133
+  ],
+  "Krungsri Signature": [
+   "2026-10-19",
+   "2026-11-18",
+   574,
+   0,
+   143.5,
+   14350,
+   287
+  ],
+  "BBL Platinum Leader": [
+   "2026-10-30",
+   "2026-11-29",
+   1232,
+   0,
+   246.4,
+   15400,
+   492.8
+  ],
+  "ttb absolute": [
+   "2026-10-15",
+   "2026-11-14",
+   962,
+   0,
+   160.3333,
+   16450,
+   320.6667
+  ]
+ }
+}
