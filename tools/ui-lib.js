@@ -1,16 +1,18 @@
 // ตัวช่วยร่วมของสคริปต์ทดสอบ UI: เปิด index.html แบบออฟไลน์ (บล็อก network) ด้วยข้อมูลตัวอย่างชุดเดียวกับ tools/ui-check.js
 const { chromium } = require('playwright');
 const path = require('path');
-exports.open = async function (viewport, query) {
+exports.open = async function (viewport, query, opts) {
+  opts = opts || {};
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: viewport || { width: 390, height: 844 }, deviceScaleFactor: 1 });
+  if (opts.fake) await require('./fake-firebase.js').install(ctx, opts.fake === true ? {} : opts.fake); // Firebase SDK จำลอง (window.FB ของจริงทำงานกับมัน)
   const p = await ctx.newPage();
   const errors = [];
-  await p.route('**/*', r => { const u = r.request().url(); if (u.startsWith('file:') || u.includes('chart.js') || u.includes('cdn.jsdelivr') || u.includes('cdnjs')) r.continue(); else r.abort(); });
+  await p.route('**/*', r => { const u = r.request().url(); if (opts.fake && u.includes('gstatic.com/firebasejs')) return r.fallback(); if (u.startsWith('file:') || u.includes('chart.js') || u.includes('cdn.jsdelivr') || u.includes('cdnjs')) r.continue(); else r.abort(); });
   p.on('pageerror', e => { errors.push(e.message.slice(0, 300)); console.log('PAGE ERROR:', e.message.slice(0, 300)); });
   await p.goto('file://' + path.resolve(__dirname, '..', 'index.html') + (query || ''));
   await p.waitForTimeout(1500);
-  await p.evaluate(() => {
+  if (!opts.fake) await p.evaluate(() => {
     const t = todayISO(); const ym = t.slice(0, 7);
     localStorage.setItem('folio_bill_cards', 'UOB PRVI Miles, KBank THE PASSION, ttb absolute');
     const mk = (i, o) => Object.assign({ id: 'x' + i, date: ym + '-' + String(1 + i % 14).padStart(2, '0'), time: '12:3' + i % 10, type: 'expense', category: 'food', amount: 250 + i * 37, currency: 'THB', fxToThb: 1, amountThb: 250 + i * 37, merchant: 'ร้านอาหาร ' + i, note: '', ref: '', source: 'manual', payMethod: 'card', card: 'UOB PRVI Miles' }, o);

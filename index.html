@@ -614,6 +614,7 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-undo button { background: none; border: none; color: #FFB3C6; font-family: var(--font); font-size: 13px; font-weight: 700; min-height: 44px; padding: 0 12px; cursor: pointer; }
 /* เฟส 4: แถบล่าง + แท็บย่อยลงทุน */
 .bottom-nav { display: none; }
+.offline-badge { font-size: 11px; color: var(--amber); background: var(--amber-bg); border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
 .invest-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
 .invest-tabs button { font-family: var(--font); font-size: 13px; min-height: 40px; padding: 0 16px; border-radius: 99px; border: 0.5px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; }
 .invest-tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -780,7 +781,7 @@ body:has(.modal-overlay.open) .bill-fab { display: none !important; } /* ซ่�
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, onSnapshot, serverTimestamp, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, addDoc, setDoc, getDoc, getDocFromCache, getDocs, deleteDoc, updateDoc, onSnapshot, serverTimestamp, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCwiOy3kd8hPDXH4PN9J4GZ1T2jC9MMsr4",
@@ -793,20 +794,50 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// เฟส 6a: เปิด persistent cache (IndexedDB) — เปิดแอปตอนออฟไลน์แล้วยังอ่านข้อมูลเดิมได้ และบันทึกที่ทำตอนออฟไลน์จะถูกเก็บในเครื่องแล้วซิงก์เองเมื่อกลับมาออนไลน์
+// หลายแท็บใช้ cache ร่วมกันได้ (persistentMultipleTabManager) · ถ้าเบราว์เซอร์ไม่รองรับ (เช่น IndexedDB ถูกปิด/โหมดส่วนตัวบางตัว) ถอยกลับไปใช้ cache ในหน่วยความจำเหมือนเดิม
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch (e) {
+  console.warn('Firestore persistent cache ใช้ไม่ได้ ใช้โหมดเดิม:', e && e.message);
+  db = getFirestore(app);
+}
 const UID = 'nattapat';
 
 // --- Firebase Helpers ---
+// เฟส 6a: คำสั่งเขียน (add/put/update/del/setDoc/replace) "ไม่รอ server ack" — Firestore เขียนลง cache ในเครื่องทันที (listener เห็นของใหม่ทันที)
+// แล้วค่อยซิงก์ขึ้นเซิร์ฟเวอร์เบื้องหลัง; promise ของ SDK จะ resolve ก็ต่อเมื่อเซิร์ฟเวอร์รับแล้ว ซึ่งตอนออฟไลน์จะค้างไม่รู้จบ
+// จึงคืน promise ที่ resolve ทันทีเพื่อให้ตัวเรียก (await ... แล้วปิด modal) ไม่ค้าง · ถ้าเซิร์ฟเวอร์ปฏิเสธภายหลัง (เช่น rules/permission) SDK จะย้อนข้อมูลในเครื่องเอง และแจ้งผู้ใช้ด้วย toast
+function bgWrite(p, what) {
+  p.catch(e => {
+    console.error('Firestore write failed:', what, e);
+    // หน่วงเล็กน้อยให้ toast "บันทึกแล้ว" ของตัวเรียกขึ้นก่อน แล้วค่อยเตือนทับ (ไม่งั้นข้อความเตือนถูกกลบทันที)
+    if (typeof window.showToast === 'function') setTimeout(() => window.showToast('⚠️ ซิงก์ขึ้นคลาวด์ไม่สำเร็จ (' + what + '): ' + ((e && (e.code || e.message)) || e)), 700);
+  });
+}
+const colPath = col => `users/${UID}/${col}`;
+// อ่านเอกสารเดียว: ออนไลน์อ่านปกติ · ออฟไลน์/เชื่อมต่อไม่ได้ → อ่านจาก cache ในเครื่อง (ไม่มี = null) แทนที่จะ throw
+async function readDoc(col, docId) {
+  const ref = doc(db, colPath(col), docId);
+  try { return await getDoc(ref); }
+  catch (e) {
+    if (navigator.onLine !== false && !(e && e.code === 'unavailable')) throw e;
+    try { return await getDocFromCache(ref); } catch (e2) { return null; }
+  }
+}
 window.FB = {
   async add(col, data) {
-    return await addDoc(collection(db, `users/${UID}/${col}`), { ...data, createdAt: serverTimestamp() });
+    const ref = doc(collection(db, colPath(col)));
+    bgWrite(setDoc(ref, { ...data, createdAt: serverTimestamp() }), 'add ' + col);
+    return ref;
   },
   async getAll(col) {
     const snap = await getDocs(collection(db, `users/${UID}/${col}`));
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
   async del(col, id) {
-    await deleteDoc(doc(db, `users/${UID}/${col}`, id));
+    bgWrite(deleteDoc(doc(db, colPath(col), id)), 'del ' + col);
   },
   listen(col, cb) {
     return onSnapshot(collection(db, `users/${UID}/${col}`), snap => {
@@ -814,26 +845,26 @@ window.FB = {
     });
   },
   async update(col, id, data) {
-    await updateDoc(doc(db, `users/${UID}/${col}`, id), data);
+    bgWrite(updateDoc(doc(db, colPath(col), id), data), 'update ' + col);
   },
   async setDoc(col, docId, data) {
-    await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+    bgWrite(setDoc(doc(db, colPath(col), docId), { ...data, updatedAt: serverTimestamp() }, { merge: true }), 'set ' + col);
   },
   // เขียนทับทั้งเอกสาร (ไม่ merge) — ใช้กับ settings ที่ต้องลบคีย์ได้ (merge จะเก็บ map ซ้อนที่ลบแล้วไว้)
   async replace(col, docId, data) {
-    await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, updatedAt: serverTimestamp() });
+    bgWrite(setDoc(doc(db, colPath(col), docId), { ...data, updatedAt: serverTimestamp() }), 'replace ' + col);
   },
   async get(col, docId) {
-    const snap = await getDoc(doc(db, `users/${UID}/${col}`, docId));
-    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    const snap = await readDoc(col, docId);
+    return snap && snap.exists() ? { id: snap.id, ...snap.data() } : null;
   },
   // สร้างเอกสารด้วย id ที่กำหนดเอง (ไม่ merge) — ใช้กับรายการที่ต้องกันซ้ำด้วยเลขอ้างอิง
   async put(col, docId, data) {
-    await setDoc(doc(db, `users/${UID}/${col}`, docId), { ...data, createdAt: serverTimestamp() });
+    bgWrite(setDoc(doc(db, colPath(col), docId), { ...data, createdAt: serverTimestamp() }), 'put ' + col);
   },
   async exists(col, docId) {
-    const snap = await getDoc(doc(db, `users/${UID}/${col}`, docId));
-    return snap.exists();
+    const snap = await readDoc(col, docId);
+    return !!snap && snap.exists();
   },
   async getRecent(col, field, n) {
     const q = query(collection(db, `users/${UID}/${col}`), orderBy(field, 'desc'), limit(n));
@@ -948,6 +979,7 @@ if (window._folioReady) {
       <button class="nav-btn" data-group="settings" onclick="navGo('settings')">⚙️ ตั้งค่า</button>
     </nav>
     <div class="topbar-right">
+      <span class="offline-badge" id="offlineBadge" style="display:none;" title="ไม่มีอินเทอร์เน็ต — รายการที่บันทึกจะเก็บในเครื่องและซิงก์ให้เองเมื่อกลับมาออนไลน์">📴 ออฟไลน์</span>
       <span class="date-badge" id="dateDisplay"></span>
       <div class="action-menu-wrap" id="actionMenuWrap">
         <button class="action-menu-btn" onclick="toggleActionMenu()" id="actionMenuBtn">
@@ -2506,6 +2538,10 @@ document.addEventListener('click', function(e) {
 });
 
 // ─── Collapsible AI Section ───
+// เฟส 6a: ป้ายออฟไลน์ — ให้รู้ว่ารายการที่บันทึกตอนนี้ยังอยู่ในเครื่อง (ซิงก์เองเมื่อกลับมาออนไลน์)
+function updateOfflineBadge() { const b = document.getElementById('offlineBadge'); if (b) b.style.display = navigator.onLine === false ? '' : 'none'; }
+window.addEventListener('online', updateOfflineBadge); window.addEventListener('offline', updateOfflineBadge);
+document.addEventListener('DOMContentLoaded', updateOfflineBadge);
 function toggleAiSection() {
   var body = document.getElementById('aiSectionBody');
   var chevron = document.getElementById('aiSectionChevron');
@@ -2869,10 +2905,12 @@ document.addEventListener('keydown', e => {
   document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
 });
 
+let _toastTimer = 0;
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 4500);
+  clearTimeout(_toastTimer); // toast ใหม่ต้องไม่ถูกตัวนับเวลาของ toast เก่าซ่อนก่อนเวลา
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 4500);
 }
 
 
@@ -9027,6 +9065,7 @@ function billOpenConfirm(drafts, note) {
 function billCloseConfirm() { billBlurForm(); closeModal('bill-confirm-modal'); billState.drafts = []; billState.editingId = null; }
 
 function billRenderDrafts() {
+  billBlurForm(); // ช่องที่โฟกัสอยู่จะถูกลบตอนวาดใหม่ → ให้ blur/change ทำงานก่อน ไม่ให้ซ้อนกลางการวาด
   const ds = billState.drafts;
   const editing = !!billState.editingId;
   document.getElementById('billConfirmTitle').textContent = editing ? 'แก้ไขรายการ' : (ds.length === 1 && ds[0].source === 'manual' ? 'เพิ่มรายการ' : ds.length > 1 ? 'ตรวจสอบ ' + ds.length + ' รายการก่อนบันทึก' : 'ตรวจสอบก่อนบันทึก');
@@ -9253,7 +9292,8 @@ async function billDraftCurrency(i, cur) {
 // ถ้ายอดต่างกัน (เลขอ้างอิงซ้ำโดยบังเอิญ) = รายการใหม่จริง บันทึกด้วย id สุ่ม
 async function billPutByRef(refKey, row) {
   const id = 'ref_' + refKey;
-  const ex = await window.FB.get('transactions', id);
+  // ดูในข้อมูลที่ listener โหลดไว้ก่อน (รวมรายการที่เพิ่งเขียนตอนออฟไลน์ที่ยังไม่ขึ้นเซิร์ฟเวอร์) แล้วค่อยถามเซิร์ฟเวอร์/cache
+  const ex = (state.transactions || []).find(t => t.id === id) || await window.FB.get('transactions', id);
   if (!ex) { await window.FB.put('transactions', id, row); return true; }
   if ((ex.currency || 'THB') === (row.currency || 'THB') && Math.abs((Number(ex.amount) || 0) - (Number(row.amount) || 0)) < 0.01) return false;
   await window.FB.add('transactions', row);
