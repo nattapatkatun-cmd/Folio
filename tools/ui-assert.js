@@ -590,6 +590,100 @@ test('เฟส5: AI แชตเดียว — ปุ่มลัดบัต
     catch (e) { failed++; console.log('FAIL', name, '\n   ', String(e.message).split('\n').slice(0, 4).join('\n    ')); }
   }
   await b.close();
+  // ───────── เฟส 6a: ออฟไลน์ (ใช้ window.FB ของจริงกับ Firebase SDK จำลอง) ─────────
+  {
+    const D = 'users/nattapat/';
+    const seedTx = (id, o) => [D + 'transactions/' + id, Object.assign({ date: new Date().toISOString().slice(0, 7) + '-02', type: 'expense', category: 'food', amount: 100, currency: 'THB', fxToThb: 1, amountThb: 100, merchant: 'ร้านเดิม', payMethod: 'cash', createdAt: { seconds: 1 } }, o)];
+    const docs = Object.fromEntries([seedTx('t1', {}), seedTx('t2', { amount: 250, amountThb: 250, merchant: 'อีกร้าน' })]);
+    const f = await lib.open(null, '', { fake: docs });
+    const fp = f.p, ctx = fp.context();
+    const sub = async (name, fn) => { try { await fn(); passed++; console.log('PASS เฟส6a:', name); } catch (e) { failed++; console.log('FAIL เฟส6a:', name, '\n   ', String(e.message).split('\n').slice(0, 5).join('\n    ')); } };
+    const toast = () => fp.evaluate(() => document.getElementById('toast').textContent);
+    const modalClosed = id => fp.waitForFunction(i => !document.getElementById(i).classList.contains('open'), id, { timeout: 1500 });
+    const goOffline = async v => { await fp.evaluate(x => { window.__fs.offline = x; }, v); await ctx.setOffline(v); await fp.waitForTimeout(100); };
+    const nDocs = col => fp.evaluate(c => Object.keys(window.__fs.docs).filter(k => k.startsWith('users/nattapat/' + c + '/')).length, col);
+    const saveManual = async (amount, opts) => {
+      await fp.evaluate(() => { showPage('bills'); billSetTab('list'); billOpenManual(); }); await fp.waitForTimeout(120);
+      await fp.keyboard.type(String(amount));
+      await fp.locator('.bill-cat-tile', { hasText: 'อาหาร' }).first().click();
+      await fp.locator('.bill-pay-chip', { hasText: 'เงินสด' }).click();
+      if (opts && opts.ref) { await fp.locator('summary', { hasText: 'เพิ่มเติม' }).click(); await fp.locator('#billDrafts input[placeholder="ถ้ามี"]').fill(opts.ref); await fp.dispatchEvent('#billDrafts input[placeholder="ถ้ามี"]', 'change'); }
+      const t0 = Date.now(); await fp.click('#billSaveBtn'); await modalClosed('bill-confirm-modal'); return Date.now() - t0;
+    };
+    await fp.waitForTimeout(500);
+    await sub('เปิด persistent cache (หลายแท็บ) และโหลดข้อมูลผ่าน listener', async () => {
+      const o = await fp.evaluate(() => window.__fs.initOpts);
+      assert.equal(o.localCache.kind, 'persistent'); assert.equal(o.localCache.opts.tabManager.kind, 'multiTab');
+      assert.equal(await fp.evaluate(() => !!window.FB && state.transactions.length), 2);
+    });
+    await sub('ออนไลน์: บันทึกรายการแล้วเอกสารขึ้น Firestore และ listener อัปเดต', async () => {
+      localStorageSetup: await fp.evaluate(() => localStorage.setItem('folio_bill_cards', 'UOB PRVI Miles'));
+      await saveManual(321); assert.equal(await nDocs('transactions'), 3);
+      assert.equal(await fp.evaluate(() => state.transactions.some(t => t.amount === 321)), true);
+    });
+    await goOffline(true);
+    await sub('ป้ายออฟไลน์แสดงเมื่อไม่มีเน็ต', async () => { assert.equal(await vis(fp, '#offlineBadge'), true); });
+    await sub('ออฟไลน์: บันทึกแล้วปิดฟอร์มทันที (ไม่รอ server) และรายการขึ้นในเครื่อง', async () => {
+      const ms = await saveManual(555); console.log('   ปิดฟอร์มภายใน', ms, 'ms');
+      assert.ok(ms < 1500);
+      assert.equal(await fp.evaluate(() => state.transactions.some(t => t.amount === 555)), true);
+      assert.match(await toast(), /บันทึก 1 รายการ/);
+      assert.equal(await fp.evaluate(() => window.__fs.log.filter(l => l.offline && l.op === 'set').length >= 1), true);
+    });
+    await sub('ออฟไลน์: บันทึกพร้อมเลขอ้างอิง (ต้องอ่านเอกสารเดิมตอนไม่มีเน็ต) ไม่ error และกันซ้ำได้', async () => {
+      await saveManual(777, { ref: 'REF-001' });
+      assert.ok(!/ไม่สำเร็จ/.test(await toast()), await toast());
+      assert.equal(await fp.evaluate(() => !!window.__fs.docs['users/nattapat/transactions/ref_REF001']), true);
+      // สลิปซ้ำ: ฟอร์มเตือนและยกเลิกติ๊กให้เอง (ตรวจจากข้อมูลในเครื่อง) · ชั้นกันซ้ำตอนเขียน (billPutByRef) อ่านจากข้อมูลในเครื่องก่อน จึงไม่ต้องถามเซิร์ฟเวอร์
+      await fp.evaluate(() => billOpenConfirm([billNewDraft({ amount: 777, ref: 'REF-001', source: 'upload' })], ''));
+      assert.match(await fp.locator('.bill-warn').first().innerText(), /เลขอ้างอิงนี้บันทึกไปแล้ว/);
+      assert.equal(await fp.evaluate(() => billState.drafts[0].include), false);
+      await fp.evaluate(() => billCloseConfirm());
+      const r = await fp.evaluate(async () => [await billPutByRef('REF001', { amount: 777, currency: 'THB' }), await billPutByRef('REF002', { amount: 5, currency: 'THB' })]);
+      assert.deepEqual(r, [false, true]);
+      assert.equal(await fp.evaluate(() => Object.keys(window.__fs.docs).filter(k => k.includes('ref_REF001')).length), 1);
+    });
+    await sub('ออฟไลน์: แก้ไขรายการแล้วปิดฟอร์มทันที', async () => {
+      await fp.evaluate(() => billEdit('t1')); await fp.fill('#billAmt0', '888'); await fp.dispatchEvent('#billAmt0', 'input');
+      await fp.click('#billSaveBtn'); await modalClosed('bill-confirm-modal');
+      assert.equal(await fp.evaluate(() => state.transactions.find(t => t.id === 't1').amount), 888);
+    });
+    await sub('ออฟไลน์: ลบแล้วเลิกทำ (คืน id เดิม)', async () => {
+      await fp.evaluate(() => billEdit('t2')); await fp.locator('#billDrafts button', { hasText: 'ลบรายการนี้' }).click(); await modalClosed('bill-confirm-modal');
+      assert.equal(await fp.evaluate(() => state.transactions.some(t => t.id === 't2')), false);
+      await fp.click('#billUndoBtn'); await fp.waitForTimeout(150);
+      assert.equal(await fp.evaluate(() => state.transactions.some(t => t.id === 't2' && t.amount === 250)), true);
+    });
+    await sub('ออฟไลน์: ผ่อน 3 งวด และ Subscription ปิดฟอร์มทันที', async () => {
+      const n0 = await nDocs('transactions');
+      await fp.evaluate(() => { billOpenManual(); const d = billState.drafts[0]; d.amount = 900; d.merchant = 'ผ่อนของ'; billDraftSet(0, 'plan', 'inst', true); billDraftSet(0, 'instMonths', 3); });
+      await fp.click('#billSaveBtn'); await modalClosed('bill-confirm-modal');
+      assert.equal(await nDocs('transactions'), n0 + 3);
+      await fp.evaluate(() => { billOpenManualSub(); const d = billState.drafts[0]; d.amount = 99; d.merchant = 'ThaiSub'; d.date = todayISO(); billDraftSet(0, 'plan', 'sub', true); });
+      await fp.click('#billSaveBtn'); await modalClosed('bill-confirm-modal');
+      assert.equal(await nDocs('subscriptions'), 1);
+    });
+    await sub('ออฟไลน์: ตั้งงบ/เป้าออมปิด modal ทันที', async () => {
+      await fp.evaluate(() => { showPage('budget'); budgetOpenExpense(); }); await fp.selectOption('#exp-billcat', 'transport'); await fp.fill('#exp-amount', '2000');
+      await fp.click('#expense-modal .btn-primary'); await modalClosed('expense-modal');
+      assert.equal(await nDocs('budget_expenses'), 1);
+      await fp.evaluate(() => openModal('saving-modal')); await fp.fill('#sav-name', 'ออมออฟไลน์'); await fp.fill('#sav-target', '5000');
+      await fp.click('#saving-modal .btn-primary'); await modalClosed('saving-modal');
+      assert.equal(await nDocs('budget_savings'), 1);
+    });
+    await sub('ออฟไลน์: FB.get/exists ของเอกสารที่ไม่มีใน cache คืน null/false แทน throw', async () => {
+      assert.deepEqual(await fp.evaluate(async () => [await FB.get('transactions', 'nope'), await FB.exists('transactions', 'nope'), await FB.exists('transactions', 't1')]), [null, false, true]);
+    });
+    await goOffline(false);
+    await sub('กลับมาออนไลน์: ป้ายหาย', async () => { assert.equal(await vis(fp, '#offlineBadge'), false); });
+    await sub('ออนไลน์ที่เซิร์ฟเวอร์ปฏิเสธการเขียน: ผู้ใช้เห็น toast แจ้งเตือน', async () => {
+      await fp.evaluate(() => { window.__fs.failNext = 'permission-denied'; });
+      await saveManual(42); await fp.waitForTimeout(1100);
+      assert.match(await toast(), /ซิงก์ขึ้นคลาวด์ไม่สำเร็จ.*permission-denied/);
+    });
+    if (f.errors.length) { failed++; console.log('FAIL เฟส6a: มี JS error', f.errors.join(' | ')); }
+    await f.b.close();
+  }
   // อันดับบัตรต้องตรงกับโหมด "คุ้มสุด" เดิม (ไฟล์อ้างอิงถ่ายจากโค้ดก่อนเฟส 5) แม้ผู้ใช้เคยตั้งโหมดอื่นไว้
   {
     const f = await lib.open();

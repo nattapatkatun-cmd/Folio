@@ -1,4 +1,5 @@
-const CACHE = 'folio-v11'; // v11: เพิ่ม js/bill-core.js เข้า SHELL (v10: ล้าง cache อัตราแลกเปลี่ยนที่เคยถูกเก็บค้างไว้)
+const CACHE = 'folio-v12'; // v12: แคช Firebase SDK/Chart.js ให้เปิดแอปออฟไลน์ได้ (เดิมไฟล์ firebase-firestore.js ถูกตัวกรอง 'firestore' ส่งไปเครือข่ายทุกครั้ง) · v11: เพิ่ม js/bill-core.js เข้า SHELL (v10: ล้าง cache อัตราแลกเปลี่ยนที่เคยถูกเก็บค้างไว้)
+const CDN_CACHE = 'folio-cdn'; // SDK/ไลบรารีที่ระบุเวอร์ชันใน URL (ไม่เปลี่ยนเนื้อหา) — เก็บข้ามการเปลี่ยน CACHE
 const SHARE_CACHE = 'folio-share'; // ไฟล์ที่แชร์เข้ามา (Share Target) — หน้าเว็บอ่านแล้วลบทิ้งเอง
 const SHELL = ['/Folio/', '/Folio/index.html', '/Folio/js/bill-core.js'];
 
@@ -11,7 +12,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE && k !== SHARE_CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE && k !== SHARE_CACHE && k !== CDN_CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -42,6 +43,17 @@ self.addEventListener('fetch', e => {
   }
   if (e.request.method !== 'GET') return;
   const url = e.request.url;
+  // ไลบรารีบน CDN ที่ล็อกเวอร์ชันใน URL → cache-first (ต้องมาก่อนตัวกรองด้านล่าง เพราะชื่อไฟล์ firebase-firestore.js มีคำว่า firestore)
+  // Chart.js โหลดด้วย <script src> (no-cors) จึงได้ opaque response — เก็บได้แต่ใช้อ่านเนื้อหาไม่ได้ ใช้ได้เฉพาะให้เบราว์เซอร์รันสคริปต์
+  if (url.startsWith('https://www.gstatic.com/firebasejs/') || url.startsWith('https://cdnjs.cloudflare.com/ajax/libs/')) {
+    e.respondWith(
+      caches.open(CDN_CACHE).then(c => c.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+        if (res.ok || res.type === 'opaque') c.put(e.request, res.clone());
+        return res;
+      })))
+    );
+    return;
+  }
   // Always network for Firebase, Gemini, APIs
   if (url.includes('firestore') || url.includes('googleapis') ||
       url.includes('generativelanguage') || url.includes('workers.dev') ||
