@@ -1,14 +1,14 @@
 // ตัวช่วยร่วมของสคริปต์ทดสอบ UI: เปิด index.html แบบออฟไลน์ (บล็อก network) ด้วยข้อมูลตัวอย่างชุดเดียวกับ tools/ui-check.js
 const { chromium } = require('playwright');
 const path = require('path');
-exports.open = async function (viewport) {
+exports.open = async function (viewport, query) {
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: viewport || { width: 390, height: 844 }, deviceScaleFactor: 1 });
   const p = await ctx.newPage();
   const errors = [];
   await p.route('**/*', r => { const u = r.request().url(); if (u.startsWith('file:') || u.includes('chart.js') || u.includes('cdn.jsdelivr') || u.includes('cdnjs')) r.continue(); else r.abort(); });
   p.on('pageerror', e => { errors.push(e.message.slice(0, 300)); console.log('PAGE ERROR:', e.message.slice(0, 300)); });
-  await p.goto('file://' + path.resolve(__dirname, '..', 'index.html'));
+  await p.goto('file://' + path.resolve(__dirname, '..', 'index.html') + (query || ''));
   await p.waitForTimeout(1500);
   await p.evaluate(() => {
     const t = todayISO(); const ym = t.slice(0, 7);
