@@ -476,6 +476,113 @@ test('เฟส4: ตั้งค่าที่เดียว — เนื้
   await p.evaluate(() => localStorage.setItem('folio_bill_cards', 'UOB PRVI Miles, KBank THE PASSION, ttb absolute'));
 });
 
+// ───────── เฟส 5 ─────────
+const withToday = async (p, iso, fn) => { await p.evaluate(d => { window._realToday = window.todayISO; window.todayISO = () => d; }, iso); try { return await fn(); } finally { await p.evaluate(() => { window.todayISO = window._realToday; }); } };
+const mockGemini = p => p.evaluate(() => { window._calls = []; window._geminiFail = 0; window.callGemini = async req => { window._calls.push({ sys: req.systemInstruction.parts[0].text, last: req.contents[req.contents.length - 1].parts[0].text }); if (window._geminiFail-- > 0) throw new Error('boom'); return { candidates: [{ content: { parts: [{ text: 'สรุป: ตอบทดสอบ' }] } }] }; }; });
+const aihIdle = p => p.waitForFunction(() => !aihBusy);
+test('เฟส5: โหมดคะแนนเหลือ "คุ้มสุด" อย่างเดียว — ไม่มีปุ่มสลับ/ตัวเลือกโหมด และไม่แตะค่า folio_bill_rw_mode2', async p => {
+  await p.evaluate(() => localStorage.setItem('folio_bill_rw_mode2', 'rop'));
+  await go(p, 'cards');
+  assert.equal(await p.evaluate(() => !!document.getElementById('billRwModeToggle')), false);
+  assert.equal(await p.evaluate(() => typeof billRwSetMode), 'undefined');
+  assert.equal(await p.evaluate(() => billRwMode()), 'baht');
+  await p.evaluate(() => { billRwOpen(); });
+  assert.equal(await p.locator('#billRwModalBody select[onchange*=billRwSetMode]').count(), 0);
+  assert.equal(await p.evaluate(() => localStorage.getItem('folio_bill_rw_mode2')), 'rop', 'ค่าเดิมต้องไม่ถูกเขียนทับ');
+  await p.evaluate(() => closeModal('billRwModal'));
+  assert.equal(await p.evaluate(() => billSyncPayload && 1).catch(() => 1), 1);
+  await p.evaluate(() => localStorage.removeItem('folio_bill_rw_mode2'));
+});
+test('เฟส5: แต่ละบัตรมีบรรทัดรอง = คะแนนดิบ + ไมล์ ROP ที่เทียบเท่า', async p => {
+  await go(p, 'cards');
+  const subs = await p.locator('#billRw details.rw-card .rw-sub2').allInnerTexts();
+  assert.ok(subs.length >= 3, 'มีบัตรอย่างน้อย 3 ใบ ได้ ' + subs.length);
+  assert.ok(subs.every(s => /\d/.test(s)), subs.join('|'));
+  const uob = await p.evaluate(() => { const prof = billRwCards().find(x => x.card === 'UOB PRVI Miles'); return prof.ropPer; });
+  assert.ok(uob > 0);
+  assert.ok(subs.some(s => /ไมล์ ROP/.test(s)), 'บัตรที่มีอัตรา ROP ต้องแสดงไมล์ ROP: ' + subs.join('|'));
+});
+test('เฟส5: ซ่อนคำเตือน "โปรไฟล์ที่ยังไม่มีบัตร" — เตือนเฉพาะบัตรที่ยังไม่ผูกโปรไฟล์', async p => {
+  await go(p, 'cards');
+  assert.ok(!(await p.textContent('#billRw')).includes('โปรไฟล์ที่ยังไม่มีบัตร'));
+  assert.equal(await p.locator('#billRwUnmapped').count(), 0);
+  await p.evaluate(() => { localStorage.setItem('folio_bill_cards', 'UOB PRVI Miles, KBank THE PASSION, ttb absolute, MyCard 1111'); billRender(); });
+  assert.equal(await p.locator('#billRwUnmapped').count(), 1);
+  assert.match(await p.textContent('#billRwUnmapped'), /MyCard 1111/);
+  assert.ok(!(await p.textContent('#billRw')).includes('โปรไฟล์ที่ยังไม่มีบัตร'));
+  await p.evaluate(() => { localStorage.setItem('folio_bill_cards', 'UOB PRVI Miles, KBank THE PASSION, ttb absolute'); billRender(); });
+});
+test('เฟส5: แถบเตือนโปรหมดอายุ — ใกล้หมด (≤30 วัน) / หมดแล้ว พร้อมปุ่มไปแก้วันหมดอายุ แก้แล้วแถบหาย', async p => {
+  const expectCount = d => p.evaluate(d => billRwExpiring(billRwCards(), d).length, d);
+  // ไกลเกิน 30 วันจากทุกกฎ → ไม่มีแถบ (ใช้วันที่ย้อนไปไกล)
+  await withToday(p, '2020-01-01', async () => { await go(p, 'cards'); assert.equal(await p.locator('#billRwExpiry').count(), 0); assert.equal(await expectCount('2020-01-01'), 0); });
+  // หาวันหมดโปรที่ใกล้ที่สุดของกฎที่ใช้อยู่ แล้วทดสอบก่อนหมด 10 วัน
+  const target = await p.evaluate(() => { const v = []; billRwCards().forEach(pr => pr.p.rules.forEach(r => { if (r.validTo && !pr.off[r.id]) v.push(r.validTo); })); return v.sort()[0]; });
+  assert.ok(target, 'ต้องมีกฎที่มีวันหมดโปร');
+  const before10 = await p.evaluate(t => billIsoAdd(t, -10), target);
+  await withToday(p, before10, async () => {
+    await go(p, 'cards');
+    assert.equal(await p.locator('#billRwExpiry').count(), 1);
+    assert.match(await p.textContent('#billRwExpiry'), /อีก 10 วัน/);
+    assert.match(await p.textContent('#billRwExpiry'), /แก้วันหมดอายุ/);
+  });
+  const after5 = await p.evaluate(t => billIsoAdd(t, 5), target);
+  await withToday(p, after5, async () => { await go(p, 'cards'); assert.match(await p.textContent('#billRwExpiry'), /หมดแล้ว/); });
+  // ปุ่มไปตั้งค่าบัตร + แก้วันหมดอายุ (ไม่ต้องแก้โค้ด) → แถบหาย
+  await withToday(p, after5, async () => {
+    await go(p, 'cards');
+    const n0 = await expectCount(after5); assert.ok(n0 >= 1);
+    await p.click('#billRwExpiry button'); await p.waitForTimeout(150);
+    assert.equal(await p.evaluate(() => document.getElementById('billRwModal').classList.contains('open')), true);
+    const inputs = p.locator('#billRwModalBody input[type=date]');
+    const idx = await inputs.evaluateAll((els, t) => els.findIndex(e => e.value === t), target);
+    assert.ok(idx >= 0, 'ต้องมีช่องวันหมดเขตของกฎนี้');
+    await inputs.nth(idx).evaluate(el => { el.value = '2099-12-31'; el.dispatchEvent(new Event('change')); }); await p.waitForTimeout(200);   // ช่องอยู่ใน <details> ที่พับอยู่ จึงตั้งค่าตรง ๆ
+    await p.evaluate(() => closeModal('billRwModal'));
+    assert.ok((await expectCount(after5)) < n0, 'กฎที่แก้วันหมดเขตต้องไม่ถูกเตือนอีก');
+    assert.equal(await p.evaluate(() => { localStorage.removeItem('folio_bill_card_profiles'); billRender(); return 1; }), 1);
+  });
+});
+test('เฟส5: AI แชตเดียว — ปุ่มลัดบัตร/บิลเปิดแชตหน้าแรกพร้อมคำถามตั้งต้นและบริบทที่ถูกต้อง', async p => {
+  await p.evaluate(() => { localStorage.removeItem('folio_aiHubThread'); aihThread = []; });
+  await mockGemini(p);
+  assert.equal(await p.evaluate(() => [typeof rwcAsk, typeof rwcRender, !!document.getElementById('rwcThread'), !!document.getElementById('rwcInput'), !!document.getElementById('billAiResult')].join()), 'undefined,undefined,false,false,false');
+  // จากแท็บบัตร
+  await go(p, 'cards');
+  const q1 = (await p.locator('#rwcCard .rwc-chip').first().innerText()).trim();
+  await p.locator('#rwcCard .rwc-chip').first().click(); await aihIdle(p); await p.waitForTimeout(100);
+  assert.equal(await p.evaluate(() => document.getElementById('page-overview').classList.contains('active')), true);
+  let calls = await p.evaluate(() => window._calls);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].sys.includes('[บัตร]') && calls[0].sys.includes('แนะนำ: <ชื่อบัตร>') && calls[0].sys.includes('ข้อมูลบัตรเครดิต/สิทธิ์'), 'บริบทบัตร');
+  assert.ok(calls[0].last.includes('รูดใบไหน'));
+  const bubbles = await p.locator('#aihThread .aih-bubble').allInnerTexts();
+  assert.ok(bubbles.length === 2 && bubbles[1].includes('ตอบทดสอบ'), bubbles.join('|'));
+  // จากแท็บภาพรวมของบิล
+  await go(p, 'overview');
+  await p.click('#billAiBtn'); await aihIdle(p); await p.waitForTimeout(100);
+  calls = await p.evaluate(() => window._calls);
+  assert.equal(calls.length, 2);
+  assert.ok(calls[1].sys.includes('รายรับ-รายจ่ายจริงจากสลิป/บิล') && !calls[1].sys.includes('[บัตร]'), 'บริบทบิลต้องมี และไม่มีบริบทบัตร');
+  assert.ok(calls[1].last.includes('## จุดรั่วไหล'));
+  // พิมพ์ถามเองที่หน้าแรก = บริบททั่วไป
+  await p.fill('#aihInput', 'ทดสอบถามเอง'); await p.click('#aihSend'); await aihIdle(p); await p.waitForTimeout(100);
+  calls = await p.evaluate(() => window._calls);
+  assert.equal(calls.length, 3); assert.ok(!calls[2].sys.includes('[บัตร]'));
+  // error → ลองใหม่ ต้องคงบริบทบัตร
+  await p.evaluate(() => { window._geminiFail = 1; });
+  await go(p, 'cards'); await p.locator('#rwcCard .rwc-chip').nth(1).click(); await aihIdle(p); await p.waitForTimeout(100);
+  assert.ok((await p.locator('#aihThread .aih-err').count()) === 1);
+  await p.evaluate(() => aihRetry()); await aihIdle(p); await p.waitForTimeout(100);
+  calls = await p.evaluate(() => window._calls);
+  assert.equal(calls.length, 5); assert.ok(calls[4].sys.includes('[บัตร]'), 'ลองใหม่ต้องคงบริบทบัตร');
+  // กำลังตอบอยู่ → ปุ่มลัดไม่ยิงซ้อน
+  await p.evaluate(() => { aihBusy = true; });
+  await go(p, 'cards'); await p.locator('#rwcCard .rwc-chip').first().click();
+  assert.equal((await p.evaluate(() => window._calls)).length, 5);
+  await p.evaluate(() => { aihBusy = false; localStorage.removeItem('folio_aiHubThread'); aihThread = []; });
+});
+
 (async () => {
   const { b, p, errors } = await lib.open();
   for (const [name, fn] of tests) {
@@ -483,6 +590,20 @@ test('เฟส4: ตั้งค่าที่เดียว — เนื้
     catch (e) { failed++; console.log('FAIL', name, '\n   ', String(e.message).split('\n').slice(0, 4).join('\n    ')); }
   }
   await b.close();
+  // อันดับบัตรต้องตรงกับโหมด "คุ้มสุด" เดิม (ไฟล์อ้างอิงถ่ายจากโค้ดก่อนเฟส 5) แม้ผู้ใช้เคยตั้งโหมดอื่นไว้
+  {
+    const f = await lib.open();
+    try {
+      const want = JSON.parse(require('fs').readFileSync(require('path').resolve(__dirname, '..', 'tests', 'fixtures', 'rw-rank.json'), 'utf8'));
+      for (const stored of [null, 'baht', 'rop', 'raw']) {
+        await f.p.evaluate(m => { m ? localStorage.setItem('folio_bill_rw_mode2', m) : localStorage.removeItem('folio_bill_rw_mode2'); }, stored);
+        const got = await require('./rw-snapshot.js').snapshot(f.p);
+        assert.deepEqual(got, want, 'อันดับ/คะแนนบัตรเปลี่ยนไปเมื่อค่าโหมดเดิมที่เก็บไว้ = ' + stored);
+      }
+      passed++; console.log('PASS เฟส5: อันดับและคะแนนบัตร (13 กรณี × ทุกบัตร) ตรงกับโหมด "คุ้มสุด" เดิมทุกตัวเลข แม้ค่าโหมดเดิมที่เก็บไว้เป็น baht/rop/raw');
+    } catch (e) { failed++; console.log('FAIL เฟส5: อันดับบัตรต่างจากเดิม', String(e.message).split('\n').slice(0, 6).join('\n    ')); }
+    await f.b.close();
+  }
   // จอกว้าง: แถบบนจัดกลุ่มเดียวกัน ไม่มีแถบล่าง
   {
     const d = await lib.open({ width: 1280, height: 800 });
