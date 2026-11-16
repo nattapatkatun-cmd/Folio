@@ -93,6 +93,163 @@ test('เฟส1: แถวรายการแถวแรกสูงกว�
   assert.ok(r.y < 700);
 });
 
+// ───────── เฟส 2 ─────────
+const openManual = async p => { await p.evaluate(() => { showPage('bills'); billSetTab('list'); billOpenManual(); }); await p.waitForTimeout(150); };
+const closeForm = p => p.evaluate(() => billCloseConfirm());
+const lastTx = p => p.evaluate(() => state.transactions[state.transactions.length - 1]);
+test('เฟส2: ฟอร์มกรอกเองสูงไม่เกินหนึ่งจอ ไม่ต้องเลื่อน และโฟกัสช่องยอด (แป้นตัวเลข)', async p => {
+  await openManual(p);
+  const m = await p.evaluate(() => { const e = document.querySelector('#bill-confirm-modal .modal'); return { sh: e.scrollHeight, ch: e.clientHeight, h: e.getBoundingClientRect().height }; });
+  console.log('   ความสูงฟอร์ม =', Math.round(m.h), 'px');
+  assert.ok(m.sh <= m.ch + 1, 'ต้องไม่มีแถบเลื่อนในฟอร์ม');
+  assert.ok(m.h <= 844);
+  assert.equal(await p.evaluate(() => document.activeElement && document.activeElement.id), 'billAmt0');
+  assert.equal(await p.getAttribute('#billAmt0', 'inputmode'), 'decimal');
+  const order = await p.evaluate(() => ['#billAmt0', '.bill-cat-grid', '.bill-pay-chips', '#billDrafts input[list]', '#billDrafts input[type=date]'].map(s => document.querySelector(s).getBoundingClientRect().y));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'ลำดับ ยอด → หมวด → จ่ายด้วย → ร้าน → วันที่');
+  await closeForm(p);
+});
+test('เฟส2: บันทึกรายจ่ายเงินสดด้วยการแตะ ≤ 4 ครั้งหลังพิมพ์ยอด', async p => {
+  await openManual(p); const n0 = await p.evaluate(() => state.transactions.length);
+  await p.keyboard.type('123.5');
+  let taps = 0;
+  await p.locator('.bill-cat-tile', { hasText: 'ช้อปปิ้ง' }).click(); taps++;
+  await p.locator('.bill-pay-chip', { hasText: 'เงินสด' }).click(); taps++;
+  await p.locator('#billSaveBtn').click(); taps++; await p.waitForTimeout(250);
+  assert.ok(taps <= 4);
+  const t = await lastTx(p);
+  assert.equal(await p.evaluate(() => state.transactions.length), n0 + 1);
+  assert.deepEqual([t.amount, t.category, t.payMethod, t.card, t.currency, t.type], [123.5, 'shopping', 'cash', '', 'THB', 'expense']);
+  assert.equal(t.date, await p.evaluate(() => todayISO()));
+});
+test('เฟส2: ชิปบัตร = แตะเดียวตั้ง payMethod=card + card, ชิปวันที่ "เมื่อวาน"', async p => {
+  await openManual(p);
+  await p.keyboard.type('500');
+  await p.locator('.bill-pay-chip', { hasText: 'KBank THE PASSION' }).click();
+  await p.locator('.bill-quick', { hasText: 'เมื่อวาน' }).click();
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(250);
+  const t = await lastTx(p);
+  assert.deepEqual([t.payMethod, t.card], ['card', 'KBank THE PASSION']);
+  assert.equal(t.date, await p.evaluate(() => billIsoAdd(todayISO(), -1)));
+});
+test('เฟส2: ตารางหมวด = 8 หมวดที่ใช้บ่อยสุดใน 90 วัน + "ทั้งหมด" แสดงครบ', async p => {
+  await p.evaluate(() => { const y = todayISO(); for (let i = 0; i < 5; i++) state.transactions.push({ id: 'ent' + i, date: y, type: 'expense', category: 'entertainment', amount: 1, currency: 'THB', amountThb: 1, merchant: 'x', payMethod: 'cash' }); state.transactions.push({ id: 'old', date: '2020-01-01', type: 'expense', category: 'health', amount: 1, currency: 'THB', amountThb: 1, merchant: 'x', payMethod: 'cash' }); });
+  await openManual(p);
+  const keys = await p.evaluate(() => billTopCats('expense', 'other'));
+  assert.equal(keys.length, 8);
+  assert.equal(keys[0], 'entertainment');                         // ใช้บ่อยสุด (5 ครั้ง) ต้องมาก่อน
+  const counts = await p.evaluate(() => { const c = {}; state.transactions.filter(t => t.type === 'expense' && t.date >= billIsoAdd(todayISO(), -90)).forEach(t => c[t.category] = (c[t.category] || 0) + 1); return c; });
+  assert.ok(keys.slice(1, 4).every(k => counts[k] >= 1));         // ถัดมาเป็นหมวดที่มีรายการจริง
+  assert.ok(!keys.includes('health'));                            // รายการเก่านอก 90 วันไม่นับ
+  assert.equal(await p.locator('.bill-cat-tile').count(), 8);
+  await p.locator('#billDrafts button', { hasText: 'ทั้งหมด ▾' }).click();
+  assert.equal(await p.locator('.bill-cat-tile').count(), await p.evaluate(() => BILL_CATS.expense.length));
+  await closeForm(p);
+  await p.evaluate(() => { state.transactions = state.transactions.filter(t => !/^(ent\d|old)$/.test(t.id)); });
+});
+test('เฟส2: จำร้าน — เลือกชื่อเดิมแล้วเติมหมวด/ช่องทาง/บัตรล่าสุด และไม่เติมทับที่เลือกเอง', async p => {
+  await openManual(p);
+  assert.ok((await p.locator('#billDrafts datalist option[value="Netflix"]').count()) === 1);
+  await p.fill('#billDrafts input[list]', 'Netflix'); await p.dispatchEvent('#billDrafts input[list]', 'change');
+  await p.waitForTimeout(150);
+  assert.deepEqual(await p.evaluate(() => { const d = billState.drafts[0]; return [d.category, d.payMethod, d.card]; }), ['entertainment', 'card', 'UOB PRVI Miles']);
+  assert.equal(await p.locator('.bill-cat-tile.on .lb').textContent(), 'บันเทิง');
+  await closeForm(p);
+  await openManual(p);
+  await p.locator('.bill-pay-chip', { hasText: 'เงินสด' }).click();
+  await p.fill('#billDrafts input[list]', 'Netflix'); await p.dispatchEvent('#billDrafts input[list]', 'change'); await p.waitForTimeout(100);
+  assert.equal(await p.evaluate(() => billState.drafts[0].payMethod), 'cash');
+  await closeForm(p);
+});
+test('เฟส2: "เพิ่มเติม" พับไว้ และเปิดเองเมื่อมีค่า (ต่างประเทศ / เลขอ้างอิง / ผ่อน)', async p => {
+  const isOpen = () => p.evaluate(() => document.querySelector('#billDrafts details.bill-more').open);
+  await openManual(p); assert.equal(await isOpen(), false); await closeForm(p);
+  await p.evaluate(() => billOpenConfirm([billNewDraft({ amount: 100, ref: 'ABC123', source: 'upload', aiRead: true })], '')); assert.equal(await isOpen(), true); await closeForm(p);
+  await p.evaluate(() => billOpenConfirm([billNewDraft({ amount: 100, currency: 'USD', fx: 35, source: 'upload' })], '')); assert.equal(await isOpen(), true); await closeForm(p);
+  await openManual(p); await p.locator('summary', { hasText: 'เพิ่มเติม' }).click();
+  await p.locator('#billDrafts .bill-more select').first().selectOption('inst'); await p.waitForTimeout(100);
+  assert.equal(await isOpen(), true); await closeForm(p);
+});
+test('เฟส2: บันทึกซ้ำ — ไม่คัดลอก ref/ผ่อน/Subscription และเป็นวันนี้', async p => {
+  await p.evaluate(() => { state.transactions.push({ id: 'rp1', date: '2026-01-05', type: 'expense', category: 'food', amount: 99, currency: 'THB', fxToThb: 1, amountThb: 99, merchant: 'ร้านซ้ำ', payMethod: 'card', card: 'UOB PRVI Miles', ref: 'R-999', refKey: 'R999', installmentId: 'Z', installmentNo: 2, installmentOf: 5, subscriptionId: 'sX', subscriptionNo: 4 }); billEdit('rp1'); });
+  await p.locator('button', { hasText: 'บันทึกอีกครั้งวันนี้' }).click(); await p.waitForTimeout(150);
+  const d = await p.evaluate(() => ({ ...billState.drafts[0], e: billState.editingId }));
+  assert.equal(d.e, null);
+  assert.deepEqual([d.ref, d.installmentId, d.installmentNo, d.subscriptionId, d.subscriptionNo, d.plan], ['', '', 0, '', 0, 'once']);
+  assert.deepEqual([d.amount, d.merchant, d.category, d.payMethod, d.card], [99, 'ร้านซ้ำ', 'food', 'card', 'UOB PRVI Miles']);
+  assert.equal(d.date, await p.evaluate(() => todayISO()));
+  assert.equal(await p.textContent('#billConfirmTitle'), 'เพิ่มรายการ');
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(250);
+  const t = await lastTx(p);
+  assert.deepEqual([t.ref || '', t.installmentId || '', t.subscriptionId || '', t.merchant], ['', '', '', 'ร้านซ้ำ']);
+  assert.equal(await p.evaluate(() => state.transactions.filter(x => x.merchant === 'ร้านซ้ำ').length), 2);
+});
+test('เฟส2: คำแนะนำรูดบัตร — บรรทัดเดียว แตะเพื่อดูอันดับเต็ม', async p => {
+  await openManual(p);
+  assert.equal(await p.locator('.rw-rec').innerText(), '');                       // ยังไม่มียอด = ไม่แสดง
+  await p.keyboard.type('1000');
+  await p.locator('.bill-cat-tile', { hasText: 'อาหาร' }).click();
+  await p.fill('#billAmt0', '1000'); await p.dispatchEvent('#billAmt0', 'input'); await p.waitForTimeout(100);
+  const h1 = (await p.locator('.rw-rec').boundingBox()).height;
+  assert.ok(h1 < 50, 'บรรทัดเดียว สูง ' + h1);
+  assert.match(await p.locator('.rw-rec').innerText(), /คุ้มสุด/);
+  await p.locator('.rw-rec').click(); await p.waitForTimeout(100);
+  const h2 = (await p.locator('.rw-rec').boundingBox()).height;
+  assert.ok(h2 > h1 + 30, 'ต้องขยายเป็นอันดับเต็ม');
+  await closeForm(p);
+});
+test('เฟส2: เส้นทางเดิมยังใช้ได้ — ผ่อน / Subscription / ต่างประเทศ+ยอดบาทจริง / เงินคืน+หมวดที่หัก / แก้ไข / หลาย draft / คำเตือนซ้ำ', async p => {
+  const n0 = () => p.evaluate(() => state.transactions.length);
+  // ผ่อน 3 งวด จ่ายแล้ว 1 → ลง 2 รายการ
+  let a = await n0();
+  await openManual(p);
+  await p.evaluate(() => { const d = billState.drafts[0]; d.amount = 1000; d.merchant = 'ทีวีผ่อน'; billDraftSet(0, 'plan', 'inst', true); billDraftSet(0, 'instMonths', 3); billDraftSet(0, 'instPaid', 1); });
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(250);
+  assert.equal(await n0(), a + 2);
+  assert.deepEqual(await p.evaluate(() => state.transactions.filter(t => t.merchant === 'ทีวีผ่อน').map(t => t.installmentNo + '/' + t.installmentOf)), ['2/3', '3/3']);
+  // Subscription
+  a = await n0();
+  await p.evaluate(() => billOpenManualSub());
+  await p.evaluate(() => { const d = billState.drafts[0]; d.amount = 159; d.merchant = 'Spotify'; d.date = todayISO(); billDraftSet(0, 'plan', 'sub', true); });
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(300);
+  assert.ok(await p.evaluate(() => state.subscriptions.some(s => s.name === 'Spotify')));
+  // ต่างประเทศ + ยอดบาทจริง
+  await openManual(p);
+  await p.evaluate(() => { const d = billState.drafts[0]; Object.assign(d, { amount: 100, currency: 'USD', fx: 35, merchant: 'Steam', thbActual: 3600, payMethod: 'card', card: 'KBank THE PASSION', category: 'entertainment' }); billRenderDrafts(); });
+  assert.equal(await p.evaluate(() => document.querySelector('#billDrafts details.bill-more').open), true);
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(250);
+  const fx = await p.evaluate(() => state.transactions.find(t => t.merchant === 'Steam'));
+  assert.deepEqual([fx.amount, fx.currency, fx.amountThb, fx.thbActual], [100, 'USD', 3600, true]);
+  // เงินคืน + หมวดที่หัก
+  await openManual(p);
+  await p.locator('#billDrafts .bill-type-toggle button', { hasText: 'รายรับ' }).click();
+  await p.locator('#billDrafts button', { hasText: 'ทั้งหมด ▾' }).click();
+  await p.locator('.bill-cat-tile', { hasText: /เงินคืน/ }).click();
+  await p.fill('#billAmt0', '50'); await p.dispatchEvent('#billAmt0', 'input');
+  await p.locator('#billDrafts select', { hasText: 'อาหาร' }).first().selectOption('food');
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(250);
+  const rf = await lastTx(p); assert.deepEqual([rf.type, rf.category, rf.offsetCat, rf.amount], ['income', 'refund', 'food', 50]);
+  // แก้ไขรายการ
+  await p.evaluate(() => billEdit('x3'));
+  await p.fill('#billAmt0', '777'); await p.dispatchEvent('#billAmt0', 'input');
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(250);
+  assert.equal(await p.evaluate(() => state.transactions.find(t => t.id === 'x3').amount), 777);
+  // หลาย draft จากสลิป
+  await p.evaluate(() => billOpenConfirm([billNewDraft({ amount: 11, source: 'upload', merchant: 'A1' }), billNewDraft({ amount: 22, source: 'upload', merchant: 'A2' })], 'ทดสอบ'));
+  assert.equal(await p.locator('#billDrafts .bill-draft').count(), 2);
+  await p.locator('#billDrafts input[type=checkbox]').nth(1).uncheck();
+  assert.equal(await p.textContent('#billSaveBtn'), 'บันทึก 1 รายการ');
+  await p.locator('#billSaveBtn').click(); await p.waitForTimeout(250);
+  assert.deepEqual(await p.evaluate(() => ['A1', 'A2'].map(m => state.transactions.some(t => t.merchant === m))), [true, false]);
+  // คำเตือนซ้ำ: วัน+ยอดเท่ากัน / เลขอ้างอิงซ้ำ
+  await p.evaluate(() => { const t = state.transactions.find(t => t.id === 'x1'); billOpenConfirm([billNewDraft({ amount: t.amount, date: t.date, currency: 'THB', source: 'upload' })], ''); });
+  assert.match(await p.locator('.bill-warn').first().innerText(), /ยอดเท่ากัน/);
+  await closeForm(p);
+  await p.evaluate(() => { state.transactions.push({ id: 'refx', date: '2026-02-02', type: 'expense', category: 'food', amount: 5, currency: 'THB', amountThb: 5, refKey: 'ZZ99', ref: 'ZZ99', merchant: 'q', payMethod: 'cash' }); billOpenConfirm([billNewDraft({ amount: 5, ref: 'ZZ99', date: '2026-02-02', source: 'upload' })], ''); });
+  assert.match(await p.locator('.bill-warn').first().innerText(), /เลขอ้างอิงนี้บันทึกไปแล้ว/);
+  await closeForm(p);
+});
+
 (async () => {
   const { b, p, errors } = await lib.open();
   for (const [name, fn] of tests) {
