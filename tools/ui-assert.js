@@ -704,6 +704,91 @@ test('เฟส6c: ปุ่ม "นำเข้า CSV" ในตั้งค�
   await p.evaluate(() => billCloseConfirm());
 });
 
+// ───────── เฟส 6d ─────────
+const alertReset = p => p.evaluate(() => { state.transactions = []; state.budgetExpenses = []; state.subscriptions = []; localStorage.removeItem('folio_alerts_dismissed'); showPage('overview'); });
+const alertTexts = p => p.locator('#alertBar .alert-item .al-txt').allInnerTexts();
+const mkTx = (p, o) => p.evaluate(o => { state.transactions.push(Object.assign({ id: 'al' + state.transactions.length, date: todayISO(), type: 'expense', category: 'food', amount: 100, currency: 'THB', fxToThb: 1, amountThb: o.amount || 100, merchant: 'x', payMethod: 'cash' }, o)); renderAlerts(); }, o);
+test('เฟส6d: ไม่มีเรื่องให้เตือน = ไม่แสดงแถบ', async p => { await alertReset(p); assert.equal(await vis(p, '#alertBar'), false); });
+test('เฟส6d: งบหมวด — เงียบที่ 84.9% เตือนที่ 85% (เหลือง) เกินงบ (แดง) และเงินคืนที่หักหมวดทำให้กลับต่ำกว่าเกณฑ์', async p => {
+  await alertReset(p);
+  await p.evaluate(() => { state.budgetExpenses = [{ billCat: 'food', amount: 1000 }]; });
+  await mkTx(p, { amount: 849 }); assert.equal(await vis(p, '#alertBar'), false, '84.9% ต้องเงียบ');
+  await mkTx(p, { amount: 1, id: 'al_x' }); let t = await alertTexts(p);
+  assert.equal(t.length, 1); assert.match(t[0], /ใกล้เต็ม.*ใช้ไป 85%.*฿850 \/ ฿1,000/);
+  assert.equal(await p.locator('#alertBar .alert-item.danger').count(), 0);
+  await mkTx(p, { amount: 150, id: 'al_y' }); t = await alertTexts(p);
+  assert.match(t[0], /เกินงบแล้ว.*100%/); assert.equal(await p.locator('#alertBar .alert-item.danger').count(), 1);
+  await p.evaluate(() => { state.transactions.push({ id: 'rf', date: todayISO(), type: 'income', category: 'refund', offsetCat: 'food', amount: 300, currency: 'THB', fxToThb: 1, amountThb: 300, merchant: 'คืน', payMethod: 'transfer' }); renderAlerts(); });
+  assert.equal(await vis(p, '#alertBar'), false, 'หักเงินคืนแล้ว 700/1000 ต้องเงียบ');
+  // งบหลายรายการในหมวดเดียวกันรวมกัน · เดือนอื่นไม่นับ
+  await p.evaluate(() => { state.budgetExpenses = [{ billCat: 'food', amount: 500 }, { billCat: 'food', amount: 500 }]; state.transactions.push({ id: 'old', date: '2020-01-01', type: 'expense', category: 'food', amount: 99999, currency: 'THB', fxToThb: 1, amountThb: 99999, merchant: 'เก่า', payMethod: 'cash' }); renderAlerts(); });
+  assert.equal(await vis(p, '#alertBar'), false);
+});
+test('เฟส6d: Subscription จะตัดใน 3 วัน (วันนี้/อีก N วัน) — ไกลกว่า 3 วัน/ยกเลิกแล้ว/รอบที่ลงแล้ว ไม่เตือน', async p => {
+  await alertReset(p);
+  const sub = (o) => p.evaluate(o => { state.subscriptions = [Object.assign({ id: 'sx', name: 'Netflix', amount: 419, amountThb: 419, active: true, cycle: 'monthly', lastNo: 0, card: 'UOB PRVI Miles' }, o)]; renderAlerts(); }, o);
+  const plus = n => p.evaluate(n => billIsoAdd(todayISO(), n), n);
+  await sub({ startDate: await plus(2) }); assert.match((await alertTexts(p))[0], /Netflix จะตัด ฿419 อีก 2 วัน · UOB PRVI Miles/);
+  await sub({ startDate: await plus(0) }); assert.match((await alertTexts(p))[0], /วันนี้/);
+  await sub({ startDate: await plus(4) }); assert.equal(await vis(p, '#alertBar'), false);
+  await sub({ startDate: await plus(2), active: false }); assert.equal(await vis(p, '#alertBar'), false);
+  // รอบแรกผ่านไปแล้ว (lastNo=1) → ดูรอบถัดไปอีกเดือน ไม่เตือนรอบที่ตัดไปแล้ว
+  await sub({ startDate: await plus(-2), lastNo: 1 }); assert.equal(await vis(p, '#alertBar'), false);
+  await sub({ startDate: await p.evaluate(() => billInstDate(billIsoAdd(todayISO(), 2), -1)), lastNo: 1 }); assert.match((await alertTexts(p))[0], /อีก 2 วัน/);
+});
+test('เฟส6d: บัตรครบกำหนดใน 3 วัน (เหลือง) เลยกำหนด (แดง) และหายเมื่อจ่ายบิลครบ', async p => {
+  await alertReset(p);
+  const cyc = await p.evaluate(() => { window._rt = window.todayISO; window.todayISO = () => '2026-11-20'; const prof = billRwCards().find(c => c.card === 'UOB PRVI Miles'); const cur = billRwCycle(prof.stmtDay, todayISO()); const closed = billRwCycle(prof.stmtDay, billIsoAdd(cur.start, -1)); return { end: closed.end, due: billRwDue(closed.end, prof.dueDay) }; });
+  try {
+    await p.evaluate(c => { state.transactions = [{ id: 'cc1', date: c.end, type: 'expense', category: 'shopping', amount: 4200, currency: 'THB', fxToThb: 1, amountThb: 4200, merchant: 'ห้าง', payMethod: 'card', card: 'UOB PRVI Miles' }]; }, cyc);
+    const at = async d => { await p.evaluate(x => { window.todayISO = () => x; renderAlerts(); }, d); return alertTexts(p); };
+    const plus = d => p.evaluate(([a, n]) => billIsoAdd(a, n), [cyc.due, d]);
+    assert.equal((await at(await plus(-4))).length, 0, 'ยังเหลือ 4 วัน ต้องเงียบ');
+    let t = await at(await plus(-3)); assert.match(t[0], /UOB PRVI Miles ครบกำหนดชำระอีก 3 วัน · ยอด ฿4,200/); assert.equal(await p.locator('#alertBar .alert-item.danger').count(), 0);
+    t = await at(cyc.due); assert.match(t[0], /ครบกำหนดชำระวันนี้/);
+    t = await at(await plus(2)); assert.match(t[0], /เลยกำหนดชำระ 2 วัน/); assert.equal(await p.locator('#alertBar .alert-item.danger').count(), 1);
+    await p.evaluate(c => { state.transactions.push({ id: 'pay', date: billIsoAdd(c.end, 3), type: 'expense', category: 'cc_payment', amount: 4200, currency: 'THB', fxToThb: 1, amountThb: 4200, merchant: 'จ่ายบัตร', payMethod: 'transfer', card: 'UOB PRVI Miles' }); }, cyc);
+    t = await at(await plus(-1)); assert.equal(t.length, 0, 'จ่ายครบแล้วต้องไม่เตือน');
+  } finally { await p.evaluate(() => { window.todayISO = window._rt; }); }
+});
+test('เฟส6d: กด ✕ ซ่อนเรื่องนั้นไปจนสิ้นวัน (วันถัดไปกลับมา) · เรียงแดงก่อน · แสดงสูงสุด 5 + "และอีก N เรื่อง" · แตะแล้วไปแท็บที่เกี่ยวข้อง', async p => {
+  await alertReset(p);
+  await p.evaluate(() => {
+    const y = todayISO(); state.budgetExpenses = ['food', 'shopping', 'transport', 'travel', 'health', 'housing'].map(k => ({ billCat: k, amount: 100 }));
+    state.transactions = ['food', 'shopping', 'transport', 'travel', 'health', 'housing'].map((k, i) => ({ id: 'm' + i, date: y, type: 'expense', category: k, amount: 90 + i * 5, currency: 'THB', fxToThb: 1, amountThb: 90 + i * 5, merchant: 'x', payMethod: 'cash' }));
+    state.subscriptions = [{ id: 'sx', name: 'Spotify', amount: 99, amountThb: 99, active: true, cycle: 'monthly', lastNo: 0, startDate: billIsoAdd(y, 1) }]; renderAlerts();
+  });
+  // 6 งบ (90..115%) + 1 sub = 7 เรื่อง → แสดง 5
+  assert.equal(await p.locator('#alertBar .alert-item').count(), 5);
+  assert.match(await p.textContent('#alertBar'), /และอีก 2 เรื่อง/);
+  const first = await p.locator('#alertBar .alert-item').first().getAttribute('class'); assert.match(first, /danger/, 'แดง (เกินงบ) ต้องมาก่อน');
+  const key = await p.locator('#alertBar .alert-item').first().getAttribute('data-key');
+  await p.locator('#alertBar .alert-item').first().locator('button').click();
+  assert.notEqual(await p.locator('#alertBar .alert-item').first().getAttribute('data-key'), key);
+  assert.equal(await p.evaluate(k => JSON.parse(localStorage.getItem('folio_alerts_dismissed'))[k], key), await p.evaluate(() => todayISO()));
+  await p.evaluate(() => renderAlerts()); assert.ok(!(await p.locator('#alertBar .alert-item').evaluateAll((els, k) => els.some(e => e.dataset.key === k), key)), 'ต้องไม่กลับมาในวันเดียวกัน');
+  // ซ่อนแล้ววันถัดไปกลับมา — ใช้เรื่อง Subscription (key ผูกกับวันตัดรอบ ไม่ขึ้นกับเดือน จึงไม่เพี้ยนข้ามเดือน)
+  await p.evaluate(() => { state.budgetExpenses = []; state.transactions = []; state.subscriptions = [{ id: 'sd', name: 'Disney', amount: 199, amountThb: 199, active: true, cycle: 'monthly', lastNo: 0, startDate: billIsoAdd(todayISO(), 2) }]; localStorage.removeItem('folio_alerts_dismissed'); renderAlerts(); });
+  await p.locator('#alertBar .alert-item .al-x').click(); assert.equal(await vis(p, '#alertBar'), false);
+  await p.evaluate(() => { window._rt = window.todayISO; const t = todayISO(); window.todayISO = () => billIsoAdd(t, 1); renderAlerts(); });
+  try { assert.match((await alertTexts(p))[0] || '', /Disney จะตัด ฿199 อีก 1 วัน/); } finally { await p.evaluate(() => { window.todayISO = window._rt; renderAlerts(); }); }
+  // แตะแล้วไปแท็บที่เกี่ยวข้อง
+  await p.evaluate(() => { state.budgetExpenses = []; state.transactions = []; state.subscriptions = [{ id: 'sx', name: 'Spotify', amount: 99, amountThb: 99, active: true, cycle: 'monthly', lastNo: 0, startDate: billIsoAdd(todayISO(), 1) }]; renderAlerts(); });
+  await p.locator('#alertBar .alert-item').first().locator('.al-txt').click();
+  assert.deepEqual(await p.evaluate(() => [document.getElementById('page-bills').classList.contains('active'), billState.tab]), [true, 'recur']);
+  await p.evaluate(() => { state.budgetExpenses = [{ billCat: 'food', amount: 100 }]; state.transactions = [{ id: 'z', date: todayISO(), type: 'expense', category: 'food', amount: 95, currency: 'THB', fxToThb: 1, amountThb: 95, merchant: 'x', payMethod: 'cash' }]; state.subscriptions = []; showPage('overview'); });
+  await p.locator('#alertBar .alert-item').first().locator('.al-txt').click();
+  assert.deepEqual(await p.evaluate(() => [document.getElementById('page-bills').classList.contains('active'), billState.tab]), [true, 'budget']);
+});
+test('เฟส6d: แถบอยู่บนสุดของหน้าแรก (เหนือการ์ดสรุป) และกดปุ่ม ✕ ได้ง่าย (≥44px)', async p => {
+  await alertReset(p);
+  await p.evaluate(() => { state.budgetExpenses = [{ billCat: 'food', amount: 100 }]; state.transactions = [{ id: 'z', date: todayISO(), type: 'expense', category: 'food', amount: 99, currency: 'THB', fxToThb: 1, amountThb: 99, merchant: 'x', payMethod: 'cash' }]; showPage('overview'); });
+  const a = await rect(p, '#alertBar'), hero = await rect(p, '#page-overview .hero-grid');
+  assert.ok(a.b <= hero.y + 1 && a.y < 200, 'bar y=' + a.y);
+  const x = await rect(p, '#alertBar .al-x'); assert.ok(x.h >= 44 && x.w >= 44);
+  await p.evaluate(() => { state.budgetExpenses = []; state.transactions = []; renderAlerts(); });
+});
+
 (async () => {
   const { b, p, errors } = await lib.open();
   for (const [name, fn] of tests) {
