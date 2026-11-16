@@ -1,6 +1,6 @@
-const CACHE = 'folio-v10'; // v10: ล้าง cache อัตราแลกเปลี่ยนที่เคยถูกเก็บค้างไว้
+const CACHE = 'folio-v11'; // v11: เพิ่ม js/bill-core.js เข้า SHELL (v10: ล้าง cache อัตราแลกเปลี่ยนที่เคยถูกเก็บค้างไว้)
 const SHARE_CACHE = 'folio-share'; // ไฟล์ที่แชร์เข้ามา (Share Target) — หน้าเว็บอ่านแล้วลบทิ้งเอง
-const SHELL = ['/Folio/', '/Folio/index.html'];
+const SHELL = ['/Folio/', '/Folio/index.html', '/Folio/js/bill-core.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
