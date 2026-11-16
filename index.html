@@ -598,6 +598,19 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-quick { min-height: 36px; padding: 0 12px; white-space: nowrap; }
 .bill-quick.on { background: var(--accent-light); color: var(--accent-dark); border-color: var(--accent); }
 .bill-more > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: 12.5px; color: var(--text2); }
+/* เฟส 3: bottom sheet, ปุ่มกรอง, การ์ดสรุปแบบย่อ, แถบเลิกทำ */
+.modal-overlay.sheet { align-items: flex-end; padding: 0; }
+.modal-overlay.sheet .modal { width: 100%; max-width: 520px; max-width: min(520px, 100vw); border-radius: 20px 20px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+.bill-filter-btn { flex: none; min-height: 40px; padding: 0 14px; position: relative; white-space: nowrap; }
+.bill-badge { display: inline-block; margin-left: 6px; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; text-align: center; }
+.bill-hero .bh-compact { display: none; }
+.bill-hero.compact { padding: 9px 14px; margin-bottom: 10px; }
+.bill-hero.compact > :not(.bh-compact) { display: none; }
+.bill-hero.compact .bh-compact { display: block; font-size: 12.5px; }
+.bill-hero.compact .bh-compact b { font-weight: 600; }
+.bill-undo { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #14121A; color: #fff; font-size: 12.5px; padding: 6px 8px 6px 16px; border-radius: 12px; z-index: 300; display: none; align-items: center; gap: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.25); max-width: 92vw; }
+.bill-undo.show { display: flex; }
+.bill-undo button { background: none; border: none; color: #FFB3C6; font-family: var(--font); font-size: 13px; font-weight: 700; min-height: 44px; padding: 0 12px; cursor: pointer; }
 #page-bills { padding-bottom: 110px; } /* เผื่อที่ให้ปุ่มลอย ＋ (56px + ขอบล่าง) ไม่ทับยอดเงิน/ปุ่มท้ายหน้า */
 body:has(.modal-overlay.open) .bill-fab { display: none !important; } /* ซ่อนปุ่มลอยเมื่อมี modal เปิด */
 .bill-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 14px; }
@@ -1432,12 +1445,6 @@ if (window._folioReady) {
 
     <section class="bill-tab" data-tab="overview">
       <div class="bill-ov-tiles" id="billOvTiles"></div>
-    <!-- เงินเหลือจริง ↔ DCA -->
-    <div class="card" style="margin-bottom:var(--gap);" id="billCashflowCard">
-      <div class="card-title">💰 เงินเหลือจริง ↔ งบ DCA</div>
-      <div id="billCashflow"></div>
-    </div>
-
     <div class="budget-grid" style="margin-bottom:var(--gap);">
       <div class="card">
         <div class="card-title"><span>แยกตามหมวด <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billCatPeriod">รายจ่ายเดือนนี้</span></span><button class="action" onclick="billOpenCatModal()">＋ หมวดเอง</button></div>
@@ -1450,11 +1457,17 @@ if (window._folioReady) {
       </div>
     </div>
 
-    <!-- แยกตามช่องทางจ่าย -->
-    <div class="card" style="margin-bottom:var(--gap);display:none;" id="billPayCard">
-      <div class="card-title">🧾 แยกตามช่องทางจ่าย <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billPayPeriod">รายจ่ายเดือนนี้</span></div>
-      <div id="billPay"></div>
+    <!-- เงินเหลือจริง ↔ DCA -->
+    <div class="card" style="margin-bottom:var(--gap);" id="billCashflowCard">
+      <div class="card-title">💰 เงินเหลือจริง ↔ งบ DCA</div>
+      <div id="billCashflow"></div>
     </div>
+
+    <!-- แยกตามช่องทางจ่าย -->
+    <details class="card" style="margin-bottom:var(--gap);display:none;" id="billPayCard">
+      <summary class="card-title" style="cursor:pointer;margin-bottom:0;">🧾 แยกตามช่องทางจ่าย <span style="font-size:10px;color:var(--text3);font-weight:400;" id="billPayPeriod">รายจ่ายเดือนนี้</span></summary>
+      <div id="billPay" style="margin-top:10px;"></div>
+    </details>
 
     <!-- AI วิเคราะห์ -->
     <div class="card" style="margin-bottom:var(--gap);">
@@ -1470,33 +1483,19 @@ if (window._folioReady) {
     <section class="bill-tab" data-tab="list">
     <!-- รายการ -->
     <div class="card" style="margin-bottom:var(--gap);">
-      <div class="card-title">
-        <span id="billListTitle">รายการ</span>
-        <span style="display:flex;gap:4px;" id="billFilterChips">
-          <button class="bill-chip active" data-f="all" onclick="billSetFilter('all')">ทั้งหมด</button>
-          <button class="bill-chip" data-f="expense" onclick="billSetFilter('expense')">จ่าย</button>
-          <button class="bill-chip" data-f="income" onclick="billSetFilter('income')">รับ</button>
-        </span>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <input class="form-input" id="billSearch" placeholder="ค้นหาร้าน / หมวด / โน้ต / บัตร" oninput="billRenderList()" style="flex:1;min-width:0;">
+        <button class="btn-ghost bill-filter-btn" id="billFilterBtn" onclick="openModal('billFilterSheet')" aria-label="กรอง">⚙︎ กรอง<span id="billFilterBadge" class="bill-badge" style="display:none;"></span></button>
       </div>
-      <div id="billRangeBar" style="display:flex;gap:6px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px;">
-        <div class="bill-view-toggle" id="billListModeToggle">
-          <button data-m="day" onclick="billSetListMode('day')">วัน</button>
-          <button data-m="week" onclick="billSetListMode('week')">สัปดาห์</button>
-          <button data-m="month" class="active" onclick="billSetListMode('month')">เดือน</button>
-        </div>
-        <div class="bill-month-nav" id="billRangeNav">
+      <div id="billActiveFilters" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;"></div>
+      <div id="billRangeBar" style="display:none;margin-bottom:8px;">
+        <div class="bill-month-nav" id="billRangeNav" style="justify-content:space-between;">
           <button onclick="billListShift(-1)" aria-label="ก่อนหน้า">‹</button>
           <span id="billRangeLabel" style="min-width:120px;">—</span>
           <button onclick="billListShift(1)" aria-label="ถัดไป">›</button>
         </div>
       </div>
-      <div id="billRangeSummary" style="font-size:11.5px;color:var(--text2);background:var(--bg);border-radius:8px;padding:7px 10px;margin-bottom:10px;"></div>
-      <div class="bill-filter-row">
-        <select class="form-select" id="billCatFilter" onchange="billSetCatFilter(this.value)"></select>
-        <select class="form-select" id="billPayFilter" onchange="billSetPayFilter(this.value)"></select>
-      </div>
-      <div id="billActiveFilters" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;"></div>
-      <input class="form-input" id="billSearch" placeholder="ค้นหาร้าน / หมวด / โน้ต / บัตร" oninput="billRenderList()" style="width:100%;margin-bottom:10px;">
+      <div id="billRangeSummary" style="font-size:11.5px;color:var(--text2);background:var(--bg);border-radius:8px;padding:6px 10px;margin-bottom:8px;white-space:nowrap;overflow-x:auto;scrollbar-width:none;"></div>
       <div id="billList"></div>
     </div>
 
@@ -1701,6 +1700,36 @@ service cloud.firestore {
   </main>
 
 </div><!-- end .app -->
+
+<!-- ─── Bill: กรองรายการ (bottom sheet) ─── -->
+<div class="modal-overlay sheet" id="billFilterSheet" onclick="if(event.target===this)closeModal('billFilterSheet')">
+  <div class="modal">
+    <h3>กรองรายการ</h3>
+    <div class="form-label">ประเภท</div>
+    <span style="display:flex;gap:6px;margin-bottom:12px;" id="billFilterChips">
+      <button class="bill-chip active" data-f="all" onclick="billSetFilter('all')">ทั้งหมด</button>
+      <button class="bill-chip" data-f="expense" onclick="billSetFilter('expense')">จ่าย</button>
+      <button class="bill-chip" data-f="income" onclick="billSetFilter('income')">รับ</button>
+    </span>
+    <div id="billModeRow" style="margin-bottom:12px;">
+      <div class="form-label">ช่วงเวลา</div>
+      <div class="bill-view-toggle" id="billListModeToggle" style="display:inline-flex;">
+        <button data-m="day" onclick="billSetListMode('day')">วัน</button>
+        <button data-m="week" onclick="billSetListMode('week')">สัปดาห์</button>
+        <button data-m="month" class="active" onclick="billSetListMode('month')">เดือน</button>
+      </div>
+    </div>
+    <div class="form-label">หมวด / ช่องทางจ่าย / บัตร</div>
+    <div class="bill-filter-row" style="margin-bottom:14px;">
+      <select class="form-select" id="billCatFilter" onchange="billSetCatFilter(this.value)"></select>
+      <select class="form-select" id="billPayFilter" onchange="billSetPayFilter(this.value)"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="billClearFilters()">ล้างตัวกรอง</button>
+      <button class="btn-primary" onclick="closeModal('billFilterSheet')">เสร็จ</button>
+    </div>
+  </div>
+</div>
 
 <!-- ─── Bill: ยืนยันก่อนบันทึก ─── -->
 <div class="modal-overlay" id="bill-confirm-modal">
@@ -2173,6 +2202,7 @@ service cloud.firestore {
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+<div class="bill-undo" id="billUndo" role="status"><span id="billUndoMsg"></span><button id="billUndoBtn" onclick="billUndoRun()">เลิกทำ</button></div>
 
 <script src="js/bill-core.js"></script>
 <script>
@@ -7761,6 +7791,8 @@ function billApplyTab() {
   billState.tab = tab;
   document.querySelectorAll('#billTabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   document.querySelectorAll('#page-bills .bill-tab').forEach(sct => sct.classList.toggle('on', sct.dataset.tab === tab));
+  const hero = document.getElementById('billMetrics');
+  if (hero) hero.classList.toggle('compact', tab !== 'overview'); // การ์ดสรุปเต็มเฉพาะแท็บภาพรวม แท็บอื่นเป็นบรรทัดเดียว
 }
 // ─── ตั้งค่าโปรไฟล์บัตร ───
 function billRwSaveAll(o) {
@@ -8062,7 +8094,7 @@ function billMatchFilters(t) {
 function billSetCatFilter(v) { billState.catFilter = v; billRenderList(); }
 function billSetPayFilter(v) { billState.payFilter = v; billRenderList(); }
 function billClearFilters() {
-  billState.catFilter = ''; billState.payFilter = '';
+  billState.catFilter = ''; billState.payFilter = ''; billState.listMode = 'month';
   billSetFilter('all');
 }
 // แตะจาก dashboard → กรองรายการให้ตรงกับยอดที่แตะ แล้วเลื่อนลงไปดู
@@ -8100,8 +8132,12 @@ function billRenderFilterControls() {
   const chips = [];
   if (billState.catFilter) chips.push(`<span class="bill-card-chip">${esc(billFilterLabel('cat', billState.catFilter))}<button onclick="billSetCatFilter('')">✕</button></span>`);
   if (billState.payFilter) chips.push(`<span class="bill-card-chip">${esc(billFilterLabel('pay', billState.payFilter))}<button onclick="billSetPayFilter('')">✕</button></span>`);
+  if (billState.filter !== 'all') chips.unshift(`<span class="bill-card-chip">${billState.filter === 'expense' ? '− รายจ่าย' : '+ รายรับ'}<button onclick="billSetFilter('all')" aria-label="ล้าง">✕</button></span>`);
+  if (billState.listMode !== 'month' && billState.view !== 'year') chips.unshift(`<span class="bill-card-chip">📅 ${billState.listMode === 'day' ? 'รายวัน' : 'รายสัปดาห์'}<button onclick="billSetListMode('month')" aria-label="ล้าง">✕</button></span>`);
   act.style.display = chips.length ? 'flex' : 'none';
-  act.innerHTML = chips.join('') + (chips.length ? '<button class="bill-chip" onclick="billClearFilters()">ล้างตัวกรอง</button>' : '');
+  act.innerHTML = chips.join('') + (chips.length > 1 ? '<button class="bill-chip" onclick="billClearFilters()">ล้างทั้งหมด</button>' : '');
+  const badge = document.getElementById('billFilterBadge');
+  if (badge) { badge.textContent = chips.length; badge.style.display = chips.length ? 'inline-block' : 'none'; }
 }
 
 function billSetFilter(f) {
@@ -8119,7 +8155,7 @@ function billRender() {
   document.querySelectorAll('#billViewToggle button').forEach(b => b.classList.toggle('active', b.dataset.v === billState.view));
   document.getElementById('billCatPeriod').textContent = 'รายจ่าย' + unit;
   document.getElementById('billTrendTitle').textContent = isYear ? 'รายเดือนตลอด' + billPeriodLabel(ym) : 'แนวโน้ม 6 เดือน';
-  document.getElementById('billListTitle').textContent = isYear ? 'รายการทั้งปี' : 'รายการ';
+  const lt = document.getElementById('billListTitle'); if (lt) lt.textContent = isYear ? 'รายการทั้งปี' : 'รายการ';
   const ownerEl = document.getElementById('billOwnerNames');
   if (ownerEl && document.activeElement !== ownerEl) ownerEl.value = localStorage.getItem('folio_bill_owner') || '';
   billRenderCardChips();
@@ -8149,7 +8185,8 @@ function billRender() {
       <div><span>ออม</span><b>${sr === null ? '—' : sr.toFixed(0) + '%'}</b></div>
       <div class="bill-tap" onclick="billDrill('cat','invest')" title="แตะเพื่อดูรายการลงทุน/ออม"><span>ลงทุน ›</span><b>${billFmt0(t.invest)}</b></div>
     </div>
-    <div class="bh-sub">${heroSub}</div>`;
+    <div class="bh-sub">${heroSub}</div>
+    <div class="bh-compact">เงินเหลือ <b>${t.surplus < 0 ? '−' : ''}${billFmt0(Math.abs(t.surplus))}</b> · รับ <b>${billFmt0(t.income)}</b> · จ่าย <b>${billFmt0(t.consumption)}</b></div>`;
   // การ์ดเงินเหลือ↔DCA เป็นมุมมอง "ตอนนี้" เสมอ — มุมมองปีใช้ยอดเดือนปัจจุบันแทนยอดทั้งปี
   billRenderCashflow(isYear ? billMonthTotals(todayISO().slice(0, 7)) : t);
   billRenderRecur();
@@ -8167,6 +8204,8 @@ function billRenderCashflow(t) {
   const el = document.getElementById('billCashflow');
   const dca = billDcaMonthly();
   const avg = billAvgSurplus();
+  // ซ่อนทั้งการ์ดเมื่อไม่มีแผน DCA และยังไม่มีเดือนที่จบแล้วให้เฉลี่ย
+  document.getElementById('billCashflowCard').style.display = dca <= 0 && !avg ? 'none' : '';
   const isCurrent = billState.view === 'year' || billState.month === todayISO().slice(0, 7);
   // ฐานที่ใช้แนะนำงบ: เฉลี่ยเดือนที่จบแล้ว → ถ้ายังไม่มี ใช้เดือนที่เลือก
   const base = avg ? avg.surplus : t.surplus;
@@ -8293,14 +8332,15 @@ function billRenderCategories(t) {
   // งบต่อเดือนจากแท็บงบประมาณ (ใช้กับมุมมองเดือน)
   const budget = {};
   if (!nM && typeof budgetCatKey === 'function') state.budgetExpenses.forEach(e => { const bk = budgetCatKey(e); budget[bk] = (budget[bk] || 0) + Number(e.amount || 0); });
-  listEl.innerHTML = keys.map(k => {
+  const showKeys = billState.catAll ? keys : keys.slice(0, 5);
+  listEl.innerHTML = showKeys.map(k => {
     const c = billCat(k, 'expense');
     const pct = total > 0 ? t.byCat[k] / total * 100 : 0;
     return `<div class="bill-cat-row bill-tap" title="แตะเพื่อดูรายการ" onclick="billDrill('cat',${esc(JSON.stringify(k))})"><span style="width:118px;flex-shrink:0;">${c.icon} ${esc(c.label)} <span style="color:var(--text3);">›</span></span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div></div>
       <span style="width:92px;text-align:right;font-weight:500;" title="${nM ? 'เฉลี่ย ' + billFmt0(t.byCat[k] / nM) + '/เดือน' : ''}">${billFmt0(t.byCat[k])}${nM ? '<div style="font-size:9.5px;color:var(--text3);font-weight:400;">' + billFmt0(t.byCat[k] / nM) + '/ด.</div>' : (budget[k] ? '<div style="font-size:9.5px;font-weight:400;color:' + (t.byCat[k] > budget[k] ? 'var(--red)' : 'var(--text3)') + ';">งบ ' + billFmt0(budget[k]) + '</div>' : '')}</span>
       <span style="width:36px;text-align:right;color:var(--text3);font-size:11px;">${pct.toFixed(0)}%</span></div>`;
-  }).join('');
+  }).join('') + (keys.length > 5 ? `<button class="bill-chip" id="billCatMore" style="margin-top:8px;min-height:36px;" onclick="billState.catAll=!billState.catAll;billRenderCategories(billMonthTotals(billPeriod()))">${billState.catAll ? 'แสดงเฉพาะ 5 อันดับ ▴' : 'ดูทั้งหมด (' + keys.length + ') ▾'}</button>` : '');
   if (typeof Chart === 'undefined' || !document.getElementById('page-bills').classList.contains('active')) return;
   billState.catChart = new Chart(document.getElementById('billCatChart').getContext('2d'), {
     type: 'doughnut',
@@ -8376,7 +8416,6 @@ function billResetListDate() {
 }
 function billSetListMode(m) {
   billState.listMode = m;
-  try { localStorage.setItem('folio_bill_listmode', m); } catch (e) {}
   billRenderList();
 }
 function billListShift(n) {
@@ -8392,10 +8431,10 @@ function billRenderList() {
   if (!el) return;
   const q = (document.getElementById('billSearch').value || '').trim().toLowerCase();
   const isYear = billState.view === 'year';
-  document.getElementById('billRangeBar').style.display = isYear ? 'none' : 'flex';
+  // ตัวเลื่อนวัน/สัปดาห์ แสดงเฉพาะเมื่อไม่ใช่โหมดเดือน (โหมดเดือนใช้ตัวเลือกเดือนบนหัวหน้า) — ตัวสลับโหมดย้ายเข้าแผ่นกรอง
+  document.getElementById('billRangeBar').style.display = isYear || billState.listMode === 'month' ? 'none' : 'block';
+  document.getElementById('billModeRow').style.display = isYear ? 'none' : '';
   document.querySelectorAll('#billListModeToggle button').forEach(b => b.classList.toggle('active', b.dataset.m === billState.listMode));
-  // โหมดเดือน: ใช้ตัวเลือกเดือนบนหัวหน้าตัวเดียว (ซ่อนตัวซ้ำ) — โหมดวัน/สัปดาห์ยังต้องมีตัวเลื่อนของตัวเอง
-  document.getElementById('billRangeNav').style.display = billState.listMode === 'month' ? 'none' : '';
   const sumEl = document.getElementById('billRangeSummary');
   billRenderFilterControls();
   const filtered = !!(billState.catFilter || billState.payFilter || billState.filter !== 'all');
@@ -8487,24 +8526,42 @@ function billOpenMonth(ym) {
   document.getElementById('billTabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ลบทันที + แถบ "เลิกทำ" 6 วินาที (แทน confirm) — เก็บสำเนาเอกสารไว้เขียนกลับด้วย id เดิม (สำคัญกับ ref_… และ <subId>_<n>)
+// งวดผ่อนยังถามว่าจะลบทั้งชุดไหม · คืน true เมื่อลบสำเร็จ
+let _billUndo = null, _billUndoTimer = 0;
+function billShowUndo(msg, docs) {
+  clearTimeout(_billUndoTimer);
+  _billUndo = docs;
+  document.getElementById('billUndoMsg').textContent = msg;
+  document.getElementById('billUndo').classList.add('show');
+  _billUndoTimer = setTimeout(billHideUndo, 6000);
+}
+function billHideUndo() { clearTimeout(_billUndoTimer); _billUndo = null; document.getElementById('billUndo').classList.remove('show'); }
+async function billUndoRun() {
+  const docs = _billUndo;
+  billHideUndo();
+  if (!docs || !docs.length) return;
+  try {
+    for (const t of docs) {
+      const { id, ...data } = t;
+      if (window.FB) await window.FB.put('transactions', id, data);
+      else if (!state.transactions.some(x => x.id === id)) state.transactions.push(t);
+    }
+    if (!window.FB) billRender();
+    showToast('เลิกทำแล้ว — คืนรายการ ' + docs.length + ' รายการ');
+  } catch (e) { showToast('เลิกทำไม่สำเร็จ: ' + e.message); }
+}
 async function billDelete(id) {
   const t = (state.transactions || []).find(x => x.id === id);
   if (!t) return false;
-  if (!confirm('ลบรายการ ' + (t.merchant || billCat(t.category, t.type).label) + ' ' + billFmt(billAmtThb(t)) + ' ?' +
-    (t.subscriptionId ? '\n\n(รอบนี้ของ Subscription จะไม่ถูกสร้างซ้ำ — ถ้าเลิกใช้แล้ว ให้กดยกเลิกที่การ์ด 🔁 Subscription ด้วย)' : ''))) return false;
   const series = t.installmentId ? (state.transactions || []).filter(x => x.installmentId === t.installmentId) : [];
-  if (series.length > 1 && confirm('รายการนี้เป็นงวด ' + t.installmentNo + '/' + t.installmentOf + ' ของรายการผ่อน\n\nลบทั้งชุด ' + series.length + ' งวดด้วยไหม?\nตกลง = ลบทั้งชุด · ยกเลิก = ลบเฉพาะงวดนี้')) {
-    try {
-      if (window.FB) for (const x of series) await window.FB.del('transactions', x.id);
-      else { state.transactions = state.transactions.filter(x => x.installmentId !== t.installmentId); billRender(); }
-      showToast('ลบรายการผ่อน ' + series.length + ' งวดแล้ว');
-      return true;
-    } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); return false; }
-  }
+  let targets = [t];
+  if (series.length > 1 && confirm('รายการนี้เป็นงวด ' + t.installmentNo + '/' + t.installmentOf + ' ของรายการผ่อน\n\nลบทั้งชุด ' + series.length + ' งวดด้วยไหม?\nตกลง = ลบทั้งชุด · ยกเลิก = ลบเฉพาะงวดนี้')) targets = series;
+  const snap = targets.map(x => ({ ...x })); // สำเนาก่อนลบ
   try {
-    if (window.FB) await window.FB.del('transactions', id);
-    else { state.transactions = state.transactions.filter(x => x.id !== id); billRender(); }
-    showToast('ลบรายการแล้ว');
+    if (window.FB) for (const x of targets) await window.FB.del('transactions', x.id);
+    else { const ids = new Set(targets.map(x => x.id)); state.transactions = state.transactions.filter(x => !ids.has(x.id)); billRender(); }
+    billShowUndo(targets.length > 1 ? 'ลบงวดผ่อน ' + targets.length + ' งวดแล้ว' : 'ลบแล้ว' + (t.subscriptionId ? ' (รอบนี้จะไม่ถูกสร้างซ้ำ)' : ''), snap);
     return true;
   } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); return false; }
 }
@@ -9754,8 +9811,6 @@ async function billHandleShareLaunch() {
 }
 try {
   if (localStorage.getItem('folio_bill_view') === 'year') billState.view = 'year';
-  const lm = localStorage.getItem('folio_bill_listmode');
-  if (['day', 'week', 'month'].includes(lm)) billState.listMode = lm;
 } catch (e) {}
 billHandleShareLaunch();
 </script>
