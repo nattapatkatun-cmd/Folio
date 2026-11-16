@@ -583,6 +583,50 @@ test('เฟส5: AI แชตเดียว — ปุ่มลัดบัต
   await p.evaluate(() => { aihBusy = false; localStorage.removeItem('folio_aiHubThread'); aihThread = []; });
 });
 
+// ───────── เฟส 6b ─────────
+test('เฟส6b: กระทบยอดบัตร — ใส่ยอด statement แล้วเห็นส่วนต่าง + รายการต่างประเทศที่ยอดบาทยังประมาณ', async p => {
+  const info = await p.evaluate(() => { window._rt = window.todayISO; window.todayISO = () => '2026-11-20';
+    const prof = billRwCards().find(c => c.card === 'UOB PRVI Miles'); const cur = billRwCycle(prof.stmtDay, todayISO()); const closed = billRwCycle(prof.stmtDay, billIsoAdd(cur.start, -1));
+    return { start: closed.start, end: closed.end }; });
+  try {
+    await p.evaluate(i => { window.todayISO = () => billIsoAdd(i.end, 1);
+      const base = { type: 'expense', category: 'shopping', payMethod: 'card', card: 'UOB PRVI Miles', fxToThb: 1 };
+      state.transactions.push({ ...base, id: 'st1', date: i.end, amount: 1000, currency: 'THB', amountThb: 1000, merchant: 'Lazada' },
+        { ...base, id: 'st2', date: i.end, amount: 100, currency: 'USD', fxToThb: 35, amountThb: 3500, thbActual: false, merchant: 'Agoda' }); billRender(); }, info);
+    await go(p, 'cards');
+    const row = p.locator('.rw-stmt[data-card="UOB PRVI Miles"]');
+    assert.equal(await row.count(), 1);
+    // ยังไม่ใส่ยอด → ไม่มีผลเทียบ แต่เตือนรายการต่างประเทศที่ยังประมาณ
+    assert.equal(await row.locator('.rw-stmt-res').count(), 0);
+    assert.match(await row.locator('.rw-stmt-est').innerText(), /Agoda.*USD 100/);
+    const app = await p.evaluate(i => billRwTxs('UOB PRVI Miles', i.start, i.end).reduce((a, t) => a + billAmtThb(t), 0), info);
+    // statement สูงกว่าแอป 1,234
+    await row.locator('input').fill(String(app + 1234)); await row.locator('input').dispatchEvent('change'); await p.waitForTimeout(150);
+    let res = await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] .rw-stmt-res').innerText();
+    assert.match(res, /สูงกว่าแอป \+฿1,234/); assert.ok(res.includes('ยอดในแอป ฿' + Math.round(app).toLocaleString()));
+    // เก็บถูกที่ (card → วันตัดรอบ) และคงอยู่หลังวาดใหม่
+    assert.equal(await p.evaluate(i => JSON.parse(localStorage.getItem('folio_bill_statements'))['UOB PRVI Miles'][i.end], info), app + 1234);
+    await p.evaluate(() => billRender());
+    assert.equal(await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] input').inputValue(), String(app + 1234));
+    // statement ต่ำกว่าแอป 500
+    await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] input').fill(String(app - 500)); await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] input').dispatchEvent('change'); await p.waitForTimeout(150);
+    assert.match(await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] .rw-stmt-res').innerText(), /แอปสูงกว่า statement ฿500/);
+    // ตรงกัน (ต่างไม่ถึง ฿1)
+    await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] input').fill(String(app + 0.4)); await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] input').dispatchEvent('change'); await p.waitForTimeout(150);
+    assert.match(await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] .rw-stmt-res').innerText(), /ตรงกับยอดในแอป/);
+    // แตะ "ใส่ยอดจริง" → เปิดฟอร์มแก้ไขรายการนั้น
+    await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] .rw-stmt-est button').click(); await p.waitForTimeout(150);
+    assert.equal(await p.evaluate(() => billState.editingId), 'st2');
+    await p.evaluate(() => billCloseConfirm());
+    // ใส่ยอดจริงแล้วรายการหลุดจากรายการ "ประมาณ"
+    await p.evaluate(() => { const t = state.transactions.find(x => x.id === 'st2'); t.thbActual = true; billRender(); });
+    assert.equal(await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] .rw-stmt-est').count(), 0);
+    // ล้างค่า (ช่องว่าง) → เอาออกจาก storage
+    await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] input').fill(''); await p.locator('.rw-stmt[data-card="UOB PRVI Miles"] input').dispatchEvent('change'); await p.waitForTimeout(150);
+    assert.equal(await p.evaluate(() => localStorage.getItem('folio_bill_statements')), '{}');
+  } finally { await p.evaluate(() => { window.todayISO = window._rt; state.transactions = state.transactions.filter(t => !/^st[12]$/.test(t.id)); localStorage.removeItem('folio_bill_statements'); billRender(); }); }
+});
+
 (async () => {
   const { b, p, errors } = await lib.open();
   for (const [name, fn] of tests) {
@@ -680,6 +724,14 @@ test('เฟส5: AI แชตเดียว — ปุ่มลัดบัต
       await fp.evaluate(() => { window.__fs.failNext = 'permission-denied'; });
       await saveManual(42); await fp.waitForTimeout(1100);
       assert.match(await toast(), /ซิงก์ขึ้นคลาวด์ไม่สำเร็จ.*permission-denied/);
+    });
+    await sub('6b: statements ขึ้น settings/bill (replace ทั้งเอกสารต้องไม่ทำคีย์อื่นหาย) และโหลดกลับจาก cloud', async () => {
+      await fp.evaluate(() => { localStorage.setItem('folio_bill_cards', 'UOB PRVI Miles'); window._billSettingsLoaded = true; billStatementSet('UOB PRVI Miles', '2026-10-27', '12345.5'); });
+      const d = await fp.evaluate(() => window.__fs.docs['users/nattapat/settings/bill']);
+      assert.deepEqual(d.statements, { 'UOB PRVI Miles': { '2026-10-27': 12345.5 } });
+      assert.deepEqual(d.cards, ['UOB PRVI Miles']);
+      await fp.evaluate(() => { localStorage.removeItem('folio_bill_statements'); window.__fs.docs['users/nattapat/settings/bill'].statements = { KTC: { '2026-09-01': 99 } }; window._billSettingsLoaded = false; window._billSettingsLoading = false; localStorage.removeItem('folio_bill_settings_dirty'); return billLoadSettings(); });
+      assert.deepEqual(await fp.evaluate(() => JSON.parse(localStorage.getItem('folio_bill_statements'))), { KTC: { '2026-09-01': 99 } });
     });
     if (f.errors.length) { failed++; console.log('FAIL เฟส6a: มี JS error', f.errors.join(' | ')); }
     await f.b.close();
