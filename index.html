@@ -1746,6 +1746,8 @@ service cloud.firestore {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <button class="btn-ghost" style="font-size:12px;" onclick="billBackupSheet()">📊 ส่งช่วงที่ดูอยู่ไป Google Sheet</button>
         <button class="btn-ghost" style="font-size:12px;" onclick="billExportCsv()">⬇️ ดาวน์โหลด CSV ทั้งหมด</button>
+        <button class="btn-ghost" style="font-size:12px;" onclick="document.getElementById('billCsvInput').click()">⬆️ นำเข้า CSV</button>
+        <input type="file" id="billCsvInput" accept=".csv,text/csv,text/plain" style="display:none;" onchange="billImportCsvFile(this.files[0]);this.value=''">
       </div>
       <div class="form-group">
         <label class="form-label">ชื่อบัญชีของคุณ (ช่วย AI แยกว่าเงินเข้าหรือออก)</label>
@@ -8040,7 +8042,7 @@ function billRwRenderModal() {
       <select class="form-select" style="width:100%;margin-top:6px;" onchange='billRwSet(${q},"preset",this.value)'>${opts}</select>${body}</div>`;
   }).join('');
 }
-const BILL_SOURCES = { camera: '📷 ถ่ายรูป', upload: '🖼️ อัปโหลด', share: '📲 แชร์', text: '⌨️ พิมพ์', voice: '🎙️ พูด', manual: '✍️ กรอกเอง', subscription: '🔁 หักอัตโนมัติ' };
+const BILL_SOURCES = { camera: '📷 ถ่ายรูป', upload: '🖼️ อัปโหลด', share: '📲 แชร์', text: '⌨️ พิมพ์', voice: '🎙️ พูด', manual: '✍️ กรอกเอง', subscription: '🔁 หักอัตโนมัติ', csv: '📄 นำเข้า CSV' };
 
 const billState = {
   month: todayISO().slice(0, 7),
@@ -9814,17 +9816,66 @@ async function billBackupSheet() {
   else showToast('✅ สำรอง ' + list.length + ' รายการไป ' + ok + ' แท็บ (Bills_' + months[0] + (months.length > 1 ? ' … ' + months[months.length - 1] : '') + ') แล้ว');
 }
 
+function billCsvText(list) {
+  const cell = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return [BILL_EXPORT_HEADERS].concat(billRowsForExport(list)).map(r => r.map(cell).join(',')).join('\n');
+}
 function billExportCsv() {
   const list = state.transactions || [];
   if (!list.length) { showToast('ยังไม่มีรายการ'); return; }
-  const cell = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const csv = [BILL_EXPORT_HEADERS].concat(billRowsForExport(list)).map(r => r.map(cell).join(',')).join('\n');
+  const csv = billCsvText(list);
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM ให้ Excel อ่านภาษาไทยถูก
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'folio-bills-' + todayISO() + '.csv';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ─── เฟส 6c: นำเข้า CSV (รูปแบบเดียวกับที่ส่งออก) → หน้าตรวจสอบ (billOpenConfirm) ใช้ระบบกันซ้ำเดิมทั้งหมด ───
+const BILL_CSV_MAX = 100; // ต่อครั้ง — แต่ละรายการในหน้าตรวจสอบเป็นฟอร์มเต็ม เยอะกว่านี้หน้าจอหนักบนมือถือ (ที่เหลือนำเข้ารอบถัดไป รายการที่เข้าไปแล้วจะถูกข้ามเองเพราะกันซ้ำ)
+const billPlain = s => String(s || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();           // ตัดอีโมจิหน้าข้อความ: "💵 เงินสด" → "เงินสด"
+function billCsvDraft(r) {
+  const type = r.type, cats = BILL_CATS[type];
+  const cat = (cats.find(c => c.label === r.category) || cats.find(c => c.label.toLowerCase() === r.category.toLowerCase()) || {}).key;
+  const payKey = Object.keys(BILL_PAY).find(k => billPlain(BILL_PAY[k]) === billPlain(r.pay)) || 'unknown';
+  const foreign = r.currency !== 'THB';
+  return billNewDraft({
+    type, category: cat, amount: r.amount, currency: r.currency, date: r.date, time: r.time, merchant: r.merchant, ref: r.ref, note: r.note,
+    payMethod: r.card && payKey === 'unknown' ? 'card' : payKey, card: r.card, source: 'csv',
+    // ต่างประเทศ: ยอดบาทในไฟล์ถือเป็นยอดจริง (ไฟล์ส่งออกไม่บอกว่าเป็นค่าประมาณหรือไม่) → คงยอดบาทเดิมไว้ ไม่คำนวณใหม่
+    fx: foreign && r.thb ? Math.round(r.thb / r.amount * 1e6) / 1e6 : 0, thbCharged: foreign && r.thb ? r.thb : 0, fxFeePct: foreign ? 0 : undefined,
+    offsetCat: 'other'
+  });
+}
+// คืน { shown, dupRef, beyondCap, skipped, error } — ถ้าไม่มีอะไรให้ตรวจสอบจะไม่เปิดหน้าตรวจสอบ
+function billImportCsvText(text) {
+  const parsed = billCsvRecords(billParseCsv(text));
+  if (parsed.error) { showToast(parsed.error); return { error: parsed.error }; }
+  if (!parsed.records.length) { showToast('ไม่พบรายการที่อ่านได้ในไฟล์' + (parsed.skipped ? ' (ข้าม ' + parsed.skipped + ' แถวที่ข้อมูลไม่ครบ)' : '')); return { error: 'empty', skipped: parsed.skipped }; }
+  billState.editingId = null;
+  billState.drafts = parsed.records.map(billCsvDraft);
+  billMarkDuplicates();
+  const all = billState.drafts;
+  const dupRef = all.filter(d => d.dup === 'ref'); // เลขอ้างอิง+ยอดตรงกับที่มีอยู่ = ซ้ำแน่นอน ไม่ต้องเอามาแสดง
+  const fresh = all.filter(d => d.dup !== 'ref');
+  const maybe = fresh.filter(d => d.dup && d.dup.startsWith('maybe')); // วัน+ยอดเท่ากับรายการเดิม: อาจซ้ำจริงหรือซื้อซ้ำจริงก็ได้ → แสดงไว้แต่ไม่ติ๊กให้
+  const rest = fresh.filter(d => !(d.dup && d.dup.startsWith('maybe')));
+  const queue = rest.concat(maybe), shown = queue.slice(0, BILL_CSV_MAX);
+  if (!shown.length) { billState.drafts = []; showToast('ไม่มีรายการใหม่ — ทุกรายการในไฟล์มีอยู่แล้ว (ข้ามซ้ำ ' + dupRef.length + ' รายการ)'); return { shown: 0, dupRef: dupRef.length, beyondCap: 0, skipped: parsed.skipped }; }
+  const beyond = queue.length - shown.length;
+  const note = 'นำเข้าจาก CSV · แสดง ' + shown.length + ' รายการ' + (dupRef.length ? ' · ข้ามที่ซ้ำแน่นอน ' + dupRef.length : '') +
+    (maybe.length ? ' · ' + maybe.filter(d => shown.includes(d)).length + ' รายการวัน+ยอดตรงกับของเดิม (ไม่ติ๊กให้ — ติ๊กเองถ้าเป็นรายการใหม่จริง)' : '') +
+    (parsed.skipped ? ' · ข้ามแถวที่ข้อมูลไม่ครบ ' + parsed.skipped : '') + (beyond ? ' · ยังเหลืออีก ' + beyond + ' รายการ — นำเข้าไฟล์เดิมซ้ำหลังบันทึกเพื่อรับส่วนที่เหลือ' : '');
+  billOpenConfirm(shown, note);
+  billState.drafts.forEach(d => { if (d.dup && d.dup.startsWith('maybe')) d.include = false; });
+  billRenderDrafts();
+  return { shown: shown.length, dupRef: dupRef.length, beyondCap: beyond, skipped: parsed.skipped };
+}
+async function billImportCsvFile(file) {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('ไฟล์ใหญ่เกิน 5 MB'); return; }
+  billImportCsvText(await file.text());
 }
 
 // ═══ AI วิเคราะห์การใช้จ่าย + การลงทุน ═══

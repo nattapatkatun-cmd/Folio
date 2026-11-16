@@ -627,6 +627,83 @@ test('เฟส6b: กระทบยอดบัตร — ใส่ยอด s
   } finally { await p.evaluate(() => { window.todayISO = window._rt; state.transactions = state.transactions.filter(t => !/^st[12]$/.test(t.id)); localStorage.removeItem('folio_bill_statements'); billRender(); }); }
 });
 
+// ───────── เฟส 6c ─────────
+const NOTE_WEIRD = 'มี, จุลภาค "คำพูด"\nและบรรทัดใหม่';
+const csvKeys = (p, arr) => p.evaluate(a => a.map(t => [t.date, t.time || '', t.type, t.category, t.merchant || '', t.amount, t.currency, Math.round(billAmtThb(t) * 100) / 100, t.payMethod || 'unknown', t.card || '', t.ref || '', t.note || ''].join('|')).sort(), arr);
+test('เฟส6c: นำเข้า CSV — ส่งออกแล้วนำเข้ากลับได้ครบทุกฟิลด์ (รวมต่างประเทศ ยอดบาท โน้ตที่มีจุลภาค/คำพูด/บรรทัดใหม่)', async p => {
+  const orig = await p.evaluate(note => {
+    const y = todayISO(); const mk = (o) => Object.assign({ date: y, type: 'expense', category: 'food', amount: 100, currency: 'THB', fxToThb: 1, merchant: 'ร้าน', payMethod: 'cash', card: '', time: '', ref: '', note: '' }, o);
+    state.transactions = [mk({ id: 'c1', merchant: 'ข้าวมันไก่', amount: 65, note, time: '12:34' }), mk({ id: 'c2', type: 'income', category: 'salary', amount: 85000, merchant: 'บริษัท', payMethod: 'transfer' }),
+      mk({ id: 'c3', category: 'travel', amount: 120, currency: 'USD', fxToThb: 34.5, amountThb: 4140, thbActual: true, merchant: 'Agoda', payMethod: 'card', card: 'UOB PRVI Miles' }),
+      mk({ id: 'c4', category: 'shopping', amount: 1890.5, merchant: 'Shopee', payMethod: 'ewallet', ref: 'RF-123' }), mk({ id: 'c5', category: 'cc_payment', amount: 5000, merchant: 'จ่ายบัตร', payMethod: 'transfer', card: 'KBank THE PASSION' }),
+      mk({ id: 'c6', type: 'income', category: 'refund', amount: 50, merchant: 'เพื่อนคืน', payMethod: 'transfer', offsetCat: 'food' })];
+    return state.transactions.map(t => ({ ...t }));
+  }, NOTE_WEIRD);
+  const csv = await p.evaluate(() => billCsvText(state.transactions));
+  await p.evaluate(() => { state.transactions = []; billRender(); });
+  const r = await p.evaluate(c => billImportCsvText(c), csv);
+  assert.deepEqual([r.shown, r.dupRef, r.beyondCap, r.skipped], [6, 0, 0, 0]);
+  assert.equal(await p.textContent('#billConfirmTitle'), 'ตรวจสอบ 6 รายการก่อนบันทึก');
+  assert.ok((await p.textContent('#billConfirmNote')).includes('นำเข้าจาก CSV'));
+  assert.equal(await p.locator('#billDrafts input[type=checkbox]:checked').count(), 6);
+  await p.click('#billSaveBtn'); await p.waitForTimeout(300);
+  const got = await p.evaluate(() => state.transactions.map(t => ({ ...t })));
+  assert.deepEqual(await csvKeys(p, got), await csvKeys(p, orig));
+  const fx = got.find(t => t.merchant === 'Agoda'); assert.deepEqual([fx.amountThb, fx.thbActual, fx.currency], [4140, true, 'USD']);
+  assert.ok(got.every(t => t.source === 'csv'));
+  assert.equal(got.find(t => t.category === 'refund').offsetCat, 'other');
+  await p.evaluate(() => { state.transactions = []; });
+});
+test('เฟส6c: ระบบกันซ้ำเดิม — เลขอ้างอิงซ้ำถูกข้าม, วัน+ยอดตรงกับของเดิมแสดงแต่ไม่ติ๊กให้, ติ๊กเองได้', async p => {
+  const csv = await p.evaluate(() => {
+    const y = todayISO(); const mk = (o) => Object.assign({ date: y, type: 'expense', category: 'food', amount: 100, currency: 'THB', fxToThb: 1, merchant: 'ร้าน', payMethod: 'cash' }, o);
+    state.transactions = [mk({ id: 'd1', amount: 321, refKey: 'XYZ1', ref: 'XYZ1' }), mk({ id: 'd2', amount: 222 }), mk({ id: 'd3', amount: 333, merchant: 'อื่น' })];
+    const c = billCsvText(state.transactions); state.transactions.push(mk({ id: 'd4', amount: 999 })); return c;   // d4 มีแต่ไม่อยู่ในไฟล์
+  });
+  const r = await p.evaluate(c => billImportCsvText(c), csv);
+  assert.equal(r.dupRef, 1);                                   // d1 (มีเลขอ้างอิง) ถูกข้ามเงียบ ๆ
+  assert.equal(r.shown, 2);                                    // d2, d3 วัน+ยอดตรงกับของเดิม → แสดงไว้
+  assert.equal(await p.locator('#billDrafts input[type=checkbox]:checked').count(), 0, 'รายการที่อาจซ้ำต้องไม่ติ๊กให้');
+  assert.match(await p.textContent('#billConfirmNote'), /ข้ามที่ซ้ำแน่นอน 1.*ไม่ติ๊กให้/);
+  assert.equal(await p.locator('#billSaveBtn').isDisabled(), true);
+  await p.evaluate(() => billCloseConfirm());
+  await p.evaluate(c => billImportCsvText(c), csv);
+  await p.locator('#billDrafts input[type=checkbox]').first().check();
+  await p.click('#billSaveBtn'); await p.waitForTimeout(250);
+  assert.equal(await p.evaluate(() => state.transactions.length), 5);   // เดิม 4 + ที่ติ๊กเอง 1
+  await p.evaluate(() => { state.transactions = []; });
+});
+test('เฟส6c: ไฟล์ผิดรูปแบบ/ว่าง/แถวเสีย + ตัวคั่น ; และวันที่ พ.ศ. + จำกัด 100 รายการต่อครั้งแล้วนำเข้าซ้ำรับส่วนที่เหลือ', async p => {
+  const toast = () => p.evaluate(() => document.getElementById('toast').textContent);
+  let r = await p.evaluate(() => billImportCsvText('a,b\n1,2'));
+  assert.match(r.error, /ไม่ใช่ไฟล์ที่ส่งออกจากแอปนี้/); assert.match(await toast(), /ไม่ใช่ไฟล์ที่ส่งออกจากแอปนี้/);
+  assert.equal(await p.evaluate(() => document.getElementById('bill-confirm-modal').classList.contains('open')), false);
+  r = await p.evaluate(() => billImportCsvText('วันที่,ประเภท,ยอด\nxx,รายจ่าย,5\n2026-01-01,รายจ่าย,0'));
+  assert.equal(r.error, 'empty'); assert.match(await toast(), /ไม่พบรายการที่อ่านได้.*ข้าม 2/);
+  r = await p.evaluate(() => billImportCsvText('วันที่;ประเภท;ยอด;ร้าน/ผู้รับ\n02/11/2569;รายจ่าย;1,250.75;ร้านทดสอบ'));
+  assert.equal(r.shown, 1);
+  assert.deepEqual(await p.evaluate(() => { const d = billState.drafts[0]; return [d.date, d.amount, d.merchant, d.category, d.source]; }), ['2026-11-02', 1250.75, 'ร้านทดสอบ', 'other', 'csv']);
+  await p.evaluate(() => billCloseConfirm());
+  const big = await p.evaluate(() => 'วันที่,ประเภท,หมวด,ร้าน/ผู้รับ,ยอด\n' + Array.from({ length: 130 }, (_, i) => `2026-03-${String(1 + i % 28).padStart(2, '0')},รายจ่าย,อาหาร/เครื่องดื่ม,ร้าน${i},${10 + i}`).join('\n'));
+  r = await p.evaluate(c => billImportCsvText(c), big);
+  assert.deepEqual([r.shown, r.beyondCap], [100, 30]);
+  assert.match(await p.textContent('#billConfirmNote'), /ยังเหลืออีก 30/);
+  await p.click('#billSaveBtn'); await p.waitForTimeout(600);
+  assert.equal(await p.evaluate(() => state.transactions.length), 100);
+  r = await p.evaluate(c => billImportCsvText(c), big);   // รอบสอง
+  assert.equal(r.shown, 100);
+  assert.equal(await p.locator('#billDrafts input[type=checkbox]:checked').count(), 30, 'ส่วนที่เหลือ 30 รายการติ๊กให้ ที่วัน+ยอดตรงกับของเดิมไม่ติ๊ก');
+  await p.evaluate(() => { billCloseConfirm(); state.transactions = []; });
+});
+test('เฟส6c: ปุ่ม "นำเข้า CSV" ในตั้งค่า รับไฟล์จริงผ่าน input แล้วเปิดหน้าตรวจสอบ', async p => {
+  await p.evaluate(() => showPage('settings'));
+  assert.equal(await p.locator('#settingsBill button', { hasText: 'นำเข้า CSV' }).count(), 1);
+  await p.setInputFiles('#billCsvInput', { name: 'folio-bills.csv', mimeType: 'text/csv', buffer: Buffer.from('﻿วันที่,เวลา,ประเภท,หมวด,ร้าน/ผู้รับ,ยอด,สกุลเงิน\n2026-05-05,08:00,รายจ่าย,อาหาร/เครื่องดื่ม,กาแฟ,60,THB\n', 'utf8') });
+  await p.waitForFunction(() => document.getElementById('bill-confirm-modal').classList.contains('open'), null, { timeout: 3000 });
+  assert.equal(await p.inputValue('#billAmt0'), '60');
+  await p.evaluate(() => billCloseConfirm());
+});
+
 (async () => {
   const { b, p, errors } = await lib.open();
   for (const [name, fn] of tests) {
