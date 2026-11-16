@@ -614,6 +614,11 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .bill-undo button { background: none; border: none; color: #FFB3C6; font-family: var(--font); font-size: 13px; font-weight: 700; min-height: 44px; padding: 0 12px; cursor: pointer; }
 /* เฟส 4: แถบล่าง + แท็บย่อยลงทุน */
 .bottom-nav { display: none; }
+.alert-bar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.alert-item { display: flex; align-items: center; gap: 8px; border-radius: 12px; padding: 4px 4px 4px 12px; font-size: 12.5px; line-height: 1.5; background: var(--amber-bg); color: var(--amber); cursor: pointer; }
+.alert-item.danger { background: var(--red-bg); color: var(--red); }
+.alert-item .al-txt { flex: 1; min-width: 0; padding: 6px 0; }
+.alert-item .al-x { flex: none; background: none; border: none; color: inherit; opacity: .7; font-size: 15px; min-width: 44px; min-height: 44px; cursor: pointer; }
 .offline-badge { font-size: 11px; color: var(--amber); background: var(--amber-bg); border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
 .invest-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
 .invest-tabs button { font-family: var(--font); font-size: 13px; min-height: 40px; padding: 0 16px; border-radius: 99px; border: 0.5px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; }
@@ -1006,6 +1011,9 @@ if (window._folioReady) {
       <div class="page-greeting" id="greetingText">สวัสดี, Nattapat</div>
       <div class="page-title">ภาพรวมความมั่งคั่งของคุณ</div>
     </div>
+
+    <!-- เฟส 6d: แจ้งเตือนในแอป (บัตรครบกำหนด / งบหมวดใกล้เต็ม / Subscription ใกล้ตัด) -->
+    <div id="alertBar" class="alert-bar" style="display:none;" role="status"></div>
 
     <!-- Hero -->
     <div class="hero-grid">
@@ -2593,6 +2601,7 @@ function showPage(id) {
   });
   if (id === 'bills' && typeof billRender === 'function') billRender(); // Chart.js ต้องวาดตอน canvas มองเห็นแล้ว
   if (id === 'signals' && typeof sgOnShowSignals === 'function') sgOnShowSignals();
+  if (id === 'overview' && typeof renderAlerts === 'function') renderAlerts();
 }
 
 // ─── Autocomplete helpers ───
@@ -7649,6 +7658,65 @@ function billStmtBlock(x) {
     ${est.length ? `<div class="rw-stmt-est" style="margin-top:4px;color:var(--text2);">⚠️ รายการต่างประเทศที่ยอดบาทยังเป็นค่าประมาณ ${est.length} รายการ — ใส่ยอดจริงจาก statement แล้วส่วนต่างจะลดลง:${est.map(t => `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0;"><span>${esc(t.merchant || billCat(t.category, t.type).label)} · ${esc(t.currency)} ${Number(t.amount).toLocaleString()}</span><span>≈ ${billFmt0(billAmtThb(t))} <button class="bill-chip" style="min-height:32px;" onclick='billEdit(${esc(JSON.stringify(t.id))})'>ใส่ยอดจริง</button></span></div>`).join('')}</div>` : ''}
   </div>`;
 }
+// ─── เฟส 6d: แจ้งเตือนในแอป (ยังไม่ใช่ push — ต้องมี backend) ───
+// แถบบนหน้าแรก: บัตรครบกำหนดใน 3 วัน (หรือเลยกำหนดยังไม่จ่าย) · งบหมวดใช้ไป ≥ 85% · Subscription จะตัดใน 3 วัน
+// กด ✕ = ซ่อนเรื่องนั้นไปจนสิ้นวัน (เก็บที่ localStorage folio_alerts_dismissed) · ตั้งแถบไม่เกิน 5 รายการ
+const ALERT_DAYS = 3, ALERT_BUDGET_PCT = 85, ALERT_MAX = 5;
+function billAlerts() {
+  const today = todayISO(), out = [];
+  // 1) บัตรครบกำหนดชำระ
+  try { billRwDues().forEach(x => {
+    if (x.done || x.days > ALERT_DAYS) return;
+    const due = Math.max(0, x.spent - x.paid);
+    out.push({ key: 'due:' + x.prof.card + ':' + x.closed.end, level: x.days < 0 ? 'danger' : 'warn', sort: x.days, go: ['bills', 'cards'],
+      text: `💳 ${x.prof.card} ${x.days < 0 ? 'เลยกำหนดชำระ ' + -x.days + ' วัน' : x.days === 0 ? 'ครบกำหนดชำระวันนี้' : 'ครบกำหนดชำระอีก ' + x.days + ' วัน'} · ยอด ${billFmt0(due)}` });
+  }); } catch (e) {}
+  // 2) งบหมวดเดือนนี้ใกล้เต็ม/เกิน (ยอดจริงหักเงินคืนแล้ว เทียบงบรวมของหมวดเดียวกัน)
+  try {
+    const ym = today.slice(0, 7), act = billMonthTotals(ym), bud = {};
+    (state.budgetExpenses || []).forEach(e => { const k = budgetCatKey(e); bud[k] = (bud[k] || 0) + (Number(e.amount) || 0); });
+    Object.keys(bud).forEach(k => {
+      const b = bud[k], a = act.byCat[k] || 0;
+      if (!(b > 0) || a / b * 100 < ALERT_BUDGET_PCT) return;
+      const pct = Math.round(a / b * 100), c = billCat(k, 'expense');
+      out.push({ key: 'bud:' + k + ':' + ym, level: a >= b ? 'danger' : 'warn', sort: 10 - Math.min(pct, 300) / 100, go: ['bills', 'budget'],
+        text: `${c.icon} งบ${c.label} ${a >= b ? 'เกินงบแล้ว' : 'ใกล้เต็ม'} · ใช้ไป ${pct}% (${billFmt0(a)} / ${billFmt0(b)})` });
+    });
+  } catch (e) {}
+  // 3) Subscription จะตัดใน 3 วัน (รอบถัดไป = รอบที่ lastNo+1)
+  try { (state.subscriptions || []).forEach(s => {
+    if (!s.active || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate || '')) return;
+    const next = billSubDate(s, Number(s.lastNo) || 0), days = billRwDays(today, next);
+    if (days < 0 || days > ALERT_DAYS) return;
+    out.push({ key: 'sub:' + (s.id || s.name) + ':' + next, level: 'warn', sort: days + 0.5, go: ['bills', 'recur'],
+      text: `🔁 ${s.name} จะตัด ${billFmt0(s.amountThb || s.amount)} ${days === 0 ? 'วันนี้' : 'อีก ' + days + ' วัน'}${s.card ? ' · ' + s.card : ''}` });
+  }); } catch (e) {}
+  const hid = billAlertsDismissed();
+  return out.filter(a => hid[a.key] !== today).sort((a, b) => (a.level === b.level ? 0 : a.level === 'danger' ? -1 : 1) || a.sort - b.sort);
+}
+function billAlertsDismissed() { try { return JSON.parse(localStorage.getItem('folio_alerts_dismissed') || '{}') || {}; } catch (e) { return {}; } }
+function billAlertDismiss(key, ev) {
+  if (ev) ev.stopPropagation();
+  const o = billAlertsDismissed(), today = todayISO();
+  Object.keys(o).forEach(k => { if (o[k] !== today) delete o[k]; }); // ทิ้งของเก่า ไม่ให้โตไม่รู้จบ
+  o[key] = today;
+  try { localStorage.setItem('folio_alerts_dismissed', JSON.stringify(o)); } catch (e) {}
+  renderAlerts();
+}
+function billAlertGo(page, tab) {
+  if (page === 'bills') { billState.tab = tab; try { localStorage.setItem('folio_bill_tab', tab); } catch (e) {} }
+  showPage(page);
+}
+function renderAlerts() {
+  const el = document.getElementById('alertBar');
+  if (!el || typeof billAlerts !== 'function') return;
+  const list = billAlerts();
+  if (!list.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const shown = list.slice(0, ALERT_MAX);
+  el.style.display = 'flex';
+  el.innerHTML = shown.map(a => `<div class="alert-item ${a.level === 'danger' ? 'danger' : ''}" data-key="${esc(a.key)}" onclick="billAlertGo('${a.go[0]}','${a.go[1]}')"><span class="al-txt">${esc(a.text)}</span><button class="al-x" aria-label="ซ่อนวันนี้" title="ซ่อนวันนี้" onclick='billAlertDismiss(${esc(JSON.stringify(a.key))},event)'>✕</button></div>`).join('') +
+    (list.length > shown.length ? `<div style="font-size:11px;color:var(--text3);padding-left:4px;">และอีก ${list.length - shown.length} เรื่อง</div>` : '');
+}
 // ครบกำหนดชำระของรอบที่ปิดล่าสุดของแต่ละบัตร (ใช้ทั้งแท็บบัตรและกล่องในภาพรวม)
 function billRwDues() {
   const today = todayISO();
@@ -8141,6 +8209,7 @@ function billOnData() {
   if (typeof renderBudget === 'function') renderBudget();
   if (!window._billSettingsLoaded && window.FB) billLoadSettings(); // ล้มเหลวรอบก่อน → ลองใหม่เมื่อข้อมูลอัปเดตครั้งถัดไป
   window._billLoaded = true;
+  renderAlerts();
   if (typeof initPhase12 === 'function') initPhase12();
   const page = document.getElementById('page-bills');
   if (page && page.classList.contains('active')) billRender();
@@ -8274,6 +8343,7 @@ function billRender() {
   billRenderTrend();
   billRenderList();
   if (billState.tab === 'budget' && typeof renderBudget === 'function') renderBudget();
+  renderAlerts();
 }
 
 function billRenderCashflow(t) {
