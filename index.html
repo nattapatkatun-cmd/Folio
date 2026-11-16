@@ -582,7 +582,13 @@ body { min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
 .rw-pill.ok { background: var(--green-bg); color: var(--green); }
 .bill-fab { position: fixed; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 18px; border: none; background: var(--accent); color: #fff; font-size: 28px; line-height: 1; cursor: pointer; box-shadow: 0 6px 20px rgba(217,80,112,.45); z-index: 50; display: none; }
 #page-bills.active .bill-fab { display: block; }
-#page-bills { padding-bottom: 90px; }
+#page-bills { padding-bottom: 110px; } /* เผื่อที่ให้ปุ่มลอย ＋ (56px + ขอบล่าง) ไม่ทับยอดเงิน/ปุ่มท้ายหน้า */
+body:has(.modal-overlay.open) .bill-fab { display: none !important; } /* ซ่อนปุ่มลอยเมื่อมี modal เปิด */
+.bill-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 14px; }
+.bill-head .bill-view-toggle button { padding: 5px 9px; }
+.bill-head .bill-month-nav span { min-width: 84px; }
+.bill-head .bill-icon-btn { width: 34px; height: 34px; flex: none; }
+#page-budget .metric-value { font-family: var(--font); font-weight: 600; letter-spacing: -0.3px; } /* ตัวเลขชุดเดียวกับหน้าบิล (sans) */
 .bill-icon-btn { background: var(--surface); border: 0.5px solid var(--border); border-radius: 99px; width: 36px; height: 36px; font-size: 16px; cursor: pointer; }
 .rw-pick-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
 .rw-pick-grid button { font-family: var(--font); background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; padding: 8px 2px; font-size: 10.5px; color: var(--text2); cursor: pointer; }
@@ -1379,12 +1385,9 @@ if (window._folioReady) {
 
   <!-- ─────────── BILL MANAGER PAGE ─────────── -->
   <main class="page" id="page-bills">
-    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-      <div>
-        <div class="page-greeting">Bill Manager · รายรับ-รายจ่ายจริง</div>
-        <div class="page-title">🧾 บันทึกบิล</div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+    <div class="page-header bill-head">
+      <div class="page-title" style="margin-top:0;font-size:20px;">🧾 บิล</div>
+      <div style="display:flex;gap:6px;align-items:center;">
       <div class="bill-view-toggle" id="billViewToggle">
         <button class="active" data-v="month" onclick="billSetView('month')">เดือน</button>
         <button data-v="year" onclick="billSetView('year')">ปี</button>
@@ -1465,7 +1468,7 @@ if (window._folioReady) {
           <button data-m="week" onclick="billSetListMode('week')">สัปดาห์</button>
           <button data-m="month" class="active" onclick="billSetListMode('month')">เดือน</button>
         </div>
-        <div class="bill-month-nav">
+        <div class="bill-month-nav" id="billRangeNav">
           <button onclick="billListShift(-1)" aria-label="ก่อนหน้า">‹</button>
           <span id="billRangeLabel" style="min-width:120px;">—</span>
           <button onclick="billListShift(1)" aria-label="ถัดไป">›</button>
@@ -8358,6 +8361,8 @@ function billRenderList() {
   const isYear = billState.view === 'year';
   document.getElementById('billRangeBar').style.display = isYear ? 'none' : 'flex';
   document.querySelectorAll('#billListModeToggle button').forEach(b => b.classList.toggle('active', b.dataset.m === billState.listMode));
+  // โหมดเดือน: ใช้ตัวเลือกเดือนบนหัวหน้าตัวเดียว (ซ่อนตัวซ้ำ) — โหมดวัน/สัปดาห์ยังต้องมีตัวเลื่อนของตัวเอง
+  document.getElementById('billRangeNav').style.display = billState.listMode === 'month' ? 'none' : '';
   const sumEl = document.getElementById('billRangeSummary');
   billRenderFilterControls();
   const filtered = !!(billState.catFilter || billState.payFilter || billState.filter !== 'all');
@@ -8408,13 +8413,12 @@ function billRenderList() {
     const foreign = t.currency && t.currency !== 'THB';
     const pay = t.payMethod === 'card' || t.category === 'cc_payment' ? '💳 ' + esc(t.card || 'บัตร') : (t.payMethod && t.payMethod !== 'unknown' ? esc(BILL_PAY[t.payMethod] || '') : '');
     const offLabel = t.category === 'refund' ? 'หักจาก ' + billCat(billOffsetCat(t), 'expense').label : '';
-    const sub = [esc(offLabel || c.label), t.installmentOf > 1 ? '🗓️ ผ่อน ' + t.installmentNo + '/' + t.installmentOf : '', t.subscriptionId ? '🔁 Subscription' : '', t.time ? esc(t.time) : '', pay, t.subscriptionId ? '' : esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
+    const sub = [esc(offLabel || c.label), pay, t.installmentOf > 1 ? '🗓️ ผ่อน ' + t.installmentNo + '/' + t.installmentOf : '', t.subscriptionId ? '🔁 Subscription' : '', t.time ? esc(t.time) : '', t.subscriptionId || t.source === 'manual' ? '' : esc(BILL_SOURCES[t.source] || ''), t.ref ? 'อ้างอิง ' + esc(String(t.ref).slice(-8)) : ''].filter(Boolean).join(' · ');
     html += `<div class="bill-row" onclick="billEdit('${esc(t.id)}')">
       <div class="bill-ico" style="background:${c.color}22;">${c.icon}</div>
       <div class="bill-main"><div class="bill-merchant">${esc(t.merchant || c.label)}${t.note ? ' <span style="color:var(--text3);font-weight:400;">· ' + esc(t.note) + '</span>' : ''}</div><div class="bill-sub">${sub}</div></div>
       <div><div class="bill-amt" style="color:${inc ? 'var(--green)' : BILL_NON_SPEND.includes(t.category) ? 'var(--text2)' : 'var(--text)'};">${inc ? '+' : '−'}${billFmt(billAmtThb(t))}</div>
       ${foreign ? `<div style="font-size:10px;color:${t.thbActual ? 'var(--text3)' : 'var(--amber)'};text-align:right;" title="${t.thbActual ? 'ยอดบาทจริง' : 'ยอดบาทประมาณ (อัตรากลาง + ค่าธรรมเนียม ' + (t.fxFeePct || 0) + '%) — แตะเพื่อใส่ยอดจริงจากสเตทเมนต์'}">${esc(t.currency)} ${Number(t.amount).toLocaleString()}${t.thbActual ? ' ✓' : ' · ประมาณ'}</div>` : ''}</div>
-      <button class="bill-del" title="ลบ" onclick="event.stopPropagation();billDelete('${esc(t.id)}')">✕</button>
     </div>`;
   });
   el.innerHTML = html;
@@ -8452,23 +8456,29 @@ function billOpenMonth(ym) {
 
 async function billDelete(id) {
   const t = (state.transactions || []).find(x => x.id === id);
-  if (!t) return;
+  if (!t) return false;
   if (!confirm('ลบรายการ ' + (t.merchant || billCat(t.category, t.type).label) + ' ' + billFmt(billAmtThb(t)) + ' ?' +
-    (t.subscriptionId ? '\n\n(รอบนี้ของ Subscription จะไม่ถูกสร้างซ้ำ — ถ้าเลิกใช้แล้ว ให้กดยกเลิกที่การ์ด 🔁 Subscription ด้วย)' : ''))) return;
+    (t.subscriptionId ? '\n\n(รอบนี้ของ Subscription จะไม่ถูกสร้างซ้ำ — ถ้าเลิกใช้แล้ว ให้กดยกเลิกที่การ์ด 🔁 Subscription ด้วย)' : ''))) return false;
   const series = t.installmentId ? (state.transactions || []).filter(x => x.installmentId === t.installmentId) : [];
   if (series.length > 1 && confirm('รายการนี้เป็นงวด ' + t.installmentNo + '/' + t.installmentOf + ' ของรายการผ่อน\n\nลบทั้งชุด ' + series.length + ' งวดด้วยไหม?\nตกลง = ลบทั้งชุด · ยกเลิก = ลบเฉพาะงวดนี้')) {
     try {
       if (window.FB) for (const x of series) await window.FB.del('transactions', x.id);
       else { state.transactions = state.transactions.filter(x => x.installmentId !== t.installmentId); billRender(); }
       showToast('ลบรายการผ่อน ' + series.length + ' งวดแล้ว');
-    } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); }
-    return;
+      return true;
+    } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); return false; }
   }
   try {
     if (window.FB) await window.FB.del('transactions', id);
     else { state.transactions = state.transactions.filter(x => x.id !== id); billRender(); }
     showToast('ลบรายการแล้ว');
-  } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); }
+    return true;
+  } catch (e) { showToast('ลบไม่สำเร็จ: ' + e.message); return false; }
+}
+// ปุ่มลบในฟอร์มแก้ไข (แทนปุ่ม ✕ ที่เคยอยู่ทุกแถว) — ลบสำเร็จแล้วค่อยปิดฟอร์ม ถ้ายกเลิกที่ confirm ฟอร์มยังอยู่
+async function billDeleteFromForm() {
+  const id = billState.editingId;
+  if (id && await billDelete(id)) billCloseConfirm();
 }
 
 // ═══ Drafts (หน้ายืนยันก่อนบันทึก) ═══
@@ -8921,7 +8931,7 @@ function billCloseConfirm() { closeModal('bill-confirm-modal'); billState.drafts
 function billRenderDrafts() {
   const ds = billState.drafts;
   const editing = !!billState.editingId;
-  document.getElementById('billConfirmTitle').textContent = editing ? 'แก้ไขรายการ' : (ds.length > 1 ? 'ตรวจสอบ ' + ds.length + ' รายการก่อนบันทึก' : 'ตรวจสอบก่อนบันทึก');
+  document.getElementById('billConfirmTitle').textContent = editing ? 'แก้ไขรายการ' : (ds.length === 1 && ds[0].source === 'manual' ? 'เพิ่มรายการ' : ds.length > 1 ? 'ตรวจสอบ ' + ds.length + ' รายการก่อนบันทึก' : 'ตรวจสอบก่อนบันทึก');
   const n = ds.filter(d => d.include).length;
   const btn = document.getElementById('billSaveBtn');
   btn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึก ' + n + ' รายการ';
@@ -8946,7 +8956,7 @@ function billRenderDrafts() {
     return `<div class="bill-draft ${d.include ? '' : 'off'}">
       ${warn}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        ${editing ? '' : `<input type="checkbox" ${d.include ? 'checked' : ''} onchange="billDraftSet(${i},'include',this.checked,true)" style="width:16px;height:16px;accent-color:var(--accent);">`}
+        ${editing || ds.length === 1 ? '' : `<input type="checkbox" ${d.include ? 'checked' : ''} onchange="billDraftSet(${i},'include',this.checked,true)" style="width:16px;height:16px;accent-color:var(--accent);">`}
         <div class="bill-type-toggle" style="flex:1;">
           <button class="${d.type === 'expense' ? 'on-expense' : ''}" onclick="billDraftSet(${i},'type','expense',true)">− รายจ่าย</button>
           <button class="${d.type === 'income' ? 'on-income' : ''}" onclick="billDraftSet(${i},'type','income',true)">+ รายรับ</button>
@@ -8976,6 +8986,7 @@ function billRenderDrafts() {
         <div class="form-group full"><label class="form-label">เลขอ้างอิงสลิป (กันบันทึกซ้ำ)</label><input class="form-input" value="${esc(d.ref)}" placeholder="ถ้ามี" onchange="billDraftSet(${i},'ref',this.value,true)"></div>
         <div class="form-group full"><label class="form-label">โน้ต</label><input class="form-input" value="${esc(d.note)}" oninput="billDraftSet(${i},'note',this.value)"></div>
       </div>
+      ${editing ? `<button class="btn-ghost" style="width:100%;margin-top:10px;min-height:44px;color:var(--red);" onclick="billDeleteFromForm()">🗑️ ลบรายการนี้</button>` : ''}
       <div style="font-size:10px;color:var(--text3);margin-top:6px;">${esc(BILL_SOURCES[d.source] || '')}${d.aiRead ? ' · อ่านโดย Gemini — ตรวจยอดและหมวดก่อนบันทึก' : ''}</div>
     </div>`;
   }).join('');
